@@ -115,7 +115,18 @@
     padding:16px;
     margin-bottom:12px;
     box-shadow:var(--shadow);
+    position:relative;
+    cursor:pointer;
   }
+
+  .delete-btn{
+    position:absolute; top:12px; right:12px;
+    background:var(--danger-soft); color:var(--danger);
+    border:1px solid rgba(229,97,90,0.3); border-radius:8px;
+    width:28px; height:28px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:14px; font-weight:bold; z-index:10;
+  }
+  .delete-btn:hover{ background:var(--danger); color:#fff; }
 
   .badge{
     display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.3px;
@@ -154,6 +165,25 @@
   .poll-opt-text{position:relative; z-index:2; font-weight:600; font-size:13.5px;}
   .poll-opt-count{position:relative; z-index:2; font-family:var(--font-mono); font-size:12px; color:var(--accent-2);}
 
+  /* Modal Pop-up */
+  .modal-overlay{
+    position:fixed; top:0; left:0; right:0; bottom:0; z-index:100;
+    background:rgba(10,12,24,0.85); backdrop-filter:blur(8px);
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.active{ display:flex; }
+  .modal-card{
+    background:var(--bg-elevated); border:1px solid var(--border);
+    border-radius:var(--radius); padding:24px; max-width:480px; width:100%;
+    box-shadow:var(--shadow); position:relative; max-height:85vh; overflow-y:auto;
+  }
+  .modal-close{
+    position:absolute; top:16px; right:16px; background:var(--bg-elevated-2);
+    color:var(--text-muted); border:1px solid var(--border); border-radius:50%;
+    width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:16px; font-weight:bold;
+  }
+
   /* Bottom Navigation */
   nav.tabbar{
     position:fixed; bottom:0; left:0; right:0; z-index:40;
@@ -182,6 +212,14 @@
 <body>
 
 <div id="app"></div>
+
+<!-- Detailed Modal View -->
+<div id="modal-view" class="modal-overlay">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -324,10 +362,10 @@
     if (activeTab === 'announcements') {
       return `
         <div class="section-title">Notices & Announcements</div>
-        <div class="section-sub">Official updates from society management.</div>
+        <div class="section-sub">Official updates from society management. Tap to expand.</div>
         
         ${isAdmin ? `
-          <div class="card">
+          <div class="card" style="cursor:default;">
             <div style="font-weight:700; margin-bottom:8px;">Post New Announcement</div>
             <form id="notice-form">
               <input type="text" id="notice-title" placeholder="Notice Title" required style="margin-bottom:8px;" />
@@ -344,10 +382,10 @@
     if (activeTab === 'polls') {
       return `
         <div class="section-title">Society Community Polls</div>
-        <div class="section-sub">Cast your vote on ongoing neighborhood decisions.</div>
+        <div class="section-sub">Cast your vote on ongoing decisions. Tap to expand.</div>
 
         ${isAdmin ? `
-          <div class="card">
+          <div class="card" style="cursor:default;">
             <div style="font-weight:700; margin-bottom:8px;">Create New Poll</div>
             <form id="poll-form">
               <input type="text" id="poll-title" placeholder="Poll Question" required style="margin-bottom:8px;" />
@@ -368,7 +406,7 @@
         <div class="section-sub">${isAdmin ? 'Review and update status of resident requests.' : 'Submit issues directly to society admin.'}</div>
 
         ${!isAdmin ? `
-          <div class="card">
+          <div class="card" style="cursor:default;">
             <form id="complaint-form">
               <label>Issue Title</label>
               <input type="text" id="c-title" placeholder="e.g. Street Light Outage" required />
@@ -446,6 +484,78 @@
     if (activeTab === 'complaints') loadComplaints();
   }
 
+  // Global Delete Handlers
+  window.deleteNotice = function(e, key) {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to remove this announcement?')) return;
+
+    if (db && typeof key === 'string' && key.length > 10) {
+      db.collection('notices').doc(key).delete().then(() => loadNotices());
+    } else {
+      notices = notices.filter((n, idx) => (n.id !== key && idx != key));
+      localStorage.setItem('rphs_notices', JSON.stringify(notices));
+      renderNoticesList();
+    }
+  };
+
+  window.deletePoll = function(e, key) {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to remove this poll?')) return;
+
+    if (db && typeof key === 'string' && key.length > 10) {
+      db.collection('polls').doc(key).delete().then(() => loadPolls());
+    } else {
+      polls = polls.filter((p, idx) => (p.id !== key && idx != key));
+      localStorage.setItem('rphs_polls', JSON.stringify(polls));
+      renderPollsList();
+    }
+  };
+
+  // Global Modal View Handlers
+  window.openNoticeModal = function(key) {
+    let item = notices.find((n, idx) => (n.id === key || idx == key));
+    if (!item) return;
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="margin-bottom:10px;"><span class="badge notice">Official Notice</span></div>
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:8px; line-height:1.3;">${item.title}</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Published: ${item.date || 'Today'}</div>
+      <div style="font-size:14.5px; color:#D6D9EC; line-height:1.6; white-space:pre-wrap;">${item.desc}</div>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+  };
+
+  window.openPollModal = function(key) {
+    let p = polls.find((item, idx) => (item.id === key || idx == key));
+    if (!p) return;
+
+    const totalVotes = p.options.reduce((sum, opt) => sum + opt.votes, 0);
+    const hasVoted = p.voters && p.voters.includes(currentUser.name);
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="margin-bottom:10px;"><span class="badge open">Community Poll</span></div>
+      <div style="font-family:var(--font-display); font-size:19px; font-weight:600; margin-bottom:16px; line-height:1.3;">${p.title}</div>
+      ${p.options.map((opt, oIndex) => {
+        const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+        return `
+          <button class="poll-opt-btn" onclick="votePoll('${p.id || key}', ${oIndex})">
+            <div class="poll-progress-bar" style="width:${pct}%;"></div>
+            <span class="poll-opt-text">${opt.text}</span>
+            <span class="poll-opt-count">${pct}% (${opt.votes})</span>
+          </button>
+        `;
+      }).join('')}
+      <div style="font-size:12px; color:var(--text-muted); margin-top:14px;">
+        Total Votes Cast: ${totalVotes} ${hasVoted ? '• (You have voted)' : ''}
+      </div>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+  };
+
+  window.closeModal = function() {
+    document.getElementById('modal-view').classList.remove('active');
+  };
+
   // Announcements
   function postNotice() {
     const title = document.getElementById('notice-title').value.trim();
@@ -459,7 +569,6 @@
         document.getElementById('notice-form').reset();
         loadNotices();
       }).catch(err => {
-        console.error("Firestore Notice Error:", err);
         fallbackPostNotice(item);
       });
     } else {
@@ -493,18 +602,24 @@
   function renderNoticesList() {
     const el = document.getElementById('notices-list');
     if (!el) return;
-    if (!notices.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No announcements posted yet.</div>'; return; }
+    if (!notices.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No announcements posted yet.</div>'; return; }
 
-    el.innerHTML = notices.map(n => `
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <span class="badge notice">Official Notice</span>
-          <span style="font-size:11px; color:var(--text-muted);">${n.date || 'Today'}</span>
+    const isAdmin = (currentUser.role === 'admin');
+
+    el.innerHTML = notices.map((n, idx) => {
+      const itemKey = n.id ? n.id : idx;
+      return `
+        <div class="card" onclick="openNoticeModal('${itemKey}')">
+          ${isAdmin ? `<button class="delete-btn" onclick="deleteNotice(event, '${itemKey}')" title="Delete Announcement">✕</button>` : ''}
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding-right:${isAdmin ? '30px' : '0'};">
+            <span class="badge notice">Official Notice</span>
+            <span style="font-size:11px; color:var(--text-muted);">${n.date || 'Today'}</span>
+          </div>
+          <div style="font-weight:700; font-size:16px; margin-bottom:6px;">${n.title}</div>
+          <div style="font-size:13.5px; color:#D6D9EC; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${n.desc}</div>
         </div>
-        <div style="font-weight:700; font-size:16px; margin-bottom:6px;">${n.title}</div>
-        <div style="font-size:13.5px; color:#D6D9EC; line-height:1.4;">${n.desc}</div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   // Polls
@@ -527,7 +642,6 @@
         document.getElementById('poll-form').reset();
         loadPolls();
       }).catch(err => {
-        console.error("Firestore Poll Error:", err);
         fallbackPostPoll(item);
       });
     } else {
@@ -561,19 +675,23 @@
   function renderPollsList() {
     const el = document.getElementById('polls-list');
     if (!el) return;
-    if (!polls.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No active polls.</div>'; return; }
+    if (!polls.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No active polls.</div>'; return; }
+
+    const isAdmin = (currentUser.role === 'admin');
 
     el.innerHTML = polls.map((p, pIndex) => {
       const totalVotes = p.options.reduce((sum, opt) => sum + opt.votes, 0);
       const hasVoted = p.voters && p.voters.includes(currentUser.name);
+      const itemKey = p.id ? p.id : pIndex;
 
       return `
-        <div class="card">
-          <div style="font-weight:700; font-size:15px; margin-bottom:10px;">${p.title}</div>
+        <div class="card" onclick="openPollModal('${itemKey}')">
+          ${isAdmin ? `<button class="delete-btn" onclick="deletePoll(event, '${itemKey}')" title="Delete Poll">✕</button>` : ''}
+          <div style="font-weight:700; font-size:15px; margin-bottom:10px; padding-right:${isAdmin ? '30px' : '0'};">${p.title}</div>
           ${p.options.map((opt, oIndex) => {
             const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
             return `
-              <button class="poll-opt-btn" onclick="votePoll('${p.id || pIndex}', ${oIndex})">
+              <button class="poll-opt-btn" onclick="event.stopPropagation(); votePoll('${itemKey}', ${oIndex})">
                 <div class="poll-progress-bar" style="width:${pct}%;"></div>
                 <span class="poll-opt-text">${opt.text}</span>
                 <span class="poll-opt-count">${pct}% (${opt.votes})</span>
@@ -605,10 +723,18 @@
       db.collection('polls').doc(poll.id).update({
         options: poll.options,
         voters: poll.voters
-      }).then(() => loadPolls());
+      }).then(() => {
+        loadPolls();
+        if (document.getElementById('modal-view').classList.contains('active')) {
+          openPollModal(pollIdentifier);
+        }
+      });
     } else {
       localStorage.setItem('rphs_polls', JSON.stringify(polls));
       renderPollsList();
+      if (document.getElementById('modal-view').classList.contains('active')) {
+        openPollModal(pollIdentifier);
+      }
     }
   };
 
@@ -636,7 +762,6 @@
         document.getElementById('complaint-form').reset();
         loadComplaints();
       }).catch(err => {
-        console.error("Firestore Complaint Error:", err);
         fallbackSubmitComplaint(newComplaint);
       });
     } else {
@@ -671,7 +796,7 @@
   function renderComplaintsList() {
     const el = document.getElementById('complaints-list');
     if (!el) return;
-    if (!complaints.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No complaints recorded.</div>'; return; }
+    if (!complaints.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No complaints recorded.</div>'; return; }
 
     const isAdmin = (currentUser.role === 'admin');
 
@@ -680,7 +805,7 @@
       const itemKey = c.id ? c.id : idx;
 
       return `
-        <div class="card">
+        <div class="card" style="cursor:default;">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
             <div style="font-weight:700; font-size:15px;">${c.title}</div>
             <span class="badge ${badgeClass}">${c.status}</span>
