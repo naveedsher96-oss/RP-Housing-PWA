@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Roshan Pakistan Housing Society</title>
+<meta name="theme-color" content="#10142A" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Roshan RPHS" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Firebase (free tier) powers the shared data for this app once hosted on a real website -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  :root{
+    --bg:#10142A;
+    --bg-elevated:#171C3B;
+    --bg-elevated-2:#1E2447;
+    --bg-elevated-3:#242B54;
+    --accent:#F2A93B;
+    --accent-2:#FFC670;
+    --accent-soft:rgba(242,169,59,0.14);
+    --text:#F1F2F9;
+    --text-muted:#9AA0C3;
+    --text-faint:#6B7099;
+    --success:#34B398;
+    --success-soft:rgba(52,179,152,0.14);
+    --danger:#E5615A;
+    --danger-soft:rgba(229,97,90,0.14);
+    --warning:#F2A93B;
+    --warning-soft:rgba(242,169,59,0.14);
+    --info:#6E8FF2;
+    --info-soft:rgba(110,143,242,0.14);
+    --border:rgba(255,255,255,0.08);
+    --border-soft:rgba(255,255,255,0.05);
+    --radius:16px;
+    --radius-sm:10px;
+    --shadow:0 8px 30px rgba(0,0,0,0.35);
+    --font-display:'Fraunces', serif;
+    --font-body:'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 20% -10%, rgba(242,169,59,0.10), transparent 45%),
+      radial-gradient(circle at 90% 0%, rgba(110,143,242,0.08), transparent 40%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  #app{
+    max-width:520px;
+    margin:0 auto;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    padding-bottom:calc(78px + env(safe-area-inset-bottom));
+  }
+  a{color:inherit;}
+  button{font-family:inherit;}
+  ::selection{background:var(--accent-soft);}
+
+  /* ---------- Header ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:30;
+    padding:calc(16px + env(safe-area-inset-top)) 18px 14px;
+    background:linear-gradient(180deg, rgba(16,20,42,0.97), rgba(16,20,42,0.88) 70%, rgba(16,20,42,0));
+    backdrop-filter:blur(10px);
+    display:flex; align-items:center; gap:12px;
+    border-bottom:1px solid var(--border-soft);
+  }
+  .brand-mark{
+    width:42px; height:42px; border-radius:12px;
+    background:#fff;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 0 18px 2px rgba(242,169,59,0.45);
+    display:flex; align-items:center; justify-content:center;
+    flex:none; padding:4px; overflow:hidden;
+  }
+  .brand-mark img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .brand-text{flex:1; min-width:0;}
+  .brand-text .name{font-family:var(--font-display); font-weight:600; font-size:16.5px; line-height:1.2; letter-spacing:0.1px;}
+  .brand-text .sub{font-size:11.5px; color:var(--text-muted); margin-top:2px; display:flex; align-items:center; gap:6px;}
+  .role-pill{
+    font-size:10.5px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
+    padding:2px 8px; border-radius:20px; background:var(--accent-soft); color:var(--accent-2);
+    border:1px solid rgba(242,169,59,0.3);
+  }
+  .icon-btn{
+    width:38px; height:38px; border-radius:12px; border:1px solid var(--border);
+    background:var(--bg-elevated); color:var(--text-muted); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex:none; transition:transform .15s ease, background .15s ease, color .15s ease;
+  }
+  .icon-btn:active{transform:scale(0.92);}
+  .icon-btn.spinning svg{animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---------- Main / sections ---------- */
+  main{flex:1; padding:18px 18px 10px;}
+  .section-title{
+    font-family:var(--font-display); font-weight:600; font-size:22px; margin:4px 0 4px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .section-sub{color:var(--text-muted); font-size:13px; margin:0 0 18px; line-height:1.5;}
+  .card{
+    background:var(--bg-elevated);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:12px;
+    box-shadow:var(--shadow);
+  }
+  .card + .card{margin-top:12px;}
+  .row{display:flex; align-items:center; gap:10px;}
+  .row.between{justify-content:space-between;}
+  .stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;}
+  .stat-card{
+    background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm);
+    padding:14px; position:relative; overflow:hidden;
+  }
+  .stat-card .glow{position:absolute; top:-20px; right:-20px; width:70px; height:70px; border-radius:50%; background:radial-gradient(circle, rgba(242,169,59,0.25), transparent 70%);}
+  .stat-card .num{font-family:var(--font-mono); font-size:26px; font-weight:600; color:var(--accent-2);}
+  .stat-card .lbl{font-size:11.5px; color:var(--text-muted); margin-top:2px;}
+  .quick-actions{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:6px;}
+  .qa-btn{
+    background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm);
+    padding:14px 12px; text-align:left; cursor:pointer; color:var(--text); font-family:inherit;
+    display:flex; flex-direction:column; gap:8px; transition:background .15s ease, transform .1s ease;
+  }
+  .qa-btn:active{transform:scale(0.97);}
+  .qa-btn svg{color:var(--accent);}
+  .qa-btn .t{font-size:13px; font-weight:700;}
+  .qa-btn .d{font-size:11px; color:var(--text-muted); line-height:1.3;}
+
+  h1,h2,h3,p{margin:0;}
+  .empty-state{
+    text-align:center; padding:40px 16px; color:var(--text-muted);
+  }
+  .empty-state .icon{color:var(--text-faint); margin-bottom:10px;}
+  .empty-state .t{font-family:var(--font-display); font-size:16px; color:var(--text); margin-bottom:4px;}
+  .empty-state .d{font-size:12.5px; line-height:1.5;}
+
+  .badge{
+    display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.3px;
+    text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap;
+  }
+  .badge.open, .badge.pending, .badge.due{background:var(--warning-soft); color:var(--accent-2);}
+  .badge.progress{background:var(--info-soft); color:#A9BCF7;}
+  .badge.resolved, .badge.approved, .badge.paid{background:var(--success-soft); color:#6BD9BE;}
+  .badge.rejected, .badge.overdue{background:var(--danger-soft); color:#F19A95;}
+  .badge.closed{background:rgba(255,255,255,0.08); color:var(--text-muted);}
+  .badge .dot{width:5px; height:5px; border-radius:50%; background:currentColor; box-shadow:0 0 6px currentColor;}
+
+  .list-item{border-top:1px solid var(--border-soft); padding:12px 0;}
+  .list-item:first-child{border-top:none; padding-top:2px;}
+  .list-title{font-weight:700; font-size:14.5px; margin-bottom:3px;}
+  .list-meta{font-size:11.5px; color:var(--text-muted);}
+  .list-body{font-size:13px; color:#D6D9EC; line-height:1.5; margin-top:6px;}
+
+  .pin-flag{color:var(--accent); flex:none;}
+
+  /* buttons */
+  .btn{
+    font-family:inherit; font-weight:700; font-size:13.5px; border:none; border-radius:12px;
+    padding:12px 16px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    transition:transform .1s ease, opacity .15s ease;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn.primary{background:linear-gradient(180deg, var(--accent-2), var(--accent)); color:#251400; box-shadow:0 4px 16px rgba(242,169,59,0.35);}
+  .btn.secondary{background:var(--bg-elevated-2); color:var(--text); border:1px solid var(--border);}
+  .btn.danger{background:var(--danger-soft); color:#F19A95; border:1px solid rgba(229,97,90,0.3);}
+  .btn.success{background:var(--success-soft); color:#6BD9BE; border:1px solid rgba(52,179,152,0.3);}
+  .btn.block{width:100%;}
+  .btn.sm{padding:8px 12px; font-size:12.5px; border-radius:9px;}
+  .btn:disabled{opacity:.45; cursor:not-allowed;}
+  .btn-row{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+
+  .fab{
+    position:fixed; right:calc(50% - 260px + 18px); bottom:calc(90px + env(safe-area-inset-bottom));
+    width:54px; height:54px; border-radius:50%; border:none; cursor:pointer;
+    background:linear-gradient(180deg, var(--accent-2), var(--accent));
+    box-shadow:0 6px 22px rgba(242,169,59,0.5);
+    display:flex; align-items:center; justify-content:center; color:#251400; z-index:25;
+  }
+  @media (max-width:559px){ .fab{right:18px;} }
+  .fab:active{transform:scale(0.94);}
+
+  /* form elements */
+  label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
+  label:first-child{margin-top:0;}
+  input[type=text], input[type=number], input[type=date], input[type=time], input[type=tel], select, textarea{
+    width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
+    border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
+    transition:border-color .15s ease;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--accent);}
+  textarea{resize:vertical; min-height:80px;}
+  .radio-group{display:flex; gap:8px; flex-wrap:wrap;}
+  .radio-chip{
+    flex:1; min-width:100px; text-align:center; padding:11px 10px; border-radius:10px; border:1px solid var(--border);
+    background:var(--bg); font-size:13px; font-weight:700; cursor:pointer; color:var(--text-muted);
+  }
+  .radio-chip.active{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-2);}
+  .checkbox-row{display:flex; align-items:center; gap:9px; margin-top:14px; font-size:13px; color:var(--text);}
+  .checkbox-row input{width:18px; height:18px; accent-color:var(--accent);}
+  .hint{font-size:11.5px; color:var(--text-faint); margin-top:6px; line-height:1.5;}
+  .error-text{font-size:12px; color:#F19A95; margin-top:8px;}
+
+  /* poll bars */
+  .poll-option{margin-bottom:10px;}
+  .poll-option-bar-bg{background:var(--bg); border-radius:8px; overflow:hidden; height:34px; position:relative; border:1px solid var(--border);}
+  .poll-option-bar-fill{height:100%; background:linear-gradient(90deg, rgba(242,169,59,0.35), rgba(242,169,59,0.55)); display:flex; align-items:center;}
+  .poll-option-label{position:absolute; left:12px; top:0; height:100%; display:flex; align-items:center; font-size:12.5px; font-weight:700; z-index:2;}
+  .poll-option-pct{position:absolute; right:12px; top:0; height:100%; display:flex; align-items:center; font-family:var(--font-mono); font-size:12px; z-index:2; color:var(--text-muted);}
+  .poll-btn{
+    display:block; width:100%; text-align:left; background:var(--bg); border:1px solid var(--border); color:var(--text);
+    padding:12px 14px; border-radius:10px; font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer; margin-bottom:8px;
+  }
+  .poll-btn:active{background:var(--bg-elevated-2);}
+
+  /* modal */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(6,8,20,0.72); backdrop-filter:blur(3px); z-index:100;
+    display:flex; align-items:flex-end; justify-content:center;
+    animation:fadeIn .18s ease;
+  }
+  @keyframes fadeIn{from{opacity:0;} to{opacity:1;}}
+  .modal-sheet{
+    width:100%; max-width:520px; background:var(--bg-elevated); border-radius:22px 22px 0 0;
+    padding:20px 20px calc(24px + env(safe-area-inset-bottom)); max-height:88vh; overflow-y:auto;
+    animation:slideUp .22s cubic-bezier(.2,.8,.3,1);
+    border:1px solid var(--border); border-bottom:none;
+  }
+  @keyframes slideUp{from{transform:translateY(30px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+  .modal-handle{width:38px; height:4px; border-radius:3px; background:var(--border); margin:0 auto 16px;}
+  .modal-title{font-family:var(--font-display); font-size:19px; font-weight:600; margin-bottom:2px;}
+
+  /* bottom nav */
+  nav.tabbar{
+    position:fixed; bottom:0; left:0; right:0; z-index:40;
+    display:flex; justify-content:center;
+    padding-bottom:env(safe-area-inset-bottom);
+    background:linear-gradient(0deg, rgba(16,20,42,0.98), rgba(16,20,42,0.9));
+    border-top:1px solid var(--border-soft);
+    backdrop-filter:blur(10px);
+  }
+  .tabbar-inner{
+    max-width:520px; width:100%; display:flex; overflow-x:auto; scrollbar-width:none; gap:2px; padding:8px 6px;
+  }
+  .tabbar-inner::-webkit-scrollbar{display:none;}
+  .tab-btn{
+    flex:1 0 auto; min-width:64px; background:none; border:none; color:var(--text-faint); cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; border-radius:12px; position:relative;
+  }
+  .tab-btn.active{color:var(--accent-2);}
+  .tab-btn .lbl{font-size:9.5px; font-weight:700; letter-spacing:.2px;}
+  .tab-dot{position:absolute; top:2px; right:14px; width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 6px var(--accent);}
+
+  .toast{
+    position:fixed; bottom:calc(90px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    background:var(--bg-elevated-3); border:1px solid var(--border); color:var(--text); padding:11px 18px;
+    border-radius:30px; font-size:13px; font-weight:600; z-index:200; box-shadow:var(--shadow);
+    display:flex; align-items:center; gap:8px; animation:toastIn .25s ease;
+  }
+  @keyframes toastIn{from{opacity:0; transform:translate(-50%, 10px);} to{opacity:1; transform:translate(-50%,0);}}
+
+  /* onboarding */
+  .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
+  .onboard-logo{width:84px; height:84px; border-radius:20px; margin:0 auto 22px; background:#fff; box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 0 40px 6px rgba(242,169,59,0.4); display:flex; align-items:center; justify-content:center; padding:8px; overflow:hidden;}
+  .onboard-logo img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
+  .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:30px; line-height:1.5;}
+
+  .link-btn{background:none; border:none; color:var(--accent-2); font-size:12.5px; font-weight:700; cursor:pointer; padding:6px 0; font-family:inherit;}
+
+  .divider{height:1px; background:var(--border-soft); margin:16px 0;}
+
+  ::-webkit-scrollbar{width:0px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+"use strict";
+
+const LOGO_DATA_URI = "logo.png";
+
+/* ============ FIREBASE SETUP ============ */
+/* ---------------------------------------------------------------------
+   PASTE YOUR FIREBASE CONFIG BELOW. Get this from:
+   Firebase Console -> Project Settings -> General -> Your apps -> SDK setup and config
+   This is safe to leave visible in the page source — Firebase apps are protected
+   by Firestore Security Rules, not by hiding this config. See the setup guide
+   for the security rules to paste into your Firestore console.
+--------------------------------------------------------------------- */
+/* ============ FIREBASE SETUP ============ */
+const firebaseConfig = {
+  apiKey: "AIzaSyA5jR_KvDtN52sIUQiYffXL_1pcoN5vNpk",
+  authDomain: "rp-housing-society.firebaseapp.com",
+  projectId: "rp-housing-society",
+  storageBucket: "rp-housing-society.firebasestorage.app",
+  messagingSenderId: "964175352040",
+  appId: "1:964175352040:web:a5aadfe8bf9a6d53af395d",
+  measurementId: "G-ZKW41KY8QX"
+};
+const FIREBASE_CONFIGURED = firebaseConfig.apiKey.indexOf('PASTE_YOUR') === -1;
+let db = null;
+if(FIREBASE_CONFIGURED){
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+}
+const SOCIETY_COLLECTION = 'roshan_society_data';
+
+/* ============ STORAGE HELPERS ============ */
+/* Personal/device-only data (like your profile) lives in the browser's localStorage.
+   Shared society data (notices, bills, complaints, etc.) lives in Firebase Firestore
+   so every resident who opens the app sees the same live data. */
+async function loadKey(key, shared, fallback){
+  if(!shared){
+    try{
+      const raw = localStorage.getItem('roshan_' + key);
+      return raw !== null ? JSON.parse(raw) : fallback;
+    }catch(e){ return fallback; }
+  }
+  if(!db) return fallback;
+  try{
+    const doc = await db.collection(SOCIETY_COLLECTION).doc(key).get();
+    if(doc.exists && doc.data() && doc.data().value !== undefined){
+      try{ return JSON.parse(doc.data().value); }catch(e){ return doc.data().value; }
+    }
+    return fallback;
+  }catch(e){ console.error('firestore read failed', key, e); return fallback; }
+}
+async function saveKey(key, shared, value){
+  if(!shared){
+    try{
+      localStorage.setItem('roshan_' + key, JSON.stringify(value));
+      return true;
+    }catch(e){ return false; }
+  }
+  if(!db) return false;
+  try{
+    await db.collection(SOCIETY_COLLECTION).doc(key).set({value: JSON.stringify(value)});
+    return true;
+  }catch(e){ console.error('firestore write failed', key, e); return false; }
+}
+
+/* ============ ICONS (minimal line set) ============ */
+const ICON = {
+  home:'<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H10v-6h4v6h3.5a1 1 0 0 0 1-1v-9"/>',
+  bell:'<path d="M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/>',
+  wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6Z"/>',
+  receipt:'<path d="M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5V3Z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  calendar:'<rect x="4" y="5.5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3.5v4M16 3.5v4"/>',
+  chart:'<path d="M5 20V10M12 20V4M19 20v-7"/><path d="M3 20h18"/>',
+  shield:'<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/><path d="m9.5 12 2 2 3.5-4"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 0 0 0-2l2-1.5-2-3.4-2.3.9a8 8 0 0 0-1.8-1l-.4-2.5h-4l-.4 2.5a8 8 0 0 0-1.8 1l-2.3-.9-2 3.4L6.6 11a7.9 7.9 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9a8 8 0 0 0 1.8 1l.4 2.5h4l.4-2.5a8 8 0 0 0 1.8-1l2.3.9 2-3.4-2-1.5Z"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 15.5-6.3L21 8M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16M3 21v-5h5"/>',
+  x:'<path d="M6 6l12 12M18 6 6 18"/>',
+  chevronRight:'<path d="m9 6 6 6-6 6"/>',
+  pin:'<path d="M12 2a5 5 0 0 0-5 5c0 4 5 11 5 11s5-7 5-11a5 5 0 0 0-5-5Z"/><circle cx="12" cy="7" r="2"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/>',
+  check:'<path d="M4 12.5 9.5 18 20 6"/>',
+  trash:'<path d="M4 7h16M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7m2 0-1 13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1L7 7"/>',
+  logout:'<path d="M9 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>',
+  building:'<path d="M4 21V6l7-3v18"/><path d="M11 21V9l9 3v9"/><path d="M7 9h.01M7 13h.01M7 17h.01"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>'
+};
+function icon(name, size, strokeW){
+  size = size || 20; strokeW = strokeW || 1.8;
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+strokeW+'" stroke-linecap="round" stroke-linejoin="round">'+(ICON[name]||'')+'</svg>';
+}
+
+/* ============ STATE ============ */
+let state = {
+  profile:null,          // {id,name,flat,role}
+  adminPin:null,
+  notices:[], complaints:[], bills:[], bookings:[], polls:[], visitors:[], facilities:[],
+  tab:'home',
+  loading:true,
+  onboardStep:'welcome',  // welcome -> details -> adminpin
+  onboardData:{name:'', flat:'', role:'resident', pin:''},
+  modal:null,             // {type, payload}
+  toast:null
+};
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function nowISO(){ return new Date().toISOString(); }
+function fmtDate(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'});
+}
+function fmtDateTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}) + ', ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+function timeAgo(iso){
+  const diff = (Date.now() - new Date(iso).getTime())/1000;
+  if(diff < 60) return 'just now';
+  if(diff < 3600) return Math.floor(diff/60)+'m ago';
+  if(diff < 86400) return Math.floor(diff/3600)+'h ago';
+  if(diff < 86400*7) return Math.floor(diff/86400)+'d ago';
+  return fmtDate(iso);
+}
+function money(n){
+  n = Number(n)||0;
+  return 'Rs ' + n.toLocaleString('en-PK');
+}
+function showToast(msg){
+  state.toast = msg;
+  render();
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>{ state.toast=null; render(); }, 2200);
+}
+function closeModal(){ state.modal = null; render(); }
+function openModal(type, payload){ state.modal = {type, payload: payload||{}}; render(); }
+
+/* ============ SETUP-NEEDED SCREEN ============ */
+function renderSetupNeeded(){
+  document.getElementById('app').innerHTML = `
+    <div class="onboard-wrap">
+      <div class="onboard-logo"><img src="${LOGO_DATA_URI}" alt="RP logo"/></div>
+      <div class="onboard-title" style="font-size:21px;">One-time setup needed</div>
+      <div class="onboard-sub" style="text-align:left;">
+        This app needs a free Firebase project to store your society's data. Open
+        <strong>roshan-society-app.html</strong> in a text editor, find the
+        <code style="background:var(--bg-elevated-2); padding:2px 6px; border-radius:5px;">firebaseConfig</code>
+        block near the top of the &lt;script&gt; section, and paste in your own project's
+        keys. Follow the setup guide Claude gave you — it only takes a few minutes and
+        stays free. Once saved, reload this page.
+      </div>
+    </div>`;
+}
+
+/* ============ INIT / LOAD ============ */
+async function init(){
+  if(!FIREBASE_CONFIGURED){ renderSetupNeeded(); return; }
+  state.profile = await loadKey('profile', false, null);
+  await refreshAll(true);
+  state.loading = false;
+  render();
+  setInterval(()=>{ if(!state.modal) refreshAll(false); }, 20000);
+}
+async function refreshAll(isInitial){
+  const [adminPin, notices, complaints, bills, bookings, polls, visitors, facilities] = await Promise.all([
+    loadKey('admin-pin', true, null),
+    loadKey('notices', true, []),
+    loadKey('complaints', true, []),
+    loadKey('bills', true, []),
+    loadKey('bookings', true, []),
+    loadKey('polls', true, []),
+    loadKey('visitors', true, []),
+    loadKey('facilities', true, null),
+  ]);
+  state.adminPin = adminPin;
+  state.notices = notices || [];
+  state.complaints = complaints || [];
+  state.bills = bills || [];
+  state.bookings = bookings || [];
+  state.polls = polls || [];
+  state.visitors = visitors || [];
+  if(facilities === null){
+    state.facilities = ['Community Hall','Gym','Guest Parking','Garden Lawn'];
+    saveKey('facilities', true, state.facilities);
+  } else {
+    state.facilities = facilities;
+  }
+  if(!isInitial) render();
+}
+async function manualRefresh(){
+  const btn = document.getElementById('refreshBtn');
+  if(btn) btn.classList.add('spinning');
+  await refreshAll(false);
+  if(btn) btn.classList.remove('spinning');
+  showToast('Updated');
+}
+
+/* ============ ONBOARDING ============ */
+function renderOnboarding(){
+  const d = state.onboardData;
+  let inner = '';
+  if(state.onboardStep === 'welcome'){
+    inner = `
+      <div class="onboard-logo"><img src="${LOGO_DATA_URI}" alt="RP logo"/></div>
+      <div class="onboard-title">Roshan Pakistan<br/>Housing Society</div>
+      <div class="onboard-sub">Notices, complaints, maintenance bills, facility bookings, polls &amp; visitor logs — all in one place for our community.</div>
+      <button class="btn primary block" data-action="onboard-next-welcome">Get Started ${icon('chevronRight',16)}</button>
+    `;
+  } else if(state.onboardStep === 'details'){
+    inner = `
+      <div class="onboard-title" style="font-size:21px;">Set up your profile</div>
+      <div class="onboard-sub">This is stored on your device and used to tag your activity.</div>
+      <label>Your name</label>
+      <input type="text" id="ob-name" placeholder="e.g. Ahmed Khan" value="${escapeHtml(d.name)}" />
+      <label>House / Flat number</label>
+      <input type="text" id="ob-flat" placeholder="e.g. Block B, House 24" value="${escapeHtml(d.flat)}" />
+      <label>You are joining as</label>
+      <div class="radio-group">
+        <div class="radio-chip ${d.role==='resident'?'active':''}" data-action="onboard-role" data-role="resident">Resident</div>
+        <div class="radio-chip ${d.role==='admin'?'active':''}" data-action="onboard-role" data-role="admin">Committee / Admin</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn secondary" data-action="onboard-back">Back</button>
+        <button class="btn primary" style="flex:1" data-action="onboard-next-details">Continue ${icon('chevronRight',16)}</button>
+      </div>
+    `;
+  } else if(state.onboardStep === 'adminpin'){
+    const settingNew = !state.adminPin;
+    inner = `
+      <div class="onboard-title" style="font-size:21px;">${settingNew? 'Create a committee PIN' : 'Enter committee PIN'}</div>
+      <div class="onboard-sub">${settingNew? 'This is the first time anyone is joining as Admin. Choose a 4-6 digit PIN and share it only with your committee members.' : 'Enter the PIN your committee is already using.'}</div>
+      <label>${settingNew? 'New PIN' : 'PIN'}</label>
+      <input type="text" inputmode="numeric" id="ob-pin" placeholder="e.g. 2468" value="${escapeHtml(d.pin)}" />
+      ${state.onboardError? `<div class="error-text">${state.onboardError}</div>` : ''}
+      <div class="btn-row">
+        <button class="btn secondary" data-action="onboard-back-pin">Back</button>
+        <button class="btn primary" style="flex:1" data-action="onboard-finish">${settingNew?'Create & Continue':'Verify & Continue'} ${icon('check',16)}</button>
+      </div>
+    `;
+  }
+  return `<div class="onboard-wrap">${inner}</div>`;
+}
+function escapeHtml(s){
+  return (s===undefined||s===null? '': String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============ RENDER SHELL ============ */
+const TABS = [
+  {id:'home', label:'Home', icon:'home'},
+  {id:'notices', label:'Notices', icon:'bell'},
+  {id:'complaints', label:'Complaints', icon:'wrench'},
+  {id:'bills', label:'Bills', icon:'receipt'},
+  {id:'book', label:'Book', icon:'calendar'},
+  {id:'polls', label:'Polls', icon:'chart'},
+  {id:'visitors', label:'Visitors', icon:'shield'},
+  {id:'settings', label:'Settings', icon:'settings'}
+];
+
+function hasNoticeUnread(){
+  if(!state.profile) return false;
+  const seen = state.profile.lastSeenNotice || '1970-01-01';
+  return state.notices.some(n=>n.date > seen);
+}
+function myOpenComplaints(){
+  if(!state.profile) return [];
+  return state.complaints.filter(c=> state.profile.role==='admin' ? c.status!=='resolved' : (c.flat===state.profile.flat));
+}
+function myDueBills(){
+  if(!state.profile) return [];
+  return state.bills.filter(b=> state.profile.role==='admin' ? b.status==='due' : (b.flat===state.profile.flat && b.status!=='paid'));
+}
+
+function render(){
+  const root = document.getElementById('app');
+  if(state.loading){
+    root.innerHTML = `<div class="onboard-wrap"><div class="onboard-logo"><img src="${LOGO_DATA_URI}" alt="RP logo"/></div><div class="onboard-sub" style="text-align:center;">Loading your society...</div></div>`;
+    return;
+  }
+  if(!state.profile){
+    root.innerHTML = renderOnboarding();
+    bindOnboardEvents();
+    return;
+  }
+  let mainHtml = '';
+  switch(state.tab){
+    case 'home': mainHtml = renderHome(); break;
+    case 'notices': mainHtml = renderNotices(); break;
+    case 'complaints': mainHtml = renderComplaints(); break;
+    case 'bills': mainHtml = renderBills(); break;
+    case 'book': mainHtml = renderBook(); break;
+    case 'polls': mainHtml = renderPolls(); break;
+    case 'visitors': mainHtml = renderVisitors(); break;
+    case 'settings': mainHtml = renderSettings(); break;
+  }
+  const tabbar = `
+    <nav class="tabbar"><div class="tabbar-inner">
+      ${TABS.map(t=>`
+        <button class="tab-btn ${state.tab===t.id?'active':''}" data-action="go-tab" data-tab="${t.id}">
+          ${t.id==='notices' && hasNoticeUnread() ? '<span class="tab-dot"></span>' : ''}
+          ${icon(t.icon,21)}
+          <span class="lbl">${t.label}</span>
+        </button>
+      `).join('')}
+    </div></nav>
+  `;
+  root.innerHTML = `
+    <div class="topbar">
+      <div class="brand-mark"><img src="${LOGO_DATA_URI}" alt="RP logo"/></div>
+      <div class="brand-text">
+        <div class="name">Roshan Pakistan Housing Society</div>
+        <div class="sub">${escapeHtml(state.profile.flat)} <span class="role-pill">${state.profile.role==='admin'?'Committee':'Resident'}</span></div>
+      </div>
+      <button class="icon-btn" id="refreshBtn" data-action="refresh">${icon('refresh',18)}</button>
+    </div>
+    <main>${mainHtml}</main>
+    ${tabbar}
+    ${state.modal ? renderModal() : ''}
+    ${state.toast ? `<div class="toast">${icon('info',15)} ${escapeHtml(state.toast)}</div>` : ''}
+  `;
+  bindMainEvents();
+}
+
+/* ============ HOME ============ */
+function renderHome(){
+  const isAdmin = state.profile.role==='admin';
+  const openC = myOpenComplaints().length;
+  const dueBills = myDueBills();
+  const dueTotal = dueBills.reduce((s,b)=>s+Number(b.amount||0),0);
+  const activePolls = state.polls.filter(p=>!p.closed).length;
+  const myBookings = state.bookings.filter(b=> isAdmin ? b.status==='pending' : b.flat===state.profile.flat).length;
+  const recentNotices = [...state.notices].sort(sortByPinnedDate).slice(0,3);
+
+  return `
+    <div class="section-title">Hi, ${escapeHtml(state.profile.name.split(' ')[0])} 👋</div>
+    <p class="section-sub">${isAdmin? "Here's what needs the committee's attention." : "Here's what's happening in your society."}</p>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="glow"></div><div class="num">${openC}</div><div class="lbl">${isAdmin?'Open complaints':'Your open complaints'}</div></div>
+      <div class="stat-card"><div class="glow"></div><div class="num" style="font-size:19px;">${money(dueTotal)}</div><div class="lbl">${isAdmin?'Total dues pending':'Your dues'}</div></div>
+      <div class="stat-card"><div class="glow"></div><div class="num">${myBookings}</div><div class="lbl">${isAdmin?'Booking requests':'Your bookings'}</div></div>
+      <div class="stat-card"><div class="glow"></div><div class="num">${activePolls}</div><div class="lbl">Active polls</div></div>
+    </div>
+
+    <div class="quick-actions">
+      <button class="qa-btn" data-action="go-tab" data-tab="complaints">${icon('wrench',22)}<div class="t">Raise a complaint</div><div class="d">Report a maintenance issue</div></button>
+      <button class="qa-btn" data-action="go-tab" data-tab="book">${icon('calendar',22)}<div class="t">Book a facility</div><div class="d">Hall, gym, parking &amp; more</div></button>
+      <button class="qa-btn" data-action="go-tab" data-tab="bills">${icon('receipt',22)}<div class="t">Check bills</div><div class="d">${isAdmin?'Manage maintenance dues':'View &amp; confirm payments'}</div></button>
+      <button class="qa-btn" data-action="go-tab" data-tab="visitors">${icon('shield',22)}<div class="t">Visitor log</div><div class="d">${isAdmin?'Log a new visitor':'See who visited your flat'}</div></button>
+    </div>
+
+    <div class="row between" style="margin-top:22px; margin-bottom:6px;">
+      <h3 style="font-family:var(--font-display); font-size:16.5px; font-weight:600;">Latest notices</h3>
+      <button class="link-btn" data-action="go-tab" data-tab="notices">See all</button>
+    </div>
+    <div class="card">
+      ${recentNotices.length===0? emptyState('bell','No notices yet','Announcements from your committee will show up here.') :
+        recentNotices.map(n=>`
+          <div class="list-item">
+            <div class="row" style="gap:6px;">
+              ${n.pinned? `<span class="pin-flag">${icon('pin',13)}</span>`:''}
+              <div class="list-title" style="flex:1;">${escapeHtml(n.title)}</div>
+            </div>
+            <div class="list-meta">${timeAgo(n.date)} · ${escapeHtml(n.author||'Committee')}</div>
+          </div>
+        `).join('')}
+    </div>
+  `;
+}
+function emptyState(iconName, title, desc){
+  return `<div class="empty-state"><div class="icon">${icon(iconName,34,1.4)}</div><div class="t">${title}</div><div class="d">${desc}</div></div>`;
+}
+function sortByPinnedDate(a,b){
+  if(!!b.pinned - !!a.pinned !== 0) return (!!b.pinned) - (!!a.pinned);
+  return new Date(b.date) - new Date(a.date);
+}
+
+/* ============ NOTICES ============ */
+function renderNotices(){
+  const isAdmin = state.profile.role==='admin';
+  const list = [...state.notices].sort(sortByPinnedDate);
+  if(state.profile){
+    state.profile.lastSeenNotice = nowISO();
+    saveKey('profile', false, state.profile);
+  }
+  return `
+    <div class="section-title">Notices ${isAdmin? `<button class="icon-btn" data-action="new-notice">${icon('plus',18)}</button>`:''}</div>
+    <p class="section-sub">Announcements &amp; updates from the committee.</p>
+    <div class="card">
+      ${list.length===0? emptyState('bell','No notices yet', isAdmin? 'Post your first announcement using the + button above.' : 'Nothing posted yet — check back soon.') :
+      list.map(n=>`
+        <div class="list-item">
+          <div class="row" style="gap:6px; align-items:flex-start;">
+            ${n.pinned? `<span class="pin-flag" style="margin-top:2px;">${icon('pin',14)}</span>`:''}
+            <div style="flex:1;">
+              <div class="list-title">${escapeHtml(n.title)}</div>
+              <div class="list-meta">${fmtDateTime(n.date)} · ${escapeHtml(n.author||'Committee')}</div>
+              <div class="list-body">${escapeHtml(n.body)}</div>
+            </div>
+            ${isAdmin? `<button class="icon-btn" style="width:32px;height:32px;" data-action="delete-notice" data-id="${n.id}">${icon('trash',15)}</button>` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* ============ COMPLAINTS ============ */
+const COMPLAINT_CATEGORIES = ['Plumbing','Electrical','Cleanliness','Security','Elevator','Parking','Noise','Other'];
+function renderComplaints(){
+  const isAdmin = state.profile.role==='admin';
+  const list = [...state.complaints]
+    .filter(c=> isAdmin || c.flat===state.profile.flat)
+    .sort((a,b)=> new Date(b.date)-new Date(a.date));
+  return `
+    <div class="section-title">Complaints <button class="icon-btn" data-action="new-complaint">${icon('plus',18)}</button></div>
+    <p class="section-sub">${isAdmin? 'All complaints raised across the society.' : "Track issues you've reported for your flat."}</p>
+    <div class="card">
+      ${list.length===0? emptyState('wrench','No complaints', isAdmin? 'Nothing reported right now.' : 'Raise a complaint using the + button above.') :
+      list.map(c=>`
+        <div class="list-item">
+          <div class="row between">
+            <div class="list-title">${escapeHtml(c.category)} ${!isAdmin? '' : '· '+escapeHtml(c.flat)}</div>
+            <span class="badge ${c.status==='open'?'open':c.status==='in-progress'?'progress':'resolved'}"><span class="dot"></span>${c.status==='in-progress'?'In progress':c.status.charAt(0).toUpperCase()+c.status.slice(1)}</span>
+          </div>
+          <div class="list-meta">${fmtDateTime(c.date)}</div>
+          <div class="list-body">${escapeHtml(c.description)}</div>
+          ${c.response? `<div class="list-body" style="color:var(--accent-2); margin-top:8px;"><strong>Committee:</strong> ${escapeHtml(c.response)}</div>`:''}
+          ${isAdmin? `
+            <div class="btn-row">
+              ${c.status!=='in-progress'? `<button class="btn sm secondary" data-action="complaint-status" data-id="${c.id}" data-status="in-progress">Mark In Progress</button>`:''}
+              ${c.status!=='resolved'? `<button class="btn sm success" data-action="complaint-status" data-id="${c.id}" data-status="resolved">Mark Resolved</button>`:''}
+              <button class="btn sm secondary" data-action="respond-complaint" data-id="${c.id}">Add note</button>
+            </div>
+          `:''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* ============ BILLS ============ */
+function renderBills(){
+  const isAdmin = state.profile.role==='admin';
+  const list = [...state.bills]
+    .filter(b=> isAdmin || b.flat===state.profile.flat)
+    .sort((a,b)=> new Date(b.dueDate)-new Date(a.dueDate));
+  const totalDue = list.filter(b=>b.status!=='paid').reduce((s,b)=>s+Number(b.amount||0),0);
+  return `
+    <div class="section-title">Maintenance Bills ${isAdmin? `<button class="icon-btn" data-action="new-bill">${icon('plus',18)}</button>`:''}</div>
+    <p class="section-sub">${isAdmin? 'Track collections across every flat.' : 'Your dues, receipts &amp; payment history.'}</p>
+    <div class="card row between" style="margin-bottom:16px;">
+      <div>
+        <div class="list-meta">${isAdmin?'Total pending across society':'Total outstanding'}</div>
+        <div style="font-family:var(--font-mono); font-size:22px; font-weight:600; color:${totalDue>0?'var(--danger)':'var(--success)'};">${money(totalDue)}</div>
+      </div>
+      ${totalDue===0? `<span class="badge paid">${icon('check',12)} All clear</span>`:''}
+    </div>
+    <div class="card">
+      ${list.length===0? emptyState('receipt','No bills yet', isAdmin? 'Generate bills using the + button above.' : "Your committee hasn't issued any bills yet.") :
+      list.map(b=>`
+        <div class="list-item">
+          <div class="row between">
+            <div>
+              <div class="list-title">${escapeHtml(b.month)} ${isAdmin? '· '+escapeHtml(b.flat):''}</div>
+              <div class="list-meta">Due ${fmtDate(b.dueDate)}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:var(--font-mono); font-weight:600; font-size:15px;">${money(b.amount)}</div>
+              <span class="badge ${b.status==='paid'?'paid':b.status==='pending-confirmation'?'pending':'due'}" style="margin-top:4px;">${b.status==='paid'?'Paid':b.status==='pending-confirmation'?'Confirm pending':'Due'}</span>
+            </div>
+          </div>
+          <div class="btn-row">
+            ${!isAdmin && b.status==='due'? `<button class="btn sm secondary" data-action="bill-paid-request" data-id="${b.id}">I've Paid — Notify Committee</button>`:''}
+            ${isAdmin && b.status!=='paid'? `<button class="btn sm success" data-action="bill-mark-paid" data-id="${b.id}">Mark Paid</button>`:''}
+            ${isAdmin? `<button class="btn sm secondary" data-action="delete-bill" data-id="${b.id}">Remove</button>`:''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* ============ BOOKING ============ */
+function renderBook(){
+  const isAdmin = state.profile.role==='admin';
+  const list = [...state.bookings]
+    .filter(b=> isAdmin || b.flat===state.profile.flat)
+    .sort((a,b)=> new Date(b.date)-new Date(a.date));
+  return `
+    <div class="section-title">Facility Booking <button class="icon-btn" data-action="new-booking">${icon('plus',18)}</button></div>
+    <p class="section-sub">Community hall, gym, parking &amp; more. ${isAdmin? 'Approve or reject requests below.' : ''}</p>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="list-meta" style="margin-bottom:8px;">AVAILABLE FACILITIES</div>
+      <div class="row" style="flex-wrap:wrap; gap:8px;">
+        ${state.facilities.map(f=>`<span class="badge closed">${escapeHtml(f)}</span>`).join('')}
+        ${isAdmin? `<button class="link-btn" data-action="manage-facilities">+ Manage</button>`:''}
+      </div>
+    </div>
+    <div class="card">
+      ${list.length===0? emptyState('calendar','No bookings yet', isAdmin? 'Requests from residents will appear here.' : 'Request a facility using the + button above.') :
+      list.map(b=>`
+        <div class="list-item">
+          <div class="row between">
+            <div>
+              <div class="list-title">${escapeHtml(b.facility)} ${isAdmin? '· '+escapeHtml(b.flat):''}</div>
+              <div class="list-meta">${fmtDate(b.date)}${b.timeSlot? ' · '+escapeHtml(b.timeSlot):''}</div>
+            </div>
+            <span class="badge ${b.status}">${b.status.charAt(0).toUpperCase()+b.status.slice(1)}</span>
+          </div>
+          ${b.notes? `<div class="list-body">${escapeHtml(b.notes)}</div>`:''}
+          ${isAdmin && b.status==='pending'? `
+            <div class="btn-row">
+              <button class="btn sm success" data-action="booking-status" data-id="${b.id}" data-status="approved">Approve</button>
+              <button class="btn sm danger" data-action="booking-status" data-id="${b.id}" data-status="rejected">Reject</button>
+            </div>
+          `:''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* ============ POLLS ============ */
+function renderPolls(){
+  const isAdmin = state.profile.role==='admin';
+  const list = [...state.polls].sort((a,b)=> new Date(b.date)-new Date(a.date));
+  return `
+    <div class="section-title">Polls &amp; Voting ${isAdmin? `<button class="icon-btn" data-action="new-poll">${icon('plus',18)}</button>`:''}</div>
+    <p class="section-sub">Society decisions, made together.</p>
+    ${list.length===0? `<div class="card">${emptyState('chart','No polls yet', isAdmin? 'Create a poll using the + button above.' : "The committee hasn't opened any polls yet.")}</div>` :
+    list.map(p=>{
+      const totalVotes = p.options.reduce((s,o)=>s+o.votes,0);
+      const hasVoted = (p.voters||[]).includes(state.profile.id);
+      const showResults = hasVoted || p.closed || isAdmin;
+      return `
+        <div class="card">
+          <div class="row between">
+            <div class="list-title" style="font-size:15.5px;">${escapeHtml(p.question)}</div>
+            <span class="badge ${p.closed?'closed':'progress'}">${p.closed?'Closed':'Active'}</span>
+          </div>
+          <div class="list-meta" style="margin-bottom:12px;">${totalVotes} vote${totalVotes===1?'':'s'} · ${fmtDate(p.date)}</div>
+          ${showResults?
+            p.options.map(o=>{
+              const pct = totalVotes? Math.round(o.votes/totalVotes*100) : 0;
+              return `<div class="poll-option"><div class="poll-option-bar-bg"><div class="poll-option-bar-fill" style="width:${pct}%;"></div><div class="poll-option-label">${escapeHtml(o.text)}</div><div class="poll-option-pct">${pct}% · ${o.votes}</div></div></div>`;
+            }).join('')
+            :
+            p.options.map((o,i)=>`<button class="poll-btn" data-action="vote-poll" data-id="${p.id}" data-idx="${i}">${escapeHtml(o.text)}</button>`).join('')
+          }
+          ${isAdmin && !p.closed? `<div class="btn-row"><button class="btn sm secondary" data-action="close-poll" data-id="${p.id}">Close poll</button></div>`:''}
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+/* ============ VISITORS ============ */
+function renderVisitors(){
+  const isAdmin = state.profile.role==='admin';
+  const list = [...state.visitors]
+    .filter(v=> isAdmin || v.flat===state.profile.flat)
+    .sort((a,b)=> new Date(b.timeIn)-new Date(a.timeIn));
+  return `
+    <div class="section-title">Visitor Log ${isAdmin? `<button class="icon-btn" data-action="new-visitor">${icon('plus',18)}</button>`:''}</div>
+    <p class="section-sub">${isAdmin? 'Log entries for guests, staff &amp; deliveries.' : 'Visitors logged for your flat.'}</p>
+    <div class="card">
+      ${list.length===0? emptyState('shield','No visitor entries', isAdmin? 'Log a new visitor using the + button above.' : 'No visitors logged for your flat yet.') :
+      list.map(v=>`
+        <div class="list-item">
+          <div class="row between">
+            <div>
+              <div class="list-title">${escapeHtml(v.name)}</div>
+              <div class="list-meta">Visiting ${escapeHtml(v.flat)} · ${escapeHtml(v.purpose)}</div>
+            </div>
+            <span class="badge ${v.timeOut? 'closed':'progress'}">${v.timeOut? 'Checked out':'On premises'}</span>
+          </div>
+          <div class="list-meta" style="margin-top:6px;">${icon('clock',11)} In: ${fmtDateTime(v.timeIn)}${v.timeOut? ' · Out: '+fmtDateTime(v.timeOut):''}</div>
+          ${isAdmin && !v.timeOut? `<div class="btn-row"><button class="btn sm secondary" data-action="visitor-checkout" data-id="${v.id}">Mark Checked Out</button></div>`:''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* ============ SETTINGS ============ */
+function renderSettings(){
+  const isAdmin = state.profile.role==='admin';
+  return `
+    <div class="section-title">Settings</div>
+    <p class="section-sub">Your profile &amp; app info.</p>
+    <div class="card">
+      <div class="list-meta" style="margin-bottom:4px;">NAME</div>
+      <div class="list-title">${escapeHtml(state.profile.name)}</div>
+      <div class="divider"></div>
+      <div class="list-meta" style="margin-bottom:4px;">HOUSE / FLAT</div>
+      <div class="list-title">${escapeHtml(state.profile.flat)}</div>
+      <div class="divider"></div>
+      <div class="list-meta" style="margin-bottom:4px;">ROLE</div>
+      <div class="list-title">${isAdmin?'Committee / Admin':'Resident'}</div>
+      <div class="btn-row"><button class="btn secondary block" data-action="edit-profile">Edit profile</button></div>
+    </div>
+    ${isAdmin? `
+    <div class="card">
+      <div class="row between">
+        <div class="list-title">Committee PIN</div>
+        <button class="link-btn" data-action="change-pin">Change</button>
+      </div>
+      <div class="hint">Share this PIN only with trusted committee members — anyone with it can manage bills, notices and complaints.</div>
+    </div>`:''}
+    <div class="card">
+      <div class="list-title" style="margin-bottom:8px;">About this app</div>
+      <div class="hint" style="font-size:12.5px; line-height:1.6;">
+        Built for Roshan Pakistan Housing Society. Free, with no subscriptions. Data is shared across everyone using this app link so the whole society stays in sync — please don't share the link outside your community.
+      </div>
+    </div>
+    <div class="card">
+      <button class="btn danger block" data-action="switch-role">${icon('logout',16)} Switch account / role</button>
+    </div>
+  `;
+}
+
+/* ============ MODALS ============ */
+function renderModal(){
+  const m = state.modal;
+  let content = '';
+  if(m.type==='new-notice') content = modalNewNotice();
+  else if(m.type==='new-complaint') content = modalNewComplaint();
+  else if(m.type==='respond-complaint') content = modalRespondComplaint(m.payload.id);
+  else if(m.type==='new-bill') content = modalNewBill();
+  else if(m.type==='new-booking') content = modalNewBooking();
+  else if(m.type==='manage-facilities') content = modalManageFacilities();
+  else if(m.type==='new-poll') content = modalNewPoll();
+  else if(m.type==='new-visitor') content = modalNewVisitor();
+  else if(m.type==='edit-profile') content = modalEditProfile();
+  else if(m.type==='change-pin') content = modalChangePin();
+  return `<div class="modal-backdrop" data-action="backdrop-close">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      ${content}
+    </div>
+  </div>`;
+}
+
+function modalNewNotice(){
+  return `
+    <div class="modal-title">New notice</div>
+    <p class="section-sub">Visible to every resident instantly.</p>
+    <label>Title</label>
+    <input type="text" id="m-title" placeholder="e.g. Water tank cleaning on Sunday" />
+    <label>Details</label>
+    <textarea id="m-body" placeholder="Add details residents should know..."></textarea>
+    <div class="checkbox-row"><input type="checkbox" id="m-pinned" /> <label style="margin:0; text-transform:none; font-weight:600; font-size:13px; color:var(--text);">Pin to top</label></div>
+    <div class="btn-row"><button class="btn primary block" data-action="save-notice">Post notice</button></div>
+  `;
+}
+function modalNewComplaint(){
+  return `
+    <div class="modal-title">Raise a complaint</div>
+    <p class="section-sub">Reported as ${escapeHtml(state.profile.flat)}.</p>
+    <label>Category</label>
+    <select id="m-category">${COMPLAINT_CATEGORIES.map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
+    <label>Describe the issue</label>
+    <textarea id="m-desc" placeholder="What's wrong, and where?"></textarea>
+    <div class="btn-row"><button class="btn primary block" data-action="save-complaint">Submit complaint</button></div>
+  `;
+}
+function modalRespondComplaint(id){
+  const c = state.complaints.find(x=>x.id===id);
+  return `
+    <div class="modal-title">Add a note</div>
+    <p class="section-sub">${escapeHtml(c.category)} · ${escapeHtml(c.flat)}</p>
+    <label>Response to resident</label>
+    <textarea id="m-response" placeholder="e.g. Plumber scheduled for tomorrow 10am">${escapeHtml(c.response||'')}</textarea>
+    <div class="btn-row"><button class="btn primary block" data-action="save-response" data-id="${id}">Save note</button></div>
+  `;
+}
+function modalNewBill(){
+  return `
+    <div class="modal-title">Generate bill</div>
+    <label>House / Flat number (or "ALL" for every flat on record)</label>
+    <input type="text" id="m-flat" placeholder="e.g. Block B, House 24 or ALL" />
+    <label>Month / Description</label>
+    <input type="text" id="m-month" placeholder="e.g. Maintenance — August 2026" />
+    <label>Amount (PKR)</label>
+    <input type="number" id="m-amount" placeholder="e.g. 3500" />
+    <label>Due date</label>
+    <input type="date" id="m-duedate" />
+    <div class="hint">Using "ALL" creates this bill for every flat that has previously appeared in a bill, complaint, booking or visitor entry. For a brand-new society, add flats one at a time first.</div>
+    <div class="btn-row"><button class="btn primary block" data-action="save-bill">Generate bill</button></div>
+  `;
+}
+function modalNewBooking(){
+  return `
+    <div class="modal-title">Request a booking</div>
+    <label>Facility</label>
+    <select id="m-facility">${state.facilities.map(f=>`<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('')}</select>
+    <label>Date</label>
+    <input type="date" id="m-date" />
+    <label>Time slot</label>
+    <input type="text" id="m-timeslot" placeholder="e.g. 6:00 PM – 9:00 PM" />
+    <label>Notes (optional)</label>
+    <textarea id="m-notes" placeholder="Occasion, number of guests, etc."></textarea>
+    <div class="btn-row"><button class="btn primary block" data-action="save-booking">Send request</button></div>
+  `;
+}
+function modalManageFacilities(){
+  return `
+    <div class="modal-title">Manage facilities</div>
+    <p class="section-sub">Add or remove bookable spaces.</p>
+    <div class="card" style="margin-bottom:14px;">
+      ${state.facilities.map((f,i)=>`
+        <div class="row between" style="padding:8px 0; ${i>0?'border-top:1px solid var(--border-soft);':''}">
+          <span>${escapeHtml(f)}</span>
+          <button class="icon-btn" style="width:32px;height:32px;" data-action="remove-facility" data-idx="${i}">${icon('trash',14)}</button>
+        </div>
+      `).join('')}
+    </div>
+    <label>Add new facility</label>
+    <input type="text" id="m-newfacility" placeholder="e.g. Rooftop Terrace" />
+    <div class="btn-row"><button class="btn primary block" data-action="add-facility">Add facility</button></div>
+  `;
+}
+function modalNewPoll(){
+  return `
+    <div class="modal-title">New poll</div>
+    <label>Question</label>
+    <input type="text" id="m-question" placeholder="e.g. Should we install solar street lights?" />
+    <label>Options (one per line, 2–5)</label>
+    <textarea id="m-options" placeholder="Yes&#10;No&#10;Need more info"></textarea>
+    <div class="btn-row"><button class="btn primary block" data-action="save-poll">Create poll</button></div>
+  `;
+}
+function modalNewVisitor(){
+  return `
+    <div class="modal-title">Log a visitor</div>
+    <label>Visitor name</label>
+    <input type="text" id="m-vname" placeholder="e.g. Courier — TCS" />
+    <label>Visiting house / flat</label>
+    <input type="text" id="m-vflat" placeholder="e.g. Block B, House 24" />
+    <label>Purpose</label>
+    <input type="text" id="m-vpurpose" placeholder="e.g. Delivery, Guest, Maintenance staff" />
+    <div class="btn-row"><button class="btn primary block" data-action="save-visitor">Log entry</button></div>
+  `;
+}
+function modalEditProfile(){
+  return `
+    <div class="modal-title">Edit profile</div>
+    <label>Name</label>
+    <input type="text" id="m-ename" value="${escapeHtml(state.profile.name)}" />
+    <label>House / Flat number</label>
+    <input type="text" id="m-eflat" value="${escapeHtml(state.profile.flat)}" />
+    <div class="btn-row"><button class="btn primary block" data-action="save-profile">Save</button></div>
+  `;
+}
+function modalChangePin(){
+  return `
+    <div class="modal-title">Change committee PIN</div>
+    <label>New PIN</label>
+    <input type="text" inputmode="numeric" id="m-newpin" placeholder="e.g. 1357" />
+    <div class="hint">Everyone currently using the old PIN will keep their admin access — only new admin sign-ups need the new PIN.</div>
+    <div class="btn-row"><button class="btn primary block" data-action="save-pin">Update PIN</button></div>
+  `;
+}
+
+/* ============ EVENT BINDING ============ */
+function bindOnboardEvents(){
+  document.body.onclick = async function(e){
+    const t = e.target.closest('[data-action]');
+    if(!t) return;
+    const action = t.dataset.action;
+    if(action==='onboard-next-welcome'){ state.onboardStep='details'; render(); }
+    if(action==='onboard-role'){ state.onboardData.role = t.dataset.role; render(); }
+    if(action==='onboard-back'){ state.onboardStep='welcome'; render(); }
+    if(action==='onboard-next-details'){
+      const name = document.getElementById('ob-name').value.trim();
+      const flat = document.getElementById('ob-flat').value.trim();
+      if(!name || !flat){ showToastSimple('Please enter your name and flat number'); return; }
+      state.onboardData.name = name; state.onboardData.flat = flat;
+      if(state.onboardData.role==='resident'){
+        finishOnboarding();
+      } else {
+        state.onboardStep='adminpin'; state.onboardError=null; render();
+      }
+    }
+    if(action==='onboard-back-pin'){ state.onboardStep='details'; render(); }
+    if(action==='onboard-finish'){
+      const pin = document.getElementById('ob-pin').value.trim();
+      if(!pin || pin.length<4){ state.onboardError='PIN must be at least 4 characters.'; render(); return; }
+      if(state.adminPin){
+        if(pin !== state.adminPin){ state.onboardError='Incorrect PIN. Ask your committee for the correct one.'; render(); return; }
+      } else {
+        state.adminPin = pin;
+        await saveKey('admin-pin', true, pin);
+      }
+      state.onboardData.pin = pin;
+      finishOnboarding();
+    }
+  };
+}
+function showToastSimple(msg){
+  const el = document.createElement('div');
+  el.className='toast'; el.style.position='fixed'; el.style.top='20px'; el.style.left='50%'; el.style.transform='translateX(-50%)'; el.style.bottom='auto';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 2200);
+}
+async function finishOnboarding(){
+  const d = state.onboardData;
+  state.profile = {id: uid(), name:d.name, flat:d.flat, role:d.role, lastSeenNotice: nowISO()};
+  await saveKey('profile', false, state.profile);
+  state.tab='home';
+  render();
+}
+
+function bindMainEvents(){
+  document.body.onclick = async function(e){
+    const backdrop = e.target.closest('[data-action="backdrop-close"]');
+    if(backdrop && e.target === backdrop){ closeModal(); return; }
+    const t = e.target.closest('[data-action]');
+    if(!t) return;
+    const action = t.dataset.action;
+    const id = t.dataset.id;
+
+    if(action==='go-tab'){ state.tab = t.dataset.tab; render(); return; }
+    if(action==='refresh'){ manualRefresh(); return; }
+
+    if(action==='new-notice') return openModal('new-notice');
+    if(action==='save-notice'){
+      const title = document.getElementById('m-title').value.trim();
+      const body = document.getElementById('m-body').value.trim();
+      if(!title || !body) return showToast('Please fill in both fields');
+      state.notices.unshift({id:uid(), title, body, pinned: document.getElementById('m-pinned').checked, date: nowISO(), author: state.profile.name});
+      await saveKey('notices', true, state.notices);
+      closeModal(); showToast('Notice posted');
+      return;
+    }
+    if(action==='delete-notice'){
+      state.notices = state.notices.filter(n=>n.id!==id);
+      await saveKey('notices', true, state.notices);
+      render(); showToast('Notice removed');
+      return;
+    }
+
+    if(action==='new-complaint') return openModal('new-complaint');
+    if(action==='save-complaint'){
+      const category = document.getElementById('m-category').value;
+      const description = document.getElementById('m-desc').value.trim();
+      if(!description) return showToast('Please describe the issue');
+      state.complaints.unshift({id:uid(), category, description, status:'open', date: nowISO(), flat: state.profile.flat, response:''});
+      await saveKey('complaints', true, state.complaints);
+      closeModal(); showToast('Complaint submitted');
+      return;
+    }
+    if(action==='complaint-status'){
+      const c = state.complaints.find(x=>x.id===id);
+      if(c){ c.status = t.dataset.status; await saveKey('complaints', true, state.complaints); render(); showToast('Status updated'); }
+      return;
+    }
+    if(action==='respond-complaint') return openModal('respond-complaint', {id});
+    if(action==='save-response'){
+      const c = state.complaints.find(x=>x.id===id);
+      if(c){ c.response = document.getElementById('m-response').value.trim(); await saveKey('complaints', true, state.complaints); closeModal(); showToast('Note saved'); }
+      return;
+    }
+
+    if(action==='new-bill') return openModal('new-bill');
+    if(action==='save-bill'){
+      const flat = document.getElementById('m-flat').value.trim();
+      const month = document.getElementById('m-month').value.trim();
+      const amount = document.getElementById('m-amount').value;
+      const dueDate = document.getElementById('m-duedate').value;
+      if(!flat || !month || !amount || !dueDate) return showToast('Please fill in all fields');
+      if(flat.toUpperCase()==='ALL'){
+        const flats = Array.from(new Set([
+          ...state.bills.map(b=>b.flat),
+          ...state.complaints.map(c=>c.flat),
+          ...state.bookings.map(b=>b.flat),
+          ...state.visitors.map(v=>v.flat)
+        ].filter(Boolean)));
+        if(flats.length===0){ showToast('No known flats yet — add at least one bill manually first'); return; }
+        flats.forEach(f=> state.bills.unshift({id:uid(), flat:f, month, amount, dueDate, status:'due', date: nowISO()}));
+      } else {
+        state.bills.unshift({id:uid(), flat, month, amount, dueDate, status:'due', date: nowISO()});
+      }
+      await saveKey('bills', true, state.bills);
+      closeModal(); showToast('Bill(s) generated');
+      return;
+    }
+    if(action==='bill-mark-paid'){
+      const b = state.bills.find(x=>x.id===id);
+      if(b){ b.status='paid'; await saveKey('bills', true, state.bills); render(); showToast('Marked as paid'); }
+      return;
+    }
+    if(action==='bill-paid-request'){
+      const b = state.bills.find(x=>x.id===id);
+      if(b){ b.status='pending-confirmation'; await saveKey('bills', true, state.bills); render(); showToast('Committee notified'); }
+      return;
+    }
+    if(action==='delete-bill'){
+      state.bills = state.bills.filter(b=>b.id!==id);
+      await saveKey('bills', true, state.bills);
+      render(); showToast('Bill removed');
+      return;
+    }
+
+    if(action==='new-booking') return openModal('new-booking');
+    if(action==='save-booking'){
+      const facility = document.getElementById('m-facility').value;
+      const date = document.getElementById('m-date').value;
+      const timeSlot = document.getElementById('m-timeslot').value.trim();
+      const notes = document.getElementById('m-notes').value.trim();
+      if(!date) return showToast('Please pick a date');
+      state.bookings.unshift({id:uid(), facility, date, timeSlot, notes, status:'pending', flat: state.profile.flat});
+      await saveKey('bookings', true, state.bookings);
+      closeModal(); showToast('Booking request sent');
+      return;
+    }
+    if(action==='booking-status'){
+      const b = state.bookings.find(x=>x.id===id);
+      if(b){ b.status = t.dataset.status; await saveKey('bookings', true, state.bookings); render(); showToast('Booking '+t.dataset.status); }
+      return;
+    }
+    if(action==='manage-facilities') return openModal('manage-facilities');
+    if(action==='add-facility'){
+      const val = document.getElementById('m-newfacility').value.trim();
+      if(!val) return;
+      state.facilities.push(val);
+      await saveKey('facilities', true, state.facilities);
+      openModal('manage-facilities');
+      return;
+    }
+    if(action==='remove-facility'){
+      state.facilities.splice(Number(t.dataset.idx),1);
+      await saveKey('facilities', true, state.facilities);
+      openModal('manage-facilities');
+      return;
+    }
+
+    if(action==='new-poll') return openModal('new-poll');
+    if(action==='save-poll'){
+      const question = document.getElementById('m-question').value.trim();
+      const optsRaw = document.getElementById('m-options').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      if(!question || optsRaw.length<2) return showToast('Add a question and at least 2 options');
+      state.polls.unshift({id:uid(), question, options: optsRaw.map(text=>({text, votes:0})), voters:[], closed:false, date: nowISO()});
+      await saveKey('polls', true, state.polls);
+      closeModal(); showToast('Poll created');
+      return;
+    }
+    if(action==='vote-poll'){
+      const p = state.polls.find(x=>x.id===id);
+      if(p && !p.closed && !(p.voters||[]).includes(state.profile.id)){
+        p.options[Number(t.dataset.idx)].votes++;
+        p.voters = p.voters || [];
+        p.voters.push(state.profile.id);
+        await saveKey('polls', true, state.polls);
+        render(); showToast('Vote recorded');
+      }
+      return;
+    }
+    if(action==='close-poll'){
+      const p = state.polls.find(x=>x.id===id);
+      if(p){ p.closed = true; await saveKey('polls', true, state.polls); render(); showToast('Poll closed'); }
+      return;
+    }
+
+    if(action==='new-visitor') return openModal('new-visitor');
+    if(action==='save-visitor'){
+      const name = document.getElementById('m-vname').value.trim();
+      const flat = document.getElementById('m-vflat').value.trim();
+      const purpose = document.getElementById('m-vpurpose').value.trim();
+      if(!name || !flat) return showToast('Please fill in name and flat');
+      state.visitors.unshift({id:uid(), name, flat, purpose: purpose||'Visit', timeIn: nowISO(), timeOut:null, loggedBy: state.profile.name});
+      await saveKey('visitors', true, state.visitors);
+      closeModal(); showToast('Visitor logged');
+      return;
+    }
+    if(action==='visitor-checkout'){
+      const v = state.visitors.find(x=>x.id===id);
+      if(v){ v.timeOut = nowISO(); await saveKey('visitors', true, state.visitors); render(); showToast('Checked out'); }
+      return;
+    }
+
+    if(action==='edit-profile') return openModal('edit-profile');
+    if(action==='save-profile'){
+      state.profile.name = document.getElementById('m-ename').value.trim() || state.profile.name;
+      state.profile.flat = document.getElementById('m-eflat').value.trim() || state.profile.flat;
+      await saveKey('profile', false, state.profile);
+      closeModal(); showToast('Profile updated');
+      return;
+    }
+    if(action==='change-pin') return openModal('change-pin');
+    if(action==='save-pin'){
+      const pin = document.getElementById('m-newpin').value.trim();
+      if(!pin || pin.length<4) return showToast('PIN must be at least 4 characters');
+      state.adminPin = pin;
+      await saveKey('admin-pin', true, pin);
+      closeModal(); showToast('PIN updated');
+      return;
+    }
+    if(action==='switch-role'){
+      state.profile = null;
+      await saveKey('profile', false, null);
+      state.onboardStep='welcome'; state.onboardData={name:'',flat:'',role:'resident',pin:''};
+      render();
+      return;
+    }
+  };
+}
+
+init();
+})();
+</script>
+</body>
+</html>

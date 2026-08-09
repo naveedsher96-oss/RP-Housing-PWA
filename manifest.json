@@ -1,0 +1,17 @@
+{
+  "name": "Roshan Pakistan Housing Society",
+  "short_name": "Roshan RPHS",
+  "description": "Notices, complaints, maintenance bills, facility booking, polls and visitor log for Roshan Pakistan Housing Society.",
+  "start_url": "./roshan-society-app.html",
+  "id": "./roshan-society-app.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#10142A",
+  "theme_color": "#10142A",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
