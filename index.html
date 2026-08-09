@@ -932,7 +932,7 @@ function renderModal(){
   else if(m.type==='edit-profile') content = modalEditProfile();
   else if(m.type==='change-pin') content = modalChangePin();
   return `<div class="modal-backdrop" data-action="backdrop-close">
-    <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-sheet">
       <div class="modal-handle"></div>
       ${content}
     </div>
