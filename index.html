@@ -225,8 +225,6 @@
 (function(){
   "use strict";
 
-  const ADMIN_PIN = "1234";
-
   // Firebase Configuration
   const firebaseConfig = {
     apiKey: "AIzaSyA5jR_KvDtN52sIUQiYffXL_1pcoN5vNpk",
@@ -318,8 +316,9 @@
           </div>
 
           <div id="pin-wrap" style="display:none;">
-            <label>Admin Security PIN</label>
-            <input type="password" id="admin-pin" placeholder="Enter 4-digit PIN" maxlength="4" />
+            <label id="pin-label">Admin Security PIN</label>
+            <input type="password" id="admin-pin" placeholder="Enter or set 4-digit PIN" maxlength="4" />
+            <div id="pin-hint" style="font-size:11px; color:var(--text-muted); margin-top:4px;">First time logging in? Enter a new 4-digit PIN to secure your admin profile.</div>
           </div>
 
           <button type="submit" class="btn primary block" style="margin-top:20px;">Access Portal</button>
@@ -333,20 +332,57 @@
       document.getElementById('pin-wrap').style.display = (val === 'admin') ? 'block' : 'none';
     });
 
-    document.getElementById('onboard-form').addEventListener('submit', (e) => {
+    document.getElementById('onboard-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const name = document.getElementById('user-name').value.trim();
       const role = document.getElementById('user-role').value;
+      const adminId = name.toLowerCase().replace(/\s+/g, '_');
       
       if (role === 'admin') {
-        const pinEntered = document.getElementById('admin-pin').value;
-        if (pinEntered !== ADMIN_PIN) {
-          alert('Incorrect Admin PIN. Default PIN is 1234.');
+        const pinEntered = document.getElementById('admin-pin').value.trim();
+        if (!pinEntered || pinEntered.length !== 4) {
+          alert('Please enter a 4-digit PIN.');
           return;
+        }
+
+        let adminPinStore = JSON.parse(localStorage.getItem('rphs_admin_pins')) || {};
+
+        if (db) {
+          try {
+            const adminDoc = await db.collection('admins').doc(adminId).get();
+            if (adminDoc.exists) {
+              if (adminDoc.data().pin !== pinEntered) {
+                alert('Incorrect PIN for this Admin profile.');
+                return;
+              }
+            } else {
+              // Register new Admin PIN on first sign in
+              await db.collection('admins').doc(adminId).set({ pin: pinEntered, name: name });
+              alert('First time login detected! Your Admin PIN has been created successfully.');
+            }
+          } catch(err) {
+            // Local fallback check
+            if (adminPinStore[adminId]) {
+              if (adminPinStore[adminId] !== pinEntered) { alert('Incorrect Admin PIN.'); return; }
+            } else {
+              adminPinStore[adminId] = pinEntered;
+              localStorage.setItem('rphs_admin_pins', JSON.stringify(adminPinStore));
+              alert('Admin PIN created successfully.');
+            }
+          }
+        } else {
+          if (adminPinStore[adminId]) {
+            if (adminPinStore[adminId] !== pinEntered) { alert('Incorrect Admin PIN.'); return; }
+          } else {
+            adminPinStore[adminId] = pinEntered;
+            localStorage.setItem('rphs_admin_pins', JSON.stringify(adminPinStore));
+            alert('Admin PIN created successfully.');
+          }
         }
       }
 
       currentUser = {
-        name: document.getElementById('user-name').value.trim(),
+        name: name,
         role: role,
         house: (role === 'admin') ? 'Admin Office' : document.getElementById('user-house').value.trim()
       };
