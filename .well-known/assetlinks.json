@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.naveedsher96_oss.twa",
+        "sha256_cert_fingerprints": ["E0:A3:63:51:6E:A1:05:6C:DD:31:10:F2:BA:6D:B7:83:EE:D0:D9:73:40:70:A3:C2:ED:98:B2:73:82:09:7B:37"]
+      }
+    }]
