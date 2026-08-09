@@ -116,13 +116,6 @@
     margin-bottom:12px;
     box-shadow:var(--shadow);
   }
-  .stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;}
-  .stat-card{
-    background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm);
-    padding:14px; position:relative; overflow:hidden;
-  }
-  .stat-card .num{font-family:var(--font-mono); font-size:26px; font-weight:600; color:var(--accent-2);}
-  .stat-card .lbl{font-size:11.5px; color:var(--text-muted); margin-top:2px;}
 
   .badge{
     display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.3px;
@@ -141,7 +134,6 @@
   .btn.primary{background:linear-gradient(180deg, var(--accent-2), var(--accent)); color:#251400; box-shadow:0 4px 16px rgba(242,169,59,0.35);}
   .btn.sm{padding:6px 12px; font-size:11.5px; border-radius:8px;}
   .btn.block{width:100%;}
-  .btn.outline{background:transparent; border:1px solid var(--border); color:var(--text);}
 
   label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
   input[type=text], input[type=password], select, textarea{
@@ -181,7 +173,7 @@
   .tab-btn.active{color:var(--accent-2);}
   .tab-btn .lbl{font-size:11px; font-weight:700;}
 
-  /* Onboarding screen */
+  /* Onboarding */
   .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
   .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
   .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:30px;}
@@ -195,7 +187,6 @@
 (function(){
   "use strict";
 
-  // Default Security PIN for Admin Access
   const ADMIN_PIN = "1234";
 
   // Firebase Configuration
@@ -209,7 +200,6 @@
     measurementId: "G-ZKW41KY8QX"
   };
 
-  // Initialize Firebase
   if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
   }
@@ -217,7 +207,7 @@
 
   // App State
   let currentUser = JSON.parse(localStorage.getItem('rphs_user')) || null;
-  let activeTab = 'announcements'; // 'announcements', 'polls', 'complaints'
+  let activeTab = 'announcements';
   let complaints = [];
   let notices = [];
   let polls = [];
@@ -229,8 +219,6 @@
       renderOnboarding();
       return;
     }
-
-    const isAdmin = (currentUser.role === 'admin');
 
     appEl.innerHTML = `
       <header class="topbar">
@@ -247,7 +235,7 @@
         <button class="btn sm" id="logout-btn" style="background:var(--bg-elevated-2); color:var(--text-muted);">Logout</button>
       </header>
 
-      <main>
+      <main style="padding-bottom:20px;">
         ${renderContent()}
       </main>
 
@@ -266,7 +254,7 @@
       </nav>
     `;
 
-    bindEvents();
+    bindGlobalEvents();
     loadData();
   }
 
@@ -336,7 +324,7 @@
     if (activeTab === 'announcements') {
       return `
         <div class="section-title">Notices & Announcements</div>
-        <div class="section-sub">Official updates from the society management.</div>
+        <div class="section-sub">Official updates from society management.</div>
         
         ${isAdmin ? `
           <div class="card">
@@ -406,7 +394,7 @@
     }
   }
 
-  function bindEvents() {
+  function bindGlobalEvents() {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
@@ -423,52 +411,68 @@
       });
     });
 
-    // Forms
+    bindFormEvents();
+  }
+
+  function bindFormEvents() {
     const noticeForm = document.getElementById('notice-form');
     if (noticeForm) {
-      noticeForm.addEventListener('submit', (e) => {
+      noticeForm.onsubmit = function(e) {
         e.preventDefault();
         postNotice();
-      });
+      };
     }
 
     const pollForm = document.getElementById('poll-form');
     if (pollForm) {
-      pollForm.addEventListener('submit', (e) => {
+      pollForm.onsubmit = function(e) {
         e.preventDefault();
         postPoll();
-      });
+      };
     }
 
     const complaintForm = document.getElementById('complaint-form');
     if (complaintForm) {
-      complaintForm.addEventListener('submit', (e) => {
+      complaintForm.onsubmit = function(e) {
         e.preventDefault();
         submitComplaint();
-      });
+      };
     }
   }
 
-  // Load Firestore / Local Data
   function loadData() {
     if (activeTab === 'announcements') loadNotices();
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'complaints') loadComplaints();
   }
 
-  // Announcements Logic
+  // Announcements
   function postNotice() {
     const title = document.getElementById('notice-title').value.trim();
     const desc = document.getElementById('notice-desc').value.trim();
+    if (!title || !desc) return;
+
     const item = { title, desc, date: new Date().toLocaleDateString(), createdAt: new Date().toISOString() };
 
     if (db) {
-      db.collection('notices').add(item).then(() => { loadNotices(); });
+      db.collection('notices').add(item).then(() => {
+        document.getElementById('notice-form').reset();
+        loadNotices();
+      }).catch(err => {
+        console.error("Firestore Notice Error:", err);
+        fallbackPostNotice(item);
+      });
     } else {
-      notices.unshift(item);
-      localStorage.setItem('rphs_notices', JSON.stringify(notices));
-      renderNoticesList();
+      fallbackPostNotice(item);
     }
+  }
+
+  function fallbackPostNotice(item) {
+    notices.unshift(item);
+    localStorage.setItem('rphs_notices', JSON.stringify(notices));
+    const form = document.getElementById('notice-form');
+    if (form) form.reset();
+    renderNoticesList();
   }
 
   function loadNotices() {
@@ -503,11 +507,13 @@
     `).join('');
   }
 
-  // Polls Logic
+  // Polls
   function postPoll() {
     const title = document.getElementById('poll-title').value.trim();
     const opt1 = document.getElementById('poll-opt1').value.trim();
     const opt2 = document.getElementById('poll-opt2').value.trim();
+
+    if (!title || !opt1 || !opt2) return;
 
     const item = {
       title,
@@ -517,12 +523,24 @@
     };
 
     if (db) {
-      db.collection('polls').add(item).then(() => { loadPolls(); });
+      db.collection('polls').add(item).then(() => {
+        document.getElementById('poll-form').reset();
+        loadPolls();
+      }).catch(err => {
+        console.error("Firestore Poll Error:", err);
+        fallbackPostPoll(item);
+      });
     } else {
-      polls.unshift(item);
-      localStorage.setItem('rphs_polls', JSON.stringify(polls));
-      renderPollsList();
+      fallbackPostPoll(item);
     }
+  }
+
+  function fallbackPostPoll(item) {
+    polls.unshift(item);
+    localStorage.setItem('rphs_polls', JSON.stringify(polls));
+    const form = document.getElementById('poll-form');
+    if (form) form.reset();
+    renderPollsList();
   }
 
   function loadPolls() {
@@ -570,9 +588,10 @@
     }).join('');
   }
 
-  window.votePoll = function(pollId, optIndex) {
-    let poll = polls.find((p, idx) => (p.id === pollId || idx == pollId));
+  window.votePoll = function(pollIdentifier, optIndex) {
+    let poll = polls.find((p, idx) => (p.id === pollIdentifier || idx == pollIdentifier));
     if (!poll) return;
+
     if (poll.voters && poll.voters.includes(currentUser.name)) {
       alert('You have already voted in this poll.');
       return;
@@ -593,11 +612,13 @@
     }
   };
 
-  // Complaints Logic
+  // Complaints
   function submitComplaint() {
     const title = document.getElementById('c-title').value.trim();
     const category = document.getElementById('c-category').value;
     const desc = document.getElementById('c-desc').value.trim();
+
+    if (!title || !desc) return;
 
     const newComplaint = {
       title,
@@ -612,13 +633,24 @@
     if (db) {
       db.collection('complaints').add(newComplaint).then(() => {
         alert('Complaint submitted!');
+        document.getElementById('complaint-form').reset();
         loadComplaints();
+      }).catch(err => {
+        console.error("Firestore Complaint Error:", err);
+        fallbackSubmitComplaint(newComplaint);
       });
     } else {
-      complaints.unshift(newComplaint);
-      localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
-      renderComplaintsList();
+      fallbackSubmitComplaint(newComplaint);
     }
+  }
+
+  function fallbackSubmitComplaint(item) {
+    complaints.unshift(item);
+    localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
+    alert('Complaint submitted!');
+    const form = document.getElementById('complaint-form');
+    if (form) form.reset();
+    renderComplaintsList();
   }
 
   function loadComplaints() {
@@ -643,8 +675,10 @@
 
     const isAdmin = (currentUser.role === 'admin');
 
-    el.innerHTML = complaints.map(c => {
+    el.innerHTML = complaints.map((c, idx) => {
       const badgeClass = c.status === 'Resolved' ? 'resolved' : (c.status === 'In Progress' ? 'progress' : 'pending');
+      const itemKey = c.id ? c.id : idx;
+
       return `
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
@@ -658,8 +692,8 @@
 
           ${isAdmin ? `
             <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border-soft); display:flex; align-items:center; gap:8px;">
-              <label style="margin:0; font-size:11px;">Admin Action:</label>
-              <select class="status-select" data-id="${c.id || ''}" style="padding:4px 8px; font-size:12px; width:auto;">
+              <label style="margin:0; font-size:11px;">Update Status:</label>
+              <select class="status-select" data-key="${itemKey}" style="padding:4px 8px; font-size:12px; width:auto;">
                 <option value="Pending" ${c.status==='Pending'?'selected':''}>Pending</option>
                 <option value="In Progress" ${c.status==='In Progress'?'selected':''}>In Progress</option>
                 <option value="Resolved" ${c.status==='Resolved'?'selected':''}>Resolved</option>
@@ -673,13 +707,30 @@
     if (isAdmin) {
       document.querySelectorAll('.status-select').forEach(select => {
         select.addEventListener('change', (e) => {
-          const docId = e.target.getAttribute('data-id');
+          const key = e.target.getAttribute('data-key');
           const newStatus = e.target.value;
-          if (db && docId) {
-            db.collection('complaints').doc(docId).update({ status: newStatus }).then(() => loadComplaints());
-          }
+          updateComplaintStatus(key, newStatus);
         });
       });
+    }
+  }
+
+  function updateComplaintStatus(key, newStatus) {
+    let target = complaints.find((c, idx) => c.id === key || idx == key);
+    if (!target) return;
+
+    target.status = newStatus;
+
+    if (db && target.id) {
+      db.collection('complaints').doc(target.id).update({ status: newStatus })
+        .then(() => loadComplaints())
+        .catch(() => {
+          localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
+          renderComplaintsList();
+        });
+    } else {
+      localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
+      renderComplaintsList();
     }
   }
 
