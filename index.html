@@ -1,938 +1,1005 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Roshan Pakistan Housing Society</title>
-  
-  <link rel="manifest" href="./manifest.json" />
-  <meta name="theme-color" content="#0B0F19" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Roshan Pakistan Housing Society</title>
+<meta name="theme-color" content="#10142A" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Roshan RPHS" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-  <!-- Bootstrap 5 CSS & FontAwesome Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<!-- Firebase Compatibility SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 
-  <!-- jsPDF Library for Admin PDF Export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- jsPDF for Admin PDF Export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  :root{
+    --bg:#10142A;
+    --bg-elevated:#171C3B;
+    --bg-elevated-2:#1E2447;
+    --bg-elevated-3:#242B54;
+    --accent:#F2A93B;
+    --accent-2:#FFC670;
+    --accent-soft:rgba(242,169,59,0.14);
+    --text:#F1F2F9;
+    --text-muted:#9AA0C3;
+    --text-faint:#6B7099;
+    --success:#34B398;
+    --success-soft:rgba(52,179,152,0.14);
+    --danger:#E5615A;
+    --danger-soft:rgba(229,97,90,0.14);
+    --warning:#F2A93B;
+    --warning-soft:rgba(242,169,59,0.14);
+    --info:#6E8FF2;
+    --info-soft:rgba(110,143,242,0.14);
+    --border:rgba(255,255,255,0.08);
+    --border-soft:rgba(255,255,255,0.05);
+    --radius:16px;
+    --radius-sm:10px;
+    --shadow:0 8px 30px rgba(0,0,0,0.35);
+    --font-display:'Fraunces', serif;
+    --font-body:'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 20% -10%, rgba(242,169,59,0.10), transparent 45%),
+      radial-gradient(circle at 90% 0%, rgba(110,143,242,0.08), transparent 40%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  #app{
+    max-width:520px;
+    margin:0 auto;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    padding-bottom:calc(78px + env(safe-area-inset-bottom));
+  }
+  a{color:inherit;}
+  button{font-family:inherit;}
+  ::selection{background:var(--accent-soft);}
 
-  <style>
-    :root {
-      --bg-dark: #0B0F19;
-      --card-bg: #1A2338;
-      --card-border: #2D3748;
-      --accent-gold: #F5B041;
-      --text-main: #FFFFFF;
-      --text-body: #E2E8F0;
-      --text-muted: #94A3B8;
-      --input-bg: #0F172A;
-    }
+  .topbar{
+    position:sticky; top:0; z-index:30;
+    padding:calc(16px + env(safe-area-inset-top)) 18px 14px;
+    background:linear-gradient(180deg, rgba(16,20,42,0.97), rgba(16,20,42,0.88) 70%, rgba(16,20,42,0));
+    backdrop-filter:blur(10px);
+    display:flex; align-items:center; gap:10px;
+    border-bottom:1px solid var(--border-soft);
+  }
+  .brand-mark{
+    width:42px; height:42px; border-radius:12px;
+    background:#fff;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 0 18px 2px rgba(242,169,59,0.45);
+    display:flex; align-items:center; justify-content:center;
+    flex:none; padding:4px; overflow:hidden;
+  }
+  .brand-mark img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .brand-text{flex:1; min-width:0;}
+  .brand-text .name{font-family:var(--font-display); font-weight:600; font-size:16.5px; line-height:1.2; letter-spacing:0.1px;}
+  .brand-text .sub{font-size:11.5px; color:var(--text-muted); margin-top:2px; display:flex; align-items:center; gap:6px;}
+  .role-pill{
+    font-size:10.5px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
+    padding:2px 8px; border-radius:20px; background:var(--accent-soft); color:var(--accent-2);
+    border:1px solid rgba(242,169,59,0.3);
+  }
 
-    body {
-      background-color: var(--bg-dark);
-      color: var(--text-body);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      min-height: 100vh;
-      padding-bottom: 80px;
-    }
+  .notif-bell-btn{
+    position:relative; background:var(--bg-elevated-2); border:1px solid var(--border);
+    border-radius:10px; width:38px; height:38px; display:flex; align-items:center;
+    justify-content:center; cursor:pointer; font-size:18px; color:var(--text);
+  }
+  .notif-badge{
+    position:absolute; top:-4px; right:-4px; background:var(--danger); color:#fff;
+    font-size:10px; font-weight:800; border-radius:10px; padding:2px 5px; min-width:16px; text-align:center;
+  }
 
-    h1, h2, h3, h4, h5, h6 {
-      color: var(--text-main);
-    }
+  .push-banner{
+    background:var(--accent-soft); border:1px solid rgba(242,169,59,0.3);
+    border-radius:12px; padding:12px 14px; margin-bottom:16px; display:flex;
+    align-items:center; justify-content:space-between; gap:10px;
+  }
 
-    .card-custom {
-      background-color: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      color: var(--text-body);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-    }
+  main{flex:1; padding:18px 18px 10px;}
+  .section-title{
+    font-family:var(--font-display); font-weight:600; font-size:22px; margin:4px 0 4px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .section-sub{color:var(--text-muted); font-size:13px; margin:0 0 18px; line-height:1.5;}
+  .card{
+    background:var(--bg-elevated); border:1px solid var(--border);
+    border-radius:var(--radius); padding:16px; margin-bottom:12px;
+    box-shadow:var(--shadow); position:relative; cursor:pointer;
+  }
 
-    /* Fixed High-Contrast Input Styles */
-    .form-control, .form-select {
-      background-color: var(--input-bg) !important;
-      border: 1px solid var(--card-border) !important;
-      color: #FFFFFF !important;
-      border-radius: 10px;
-      padding: 10px 14px;
-    }
+  .ticket-no{
+    font-family:var(--font-mono); font-size:11px; color:var(--accent-2);
+    background:var(--accent-soft); padding:2px 6px; border-radius:4px; font-weight:600;
+  }
 
-    .form-control::placeholder {
-      color: #64748B !important;
-    }
+  .badge{
+    display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.3px;
+    text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap;
+  }
+  .badge.pending{background:var(--warning-soft); color:var(--accent-2);}
+  .badge.assigned{background:var(--info-soft); color:var(--info);}
+  .badge.in-progress{background:var(--info-soft); color:var(--info);}
+  .badge.resolved{background:var(--success-soft); color:var(--success);}
+  .badge.closed{background:rgba(255,255,255,0.1); color:var(--text-muted);}
+  .badge.notice{background:var(--accent-soft); color:var(--accent-2);}
 
-    .form-control:focus, .form-select:focus {
-      background-color: var(--input-bg) !important;
-      color: #FFFFFF !important;
-      border-color: var(--accent-gold) !important;
-      box-shadow: 0 0 0 0.25rem rgba(245, 176, 65, 0.25) !important;
-    }
+  .btn{
+    font-family:inherit; font-weight:700; font-size:13.5px; border:none; border-radius:12px;
+    padding:12px 16px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn.primary{background:linear-gradient(180deg, var(--accent-2), var(--accent)); color:#251400; box-shadow:0 4px 16px rgba(242,169,59,0.35);}
+  .btn.secondary{background:var(--bg-elevated-2); color:var(--text); border:1px solid var(--border);}
+  .btn.danger{background:var(--danger); color:#fff;}
+  .btn.sm{padding:6px 12px; font-size:11.5px; border-radius:8px;}
+  .btn.block{width:100%;}
 
-    .form-select option {
-      background-color: var(--input-bg);
-      color: #FFFFFF;
-    }
+  label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
+  input[type=text], input[type=email], input[type=password], select, textarea{
+    width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
+    border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
+  }
+  textarea{resize:vertical; min-height:80px;}
 
-    .form-check-label {
-      color: var(--text-body);
-    }
+  .modal-overlay{
+    position:fixed; top:0; left:0; right:0; bottom:0; z-index:100;
+    background:rgba(10,12,24,0.85); backdrop-filter:blur(8px);
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.active{ display:flex; }
+  .modal-card{
+    background:var(--bg-elevated); border:1px solid var(--border);
+    border-radius:var(--radius); padding:24px; max-width:480px; width:100%;
+    box-shadow:var(--shadow); position:relative; max-height:85vh; overflow-y:auto;
+  }
+  .modal-close{
+    position:absolute; top:16px; right:16px; background:var(--bg-elevated-2);
+    color:var(--text-muted); border:1px solid var(--border); border-radius:50%;
+    width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:16px; font-weight:bold;
+  }
 
-    .btn-gold {
-      background: linear-gradient(180deg, #F5B041 0%, #E59866 100%);
-      color: #0B0F19 !important;
-      font-weight: 700;
-      border: none;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(245, 176, 65, 0.3);
-      transition: all 0.2s ease;
-    }
+  nav.tabbar{
+    position:fixed; bottom:0; left:0; right:0; z-index:40;
+    display:flex; justify-content:center;
+    padding-bottom:env(safe-area-inset-bottom);
+    background:linear-gradient(0deg, rgba(16,20,42,0.98), rgba(16,20,42,0.9));
+    border-top:1px solid var(--border-soft); backdrop-filter:blur(10px);
+  }
+  .tabbar-inner{ max-width:520px; width:100%; display:flex; justify-content:space-around; padding:8px 6px; }
+  .tab-btn{ background:none; border:none; color:var(--text-faint); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; flex:1; }
+  .tab-btn.active{color:var(--accent-2);}
+  .tab-btn .lbl{font-size:11px; font-weight:700;}
 
-    .btn-gold:hover {
-      background: #E59866;
-      color: #0B0F19 !important;
-      transform: translateY(-1px);
-    }
-
-    .badge-role {
-      background-color: rgba(245, 176, 65, 0.15);
-      color: var(--accent-gold);
-      border: 1px solid var(--accent-gold);
-      border-radius: 6px;
-      padding: 2px 8px;
-      font-size: 0.75rem;
-      font-weight: 700;
-    }
-
-    .extra-small {
-      font-size: 0.75rem;
-    }
-
-    /* Bottom Navigation Bar */
-    .bottom-nav {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background-color: #0F172A;
-      border-top: 1px solid var(--card-border);
-      display: flex;
-      justify-content: space-around;
-      padding: 10px 0;
-      z-index: 1000;
-    }
-
-    .nav-item-btn {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      font-size: 0.75rem;
-      gap: 3px;
-      transition: color 0.2s;
-    }
-
-    .nav-item-btn i {
-      font-size: 1.3rem;
-    }
-
-    .nav-item-btn.active {
-      color: var(--accent-gold);
-      font-weight: 600;
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .banner-mandatory {
-      background-color: rgba(245, 176, 65, 0.1);
-      border: 1px solid var(--accent-gold);
-      border-radius: 12px;
-    }
-
-    /* Logo Image Styling */
-    .app-logo {
-      width: 44px;
-      height: 44px;
-      object-fit: contain;
-      border-radius: 10px;
-      background-color: rgba(255, 255, 255, 0.05);
-      padding: 2px;
-    }
-
-    .app-logo-large {
-      width: 90px;
-      height: 90px;
-      object-fit: contain;
-      border-radius: 20px;
-      background-color: rgba(255, 255, 255, 0.05);
-      padding: 6px;
-    }
-  </style>
+  .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
+  .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
+  .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:24px;}
+  .toggle-auth-mode{text-align:center; margin-top:16px; font-size:13px; color:var(--accent-2); cursor:pointer; text-decoration:underline;}
+</style>
 </head>
 <body>
 
-  <div class="container py-3 max-width-md">
+<div id="app"></div>
 
-    <!-- HEADER BAR -->
-    <div id="appHeader" class="d-flex justify-content-between align-items-center mb-4 hidden">
-      <div class="d-flex align-items-center gap-2">
-        <img src="logo.png" alt="Logo" class="app-logo shadow-sm" />
-        <div>
-          <h6 class="mb-0 fw-bold text-white">Roshan Pakistan Housing Society</h6>
-          <span id="headerUserName" class="text-warning small me-2"></span>
-          <span id="headerRoleBadge" class="badge-role">RESIDENT</span>
-        </div>
-      </div>
-      <button onclick="handleSignOut()" class="btn btn-sm btn-outline-light rounded-circle">
-        <i class="bi bi-power"></i>
-      </button>
-    </div>
-
-    <!-- VIEW 0: WELCOME SCREEN -->
-    <div id="welcomeView" class="text-center py-5">
-      <div class="my-5">
-        <div class="d-inline-block mb-4 shadow-lg">
-          <img src="logo.png" alt="Logo" class="app-logo-large shadow" />
-        </div>
-        <h2 class="fw-bold mb-2 text-white">Roshan Pakistan<br>Housing Society</h2>
-        <p class="text-muted fs-6 px-3">
-          Notices, complaints, maintenance bills, facility bookings, polls & visitor logs — all in one place for our community.
-        </p>
-      </div>
-      <button onclick="showAuthView()" class="btn btn-gold w-100 py-3 mt-4 fs-5">Get Started <i class="bi bi-chevron-right ms-1"></i></button>
-    </div>
-
-    <!-- VIEW 1: AUTHENTICATION / PROFILE SETUP -->
-    <div id="authView" class="py-4 hidden">
-      <div class="text-center mb-4">
-        <div class="mb-3">
-          <img src="logo.png" alt="Logo" class="app-logo shadow-sm" style="width: 60px; height: 60px;" />
-        </div>
-        <h3 id="authTitle" class="fw-bold text-white">Set up your profile</h3>
-        <p class="text-muted small">Sign in or register to access society services.</p>
-      </div>
-
-      <form id="authForm" onsubmit="handleAuthSubmit(event)" class="card-custom p-4">
-        <div class="mb-3">
-          <label class="form-label extra-small text-muted fw-bold">YOUR EMAIL</label>
-          <input type="email" id="authEmail" class="form-control" required placeholder="name@domain.com" />
-        </div>
-        <div class="mb-3">
-          <label class="form-label extra-small text-muted fw-bold">PASSWORD</label>
-          <input type="password" id="authPassword" class="form-control" required placeholder="••••••••" />
-        </div>
-
-        <div id="regFields" class="hidden">
-          <div class="mb-3">
-            <label class="form-label extra-small text-muted fw-bold">YOUR NAME</label>
-            <input type="text" id="regName" class="form-control" placeholder="e.g. Ahmed Khan" />
-          </div>
-          <div class="mb-3">
-            <label class="form-label extra-small text-muted fw-bold">HOUSE / FLAT NUMBER</label>
-            <input type="text" id="regHouse" class="form-control" placeholder="e.g. Block B, House 24" />
-          </div>
-          <div class="mb-3">
-            <label class="form-label extra-small text-muted fw-bold">YOU ARE JOINING AS</label>
-            <div class="row g-2">
-              <div class="col-6">
-                <input type="radio" class="btn-check" name="joiningRole" id="roleResident" value="resident" checked>
-                <label class="btn btn-outline-warning w-100 py-2" for="roleResident">Resident</label>
-              </div>
-              <div class="col-6">
-                <input type="radio" class="btn-check" name="joiningRole" id="roleAdmin" value="admin">
-                <label class="btn btn-outline-warning w-100 py-2" for="roleAdmin">Committee / Admin</label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="d-flex gap-2 mt-4">
-          <button type="button" onclick="hideAuthView()" class="btn btn-outline-secondary px-4 py-2">Back</button>
-          <button type="submit" id="authSubmitBtn" class="btn btn-gold flex-grow-1 py-2">Continue <i class="bi bi-chevron-right"></i></button>
-        </div>
-      </form>
-
-      <div class="text-center mt-3">
-        <a href="#" id="authToggleLink" onclick="toggleAuthMode(event)" class="text-warning small text-decoration-none fw-bold">
-          Need an account? Register Profile
-        </a>
-      </div>
-    </div>
-
-    <!-- VIEW 2: PENDING APPROVAL -->
-    <div id="pendingView" class="text-center py-5 hidden">
-      <div class="card-custom p-4 my-4">
-        <i class="bi bi-hourglass-split text-warning display-3 mb-3"></i>
-        <h4 class="fw-bold text-white">Approval Pending</h4>
-        <p class="text-muted small">Welcome, <span id="pendingName" class="text-white"></span>. Your registration for <strong id="pendingHouse" class="text-warning"></strong> is waiting for committee approval.</p>
-      </div>
-    </div>
-
-    <!-- MANDATORY BIODATA GATE (FOR USERS WITHOUT BIODATA) -->
-    <div id="mandatoryBiodataGate" class="py-3 hidden">
-      <div class="banner-mandatory p-3 mb-3 text-center">
-        <div class="mb-2">
-          <img src="logo.png" alt="Logo" class="app-logo shadow-sm" style="width: 36px; height: 36px;" />
-        </div>
-        <h5 class="fw-bold text-warning mb-1">Mandatory Registration Requirement</h5>
-        <p class="extra-small text-light mb-0">Please complete and save your official Resident Biodata form below before accessing the society portal.</p>
-      </div>
-
-      <form id="mandatoryBiodataForm" onsubmit="saveBiodataProfile(event)" class="card-custom p-3">
-        <div class="mb-2">
-          <label class="form-label extra-small text-muted mb-1">FIRST NAME *</label>
-          <input type="text" id="bioFirstName" class="form-control" required placeholder="Enter first name" />
-        </div>
-        <div class="mb-2">
-          <label class="form-label extra-small text-muted mb-1">LAST NAME *</label>
-          <input type="text" id="bioLastName" class="form-control" required placeholder="Enter last name" />
-        </div>
-        <div class="mb-2">
-          <label class="form-label extra-small text-muted mb-1">CNIC NUMBER *</label>
-          <input type="text" id="bioCNIC" class="form-control" placeholder="xxxxx-xxxxxxx-x" required />
-        </div>
-        <div class="mb-2">
-          <label class="form-label extra-small text-muted mb-1">CELL NUMBER *</label>
-          <input type="tel" id="bioCell" class="form-control" placeholder="+923001234567" required />
-        </div>
-        <div class="mb-2">
-          <label class="form-label extra-small text-muted mb-1">ADDRESS / HOUSE NO. *</label>
-          <input type="text" id="bioAddress" class="form-control" placeholder="e.g. House #12, Block C" required />
-        </div>
-        <div class="mb-2">
-          <label class="form-label extra-small text-muted mb-1">BLOOD GROUP *</label>
-          <select id="bioBloodGroup" class="form-select" required>
-            <option value="">Select blood group...</option>
-            <option value="A+">A+</option>
-            <option value="A-">A-</option>
-            <option value="B+">B+</option>
-            <option value="B-">B-</option>
-            <option value="O+">O+</option>
-            <option value="O-">O-</option>
-            <option value="AB+">AB+</option>
-            <option value="AB-">AB-</option>
-          </select>
-        </div>
-        <div class="mb-2">
-          <label class="form-label extra-small text-muted mb-1 d-block">OCCUPANCY STATUS *</label>
-          <div class="form-check form-check-inline">
-            <input class="form-check-input" type="radio" name="occupancyType" id="typeOwner" value="Owner" checked required />
-            <label class="form-check-label small" for="typeOwner">Owner</label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input class="form-check-input" type="radio" name="occupancyType" id="typeRent" value="Tenant/Rent" required />
-            <label class="form-check-label small" for="typeRent">Rent</label>
-          </div>
-        </div>
-        
-        <div class="mb-2">
-          <label class="form-label extra-small text-muted mb-1">FAMILY DETAILS / NAMES *</label>
-          <textarea id="bioFamilyText" class="form-control" rows="3" placeholder="List resident family details and member names..." required></textarea>
-        </div>
-
-        <button type="submit" class="btn btn-gold w-100 py-3 mt-3 fs-6">
-          Save Profile & Access Portal <i class="bi bi-arrow-right ms-1"></i>
-        </button>
-      </form>
-    </div>
-
-    <!-- VIEW 3: MAIN DASHBOARD TAB VIEWS -->
-    <div id="dashboardView" class="hidden">
-
-      <!-- TAB A: HOME DASHBOARD -->
-      <div id="tab-content-home" class="tab-page">
-        <h3 class="fw-bold mb-1 text-white">Hi, <span id="homeWelcomeName" class="text-warning">User</span> 👋</h3>
-        <p class="text-muted small mb-4">Here's what's happening in your society.</p>
-
-        <!-- Stats Grid -->
-        <div class="row g-3 mb-4">
-          <div class="col-6">
-            <div class="card-custom p-3">
-              <h3 class="fw-bold text-warning mb-0" id="statComplaints">0</h3>
-              <span class="text-muted extra-small">Your open complaints</span>
-            </div>
-          </div>
-          <div class="col-6">
-            <div class="card-custom p-3">
-              <h3 class="fw-bold text-warning mb-0">Rs 0</h3>
-              <span class="text-muted extra-small">Your dues</span>
-            </div>
-          </div>
-          <div class="col-6">
-            <div class="card-custom p-3">
-              <h3 class="fw-bold text-warning mb-0">0</h3>
-              <span class="text-muted extra-small">Your bookings</span>
-            </div>
-          </div>
-          <div class="col-6">
-            <div class="card-custom p-3">
-              <h3 class="fw-bold text-warning mb-0" id="statPolls">0</h3>
-              <span class="text-muted extra-small">Active polls</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Action Tiles -->
-        <div class="row g-3 mb-4">
-          <div class="col-6" onclick="switchTab('complaints')">
-            <div class="card-custom p-3 h-100 style-hover">
-              <i class="bi bi-wrench text-warning fs-4 mb-2"></i>
-              <h6 class="fw-bold text-white mb-1">Raise a complaint</h6>
-              <span class="text-muted extra-small">Report a maintenance issue</span>
-            </div>
-          </div>
-          <div class="col-6" onclick="switchTab('profile')">
-            <div class="card-custom p-3 h-100 style-hover">
-              <i class="bi bi-person-vcard text-warning fs-4 mb-2"></i>
-              <h6 class="fw-bold text-white mb-1">My Biodata</h6>
-              <span class="text-muted extra-small">View resident details</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Latest Notices Section -->
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="fw-bold text-white mb-0">Latest notices</h5>
-          <a href="#" onclick="switchTab('notices')" class="text-warning small text-decoration-none">See all</a>
-        </div>
-        <div id="homeNoticesList" class="card-custom p-4 text-center">
-          <i class="bi bi-bell text-muted fs-2 mb-2"></i>
-          <h6 class="fw-bold text-white mb-1">No notices yet</h6>
-          <p class="text-muted small mb-0">Announcements from your committee will show up here.</p>
-        </div>
-      </div>
-
-      <!-- TAB B: NOTICES -->
-      <div id="tab-content-notices" class="tab-page hidden">
-        <h4 class="fw-bold text-white mb-3">Society Notices</h4>
-        <div id="fullNoticesList"></div>
-      </div>
-
-      <!-- TAB C: COMPLAINTS -->
-      <div id="tab-content-complaints" class="tab-page hidden">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <div>
-            <h4 class="fw-bold text-white mb-0">Complaints</h4>
-            <p class="text-muted small">Track issues you've reported for your flat.</p>
-          </div>
-          <button class="btn btn-outline-warning btn-sm rounded-circle" onclick="toggleComplaintForm()">
-            <i class="bi bi-plus-lg"></i>
-          </button>
-        </div>
-
-        <!-- Complaint Submission Form -->
-        <div id="complaintFormCard" class="card-custom p-3 mb-3 hidden">
-          <h6 class="fw-bold text-warning mb-2">New Complaint</h6>
-          <form onsubmit="submitComplaint(event)">
-            <div class="mb-2">
-              <input type="text" id="compTitle" class="form-control" placeholder="Subject / Title" required />
-            </div>
-            <div class="mb-2">
-              <textarea id="compDesc" class="form-control" rows="3" placeholder="Describe the issue..." required></textarea>
-            </div>
-            <button type="submit" class="btn btn-gold w-100 py-2">Submit Complaint</button>
-          </form>
-        </div>
-
-        <div id="complaintsListContainer"></div>
-      </div>
-
-      <!-- TAB D: POLLS -->
-      <div id="tab-content-polls" class="tab-page hidden">
-        <h4 class="fw-bold text-white mb-3">Resident Polls</h4>
-        <div id="pollsListContainer"></div>
-      </div>
-
-      <!-- TAB E: PROFILE DETAILS -->
-      <div id="tab-content-profile" class="tab-page hidden">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h4 class="fw-bold text-white mb-0">My Profile Details</h4>
-          <button class="btn btn-outline-warning btn-sm" onclick="enableEditBiodata()">Edit Biodata</button>
-        </div>
-        <div class="card-custom p-4" id="profileDetailsContainer">
-          <p class="text-muted small">Loading details...</p>
-        </div>
-      </div>
-
-      <!-- TAB G: ADMIN CONTROL PANEL (ONLY ADMIN) -->
-      <div id="tab-content-admin" class="tab-page hidden">
-        <h4 class="fw-bold text-warning mb-3">Committee Admin Panel</h4>
-
-        <!-- Approvals -->
-        <div class="card-custom p-3 mb-3">
-          <h6 class="fw-bold text-warning">Pending Approvals</h6>
-          <div id="adminPendingList"></div>
-        </div>
-
-        <!-- All Resident Profiles & Biodata Printing -->
-        <div class="card-custom p-3 mb-3">
-          <h6 class="fw-bold text-warning">Resident Profiles & Biodata</h6>
-          <div id="adminResidentsList"></div>
-        </div>
-
-        <!-- Post Notice -->
-        <div class="card-custom p-3 mb-3">
-          <h6 class="fw-bold text-warning">Post Notice</h6>
-          <form onsubmit="createNotice(event)">
-            <input type="text" id="annTitle" class="form-control mb-2" placeholder="Notice Title" required />
-            <textarea id="annContent" class="form-control mb-2" rows="2" placeholder="Content" required></textarea>
-            <button type="submit" class="btn btn-gold w-100 py-2">Post Notice</button>
-          </form>
-        </div>
-
-        <!-- Create Poll -->
-        <div class="card-custom p-3">
-          <h6 class="fw-bold text-warning">Create Poll</h6>
-          <form onsubmit="createPoll(event)">
-            <input type="text" id="pollQuestion" class="form-control mb-2" placeholder="Question" required />
-            <input type="text" id="pollOptions" class="form-control mb-2" placeholder="Option 1, Option 2" required />
-            <button type="submit" class="btn btn-gold w-100 py-2">Create Poll</button>
-          </form>
-        </div>
-      </div>
-
-    </div>
-
+<!-- Modal Container -->
+<div id="modal-view" class="modal-overlay">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modal-body"></div>
   </div>
+</div>
 
-  <!-- BOTTOM NAVIGATION BAR -->
-  <nav id="bottomNav" class="bottom-nav hidden">
-    <button class="nav-item-btn active" onclick="switchTab('home')">
-      <i class="bi bi-house-door"></i>
-      <span>Home</span>
-    </button>
-    <button class="nav-item-btn" onclick="switchTab('notices')">
-      <i class="bi bi-bell"></i>
-      <span>Notices</span>
-    </button>
-    <button class="nav-item-btn" onclick="switchTab('complaints')">
-      <i class="bi bi-wrench"></i>
-      <span>Complaints</span>
-    </button>
-    <button class="nav-item-btn" onclick="switchTab('polls')">
-      <i class="bi bi-bar-chart"></i>
-      <span>Polls</span>
-    </button>
-    <button class="nav-item-btn" onclick="switchTab('profile')">
-      <i class="bi bi-person"></i>
-      <span>Profile</span>
-    </button>
-    <button id="adminNavBtn" class="nav-item-btn text-warning hidden" onclick="switchTab('admin')">
-      <i class="bi bi-shield-lock"></i>
-      <span>Admin</span>
-    </button>
-  </nav>
+<script>
+(function(){
+  "use strict";
 
-  <script>
-    // Firebase Configuration
-    const firebaseConfig = {
-      apiKey: "AIzaSyA5jR_KvDtN52sIUQiYffXL_1pcoN5vNpk",
-      authDomain: "rp-housing-society.firebaseapp.com",
-      projectId: "rp-housing-society",
-      storageBucket: "rp-housing-society.firebasestorage.app",
-      messagingSenderId: "964175352040",
-      appId: "1:964175352040:web:a5aadfe8bf9a6d53af395d",
-      measurementId: "G-ZKW41KY8QX"
-    };
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
+  const firebaseConfig = {
+    apiKey: "AIzaSyA5jR_KvDtN52sIUQiYffXL_1pcoN5vNpk",
+    authDomain: "rp-housing-society.firebaseapp.com",
+    projectId: "rp-housing-society",
+    storageBucket: "rp-housing-society.firebasestorage.app",
+    messagingSenderId: "964175352040",
+    appId: "1:964175352040:web:a5aadfe8bf9a6d53af395d",
+    measurementId: "G-ZKW41KY8QX"
+  };
 
-    let isRegisterMode = false;
-    let currentUserData = null;
+  let db = null;
+  let auth = null;
+  let messaging = null;
 
-    function showAuthView() {
-      document.getElementById('welcomeView').classList.add('hidden');
-      document.getElementById('authView').classList.remove('hidden');
-    }
+  try {
+    if (typeof firebase !== 'undefined') {
+      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      auth = firebase.auth();
 
-    function hideAuthView() {
-      document.getElementById('authView').classList.add('hidden');
-      document.getElementById('welcomeView').classList.remove('hidden');
-    }
-
-    function toggleAuthMode(e) {
-      if (e) e.preventDefault();
-      isRegisterMode = !isRegisterMode;
-      document.getElementById('authTitle').innerText = isRegisterMode ? "Register Profile" : "Set up your profile";
-      document.getElementById('regFields').classList.toggle('hidden', !isRegisterMode);
-      document.getElementById('authToggleLink').innerText = isRegisterMode ? "Already have an account? Sign In" : "Need an account? Register Profile";
-    }
-
-    async function handleAuthSubmit(e) {
-      e.preventDefault();
-      const email = document.getElementById('authEmail').value.trim();
-      const password = document.getElementById('authPassword').value.trim();
-
-      try {
-        if (isRegisterMode) {
-          const name = document.getElementById('regName').value.trim();
-          const house = document.getElementById('regHouse').value.trim();
-          const role = document.querySelector('input[name="joiningRole"]:checked').value;
-
-          const cred = await auth.createUserWithEmailAndPassword(email, password);
-          await db.collection('users').doc(cred.user.uid).set({
-            name: name,
-            house: house,
-            email: email,
-            role: role,
-            approved: role === 'admin' ? true : false,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-        } else {
-          await auth.signInWithEmailAndPassword(email, password);
+      firebase.messaging.isSupported().then(supported => {
+        if (supported) {
+          messaging = firebase.messaging();
+          initPushMessaging();
         }
-      } catch (err) {
-        alert(err.message);
-      }
+      }).catch(err => console.log("Messaging unsupported:", err));
     }
+  } catch(e) {
+    console.error("Firebase Init Error:", e);
+  }
 
-    function handleSignOut() {
-      auth.signOut();
-    }
+  // Application State Variables
+  let currentUserProfile = null;
+  let registrationInProgress = false;
+  let isAuthModeLogin = true;
+  let activeTab = 'biodata';
+  let notifications = [];
+  let pendingResidents = [];
+  let allResidents = [];
 
+  const appEl = document.getElementById('app');
+
+  // Observer
+  if (auth) {
     auth.onAuthStateChanged(async (user) => {
-      const welcomeView = document.getElementById('welcomeView');
-      const authView = document.getElementById('authView');
-      const pendingView = document.getElementById('pendingView');
-      const mandatoryBiodataGate = document.getElementById('mandatoryBiodataGate');
-      const dashboardView = document.getElementById('dashboardView');
-      const appHeader = document.getElementById('appHeader');
-      const bottomNav = document.getElementById('bottomNav');
+      if (registrationInProgress) return; 
 
       if (user) {
-        welcomeView.classList.add('hidden');
-        authView.classList.add('hidden');
-
-        const doc = await db.collection('users').doc(user.uid).get();
-        currentUserData = doc.data() || {};
-
-        document.getElementById('headerUserName').innerText = currentUserData.name || user.email;
-        document.getElementById('homeWelcomeName').innerText = currentUserData.name || 'Resident';
-        document.getElementById('headerRoleBadge').innerText = (currentUserData.role || 'resident').toUpperCase();
-        
-        appHeader.classList.remove('hidden');
-
-        if (!currentUserData.approved) {
-          document.getElementById('pendingName').innerText = currentUserData.name || user.email;
-          document.getElementById('pendingHouse').innerText = currentUserData.house || 'N/A';
-          pendingView.classList.remove('hidden');
-          mandatoryBiodataGate.classList.add('hidden');
-          dashboardView.classList.add('hidden');
-          bottomNav.classList.add('hidden');
-        } 
-        // MANDATORY BIODATA CHECK
-        else if (!currentUserData.biodata) {
-          pendingView.classList.add('hidden');
-          mandatoryBiodataGate.classList.remove('hidden');
-          dashboardView.classList.add('hidden');
-          bottomNav.classList.add('hidden');
-
-          // Pre-fill name/house if available from signup
-          if (currentUserData.name) {
-            const parts = currentUserData.name.split(' ');
-            document.getElementById('bioFirstName').value = parts[0] || '';
-            document.getElementById('bioLastName').value = parts.slice(1).join(' ') || '';
+        try {
+          const userDoc = await db.collection('users').doc(user.uid).get();
+          if (userDoc.exists) {
+            currentUserProfile = { uid: user.uid, email: user.email, ...userDoc.data() };
+            saveDeviceToken();
+          } else {
+            currentUserProfile = null;
+            await auth.signOut();
           }
-          if (currentUserData.house) {
-            document.getElementById('bioAddress').value = currentUserData.house;
-          }
-        } 
-        // FULL DASHBOARD UNLOCKED
-        else {
-          pendingView.classList.add('hidden');
-          mandatoryBiodataGate.classList.add('hidden');
-          dashboardView.classList.remove('hidden');
-          bottomNav.classList.remove('hidden');
-
-          populateBiodataForm(currentUserData.biodata);
-          renderProfileCard(currentUserData.biodata);
-
-          if (currentUserData.role === 'admin') {
-            document.getElementById('adminNavBtn').classList.remove('hidden');
-            loadAdminPendingUsers();
-            loadAdminAllResidents();
-          }
-
-          loadNotices();
-          loadComplaints();
-          loadPolls();
+        } catch(e) {
+          console.error("Failed fetching user profile:", e);
         }
       } else {
-        welcomeView.classList.remove('hidden');
-        authView.classList.add('hidden');
-        pendingView.classList.add('hidden');
-        mandatoryBiodataGate.classList.add('hidden');
-        dashboardView.classList.add('hidden');
-        appHeader.classList.add('hidden');
-        bottomNav.classList.add('hidden');
+        currentUserProfile = null;
+      }
+      render();
+    });
+  }
+
+  function initPushMessaging() {
+    if (!messaging) return;
+    if (Notification.permission === 'granted') {
+      saveDeviceToken();
+    }
+    messaging.onMessage((payload) => {
+      new Notification(payload.notification.title, {
+        body: payload.notification.body,
+        icon: '/icon-192.png'
+      });
+      loadNotifications();
+    });
+  }
+
+  function saveDeviceToken() {
+    if (!messaging || !currentUserProfile || !auth.currentUser) return;
+    messaging.getToken().then((currentToken) => {
+      if (currentToken && db) {
+        db.collection('fcm_tokens').doc(auth.currentUser.uid).set({
+          token: currentToken,
+          uid: auth.currentUser.uid,
+          name: currentUserProfile.name,
+          role: currentUserProfile.role,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(err => console.error("FCM Token Save Error:", err));
+      }
+    }).catch((err) => console.log('Push token registration error:', err));
+  }
+
+  function render() {
+    if (!auth || !auth.currentUser || !currentUserProfile) {
+      renderOnboarding();
+      return;
+    }
+
+    // EMAIL VERIFICATION GUARD
+    if (currentUserProfile.role === 'resident' && !auth.currentUser.emailVerified) {
+      renderEmailVerificationScreen();
+      return;
+    }
+
+    // MANDATORY BIODATA GATE (if resident has not submitted biodata yet)
+    if (currentUserProfile.role === 'resident' && !currentUserProfile.biodataSubmitted) {
+      renderBiodataFormScreen();
+      return;
+    }
+
+    // HARDENED PENDING APPROVAL GUARD
+    if (currentUserProfile.role === 'resident' && currentUserProfile.approved !== true) {
+      renderPendingApprovalScreen();
+      return;
+    }
+
+    const unreadCount = notifications.filter(n => !n.read).length;
+    const isAdmin = currentUserProfile.role === 'admin';
+
+    appEl.innerHTML = `
+      <header class="topbar">
+        <div class="brand-mark">
+          <img src="icon-192.png" alt="Logo" onerror="this.style.display='none'">
+        </div>
+        <div class="brand-text">
+          <div class="name">Roshan Housing Society</div>
+          <div class="sub">
+            <span>${escapeHtml(currentUserProfile.name)} ${currentUserProfile.house ? '(' + escapeHtml(currentUserProfile.house) + ')' : ''}</span>
+            <span class="role-pill">${escapeHtml(currentUserProfile.role)}</span>
+          </div>
+        </div>
+        <button class="notif-bell-btn" onclick="openNotificationsModal()" title="Notifications">
+          🔔
+          ${unreadCount > 0 ? `<span class="notif-badge">${unreadCount}</span>` : ''}
+        </button>
+        <button class="btn sm" id="logout-btn" style="background:var(--bg-elevated-2); color:var(--text-muted);">Logout</button>
+      </header>
+
+      <main style="padding-bottom:20px;">
+        ${('Notification' in window && Notification.permission !== 'granted') ? `
+          <div class="push-banner">
+            <span style="font-size:12.5px; font-weight:600; color:var(--accent-2);">Enable push notifications for instant alerts!</span>
+            <button class="btn sm primary" onclick="requestPushPermission()">Enable</button>
+          </div>
+        ` : ''}
+
+        ${renderContent()}
+      </main>
+
+      <nav class="tabbar">
+        <div class="tabbar-inner">
+          <button class="tab-btn ${activeTab==='biodata'?'active':''}" data-tab="biodata">
+            <span class="lbl">${isAdmin ? 'Residents Directory' : 'My Biodata'}</span>
+          </button>
+          ${isAdmin ? `
+            <button class="tab-btn ${activeTab==='approvals'?'active':''}" data-tab="approvals">
+              <span class="lbl">Approvals</span>
+            </button>
+          ` : ''}
+        </div>
+      </nav>
+    `;
+
+    bindGlobalEvents();
+    loadData();
+  }
+
+  function renderEmailVerificationScreen() {
+    appEl.innerHTML = `
+      <div class="onboard-wrap">
+        <div class="onboard-title">Verify Your Email</div>
+        <div class="onboard-sub">A verification link has been sent to <strong>${escapeHtml(auth.currentUser.email)}</strong>. Please verify your email to proceed.</div>
+        
+        <div class="card" style="text-align:center; padding:20px; cursor:default;">
+          <div style="font-size:36px; margin-bottom:10px;">📧</div>
+          <div style="font-size:13.5px; color:var(--text-muted);">Check your inbox and spam folder. Once verified, click below.</div>
+        </div>
+
+        <button class="btn primary block" id="check-verification-btn" style="margin-top:16px;">I Have Verified My Email</button>
+        <button class="btn secondary block" id="resend-verification-btn" style="margin-top:8px;">Resend Email Link</button>
+        <button class="btn danger block" id="logout-verification-btn" style="margin-top:8px;">Sign Out</button>
+      </div>
+    `;
+
+    document.getElementById('check-verification-btn').addEventListener('click', async () => {
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) {
+        render();
+      } else {
+        alert("Email is not verified yet. Please check your inbox.");
       }
     });
 
-    function switchTab(tabName) {
-      document.querySelectorAll('.tab-page').forEach(el => el.classList.add('hidden'));
-      document.querySelectorAll('.nav-item-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('resend-verification-btn').addEventListener('click', async () => {
+      try {
+        await auth.currentUser.sendEmailVerification();
+        alert("Verification email resent!");
+      } catch(err) {
+        alert("Error sending verification email: " + err.message);
+      }
+    });
 
-      const target = document.getElementById(`tab-content-${tabName}`);
-      if (target) target.classList.remove('hidden');
+    document.getElementById('logout-verification-btn').addEventListener('click', () => auth.signOut());
+  }
 
-      const activeBtn = Array.from(document.querySelectorAll('.nav-item-btn')).find(b => b.innerText.toLowerCase().includes(tabName));
-      if (activeBtn) activeBtn.classList.add('active');
-    }
+  function renderBiodataFormScreen() {
+    appEl.innerHTML = `
+      <div class="onboard-wrap" style="max-width:520px; padding:20px 16px;">
+        <div class="onboard-title">Complete Resident Biodata</div>
+        <div class="onboard-sub">Please fill out your official society resident record to proceed.</div>
 
-    function toggleComplaintForm() {
-      document.getElementById('complaintFormCard').classList.toggle('hidden');
-    }
+        <div class="card" style="cursor:default; padding:20px;">
+          <form id="biodata-form">
+            <label>Full Name</label>
+            <input type="text" id="bio-name" value="${escapeHtml(currentUserProfile.name || '')}" required />
 
-    function enableEditBiodata() {
-      document.getElementById('mandatoryBiodataGate').classList.remove('hidden');
-      document.getElementById('dashboardView').classList.add('hidden');
-      document.getElementById('bottomNav').classList.add('hidden');
-    }
+            <label>CNIC Number (e.g. 35202-1234567-1)</label>
+            <input type="text" id="bio-cnic" placeholder="35202-1234567-1" required />
 
-    // PROFILE & BIODATA LOGIC
-    function populateBiodataForm(b) {
-      document.getElementById('bioFirstName').value = b.firstName || '';
-      document.getElementById('bioLastName').value = b.lastName || '';
-      document.getElementById('bioCNIC').value = b.cnic || '';
-      document.getElementById('bioCell').value = b.cell || '';
-      document.getElementById('bioAddress').value = b.address || '';
-      document.getElementById('bioBloodGroup').value = b.bloodGroup || '';
-      if (b.occupancy === 'Tenant/Rent') document.getElementById('typeRent').checked = true;
-      document.getElementById('bioFamilyText').value = b.familyText || '';
-    }
+            <label>Cell Number</label>
+            <input type="text" id="bio-phone" value="${escapeHtml(currentUserProfile.phone || '')}" placeholder="+92 300 1234567" required />
 
-    function renderProfileCard(b) {
-      const container = document.getElementById('profileDetailsContainer');
-      container.innerHTML = `
-        <div class="row g-3">
-          <div class="col-6"><small class="text-muted extra-small">NAME</small><br><strong class="text-white">${b.firstName} ${b.lastName}</strong></div>
-          <div class="col-6"><small class="text-muted extra-small">CNIC</small><br><strong class="text-white">${b.cnic}</strong></div>
-          <div class="col-6"><small class="text-muted extra-small">CELL</small><br><strong class="text-white">${b.cell}</strong></div>
-          <div class="col-6"><small class="text-muted extra-small">BLOOD GROUP</small><br><strong class="text-warning">${b.bloodGroup}</strong></div>
-          <div class="col-12"><small class="text-muted extra-small">ADDRESS / OCCUPANCY</small><br><strong class="text-white">${b.address} (${b.occupancy})</strong></div>
-          <div class="col-12 mt-2"><small class="text-muted extra-small">FAMILY DETAILS</small><br><p class="small text-light bg-dark p-3 rounded mb-0 border border-secondary">${b.familyText}</p></div>
+            <label>House / Plot Number</label>
+            <input type="text" id="bio-house" value="${escapeHtml(currentUserProfile.house || '')}" placeholder="House 42, Block B" required />
+
+            <label>Blood Group</label>
+            <select id="bio-blood" required>
+              <option value="">Select Blood Group</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+
+            <label>Occupancy Type</label>
+            <select id="bio-occupancy" required>
+              <option value="Owner">Owner</option>
+              <option value="Tenant">Tenant</option>
+            </select>
+
+            <label>Family Members / Dependents Details</label>
+            <textarea id="bio-family" placeholder="List names and ages of family members living with you..." required></textarea>
+
+            <button type="submit" class="btn primary block" style="margin-top:20px;">Save & Submit Biodata</button>
+          </form>
         </div>
+        <button class="btn secondary block" onclick="auth.signOut()" style="margin-top:10px;">Sign Out</button>
+      </div>
+    `;
+
+    document.getElementById('biodata-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cnic = document.getElementById('bio-cnic').value.trim();
+      const phone = document.getElementById('bio-phone').value.trim();
+      const house = document.getElementById('bio-house').value.trim();
+      const bloodGroup = document.getElementById('bio-blood').value;
+      const occupancyType = document.getElementById('bio-occupancy').value;
+      const familyDetails = document.getElementById('bio-family').value.trim();
+      const name = document.getElementById('bio-name').value.trim();
+
+      try {
+        await db.collection('users').doc(auth.currentUser.uid).update({
+          name,
+          cnic,
+          phone,
+          house,
+          bloodGroup,
+          occupancyType,
+          familyDetails,
+          biodataSubmitted: true
+        });
+
+        currentUserProfile = {
+          ...currentUserProfile,
+          name,
+          cnic,
+          phone,
+          house,
+          bloodGroup,
+          occupancyType,
+          familyDetails,
+          biodataSubmitted: true
+        };
+
+        render();
+      } catch(err) {
+        alert("Error saving biodata: " + err.message);
+      }
+    });
+  }
+
+  function renderPendingApprovalScreen() {
+    appEl.innerHTML = `
+      <div class="onboard-wrap">
+        <div class="onboard-title">Account Pending Approval</div>
+        <div class="onboard-sub">Welcome, <strong>${escapeHtml(currentUserProfile.name)}</strong>. Your registration for <strong>${escapeHtml(currentUserProfile.house)}</strong> is currently under review by society administrators.</div>
+        
+        <div class="card" style="text-align:center; padding:20px; cursor:default;">
+          <div style="font-size:36px; margin-bottom:10px;">⏳</div>
+          <div style="font-size:14px; color:var(--text-muted);">Biodata submitted successfully! You will gain full access once verified by management.</div>
+        </div>
+
+        <button class="btn primary block" id="logout-pending-btn" style="margin-top:20px;">Sign Out</button>
+      </div>
+    `;
+
+    document.getElementById('logout-pending-btn').addEventListener('click', () => auth.signOut());
+  }
+
+  window.requestPushPermission = function() {
+    Notification.requestPermission().then((permission) => {
+      if (permission === 'granted') saveDeviceToken();
+      render();
+    });
+  };
+
+  function renderOnboarding() {
+    appEl.innerHTML = `
+      <div class="onboard-wrap">
+        <div class="onboard-title">Roshan Housing Society</div>
+        <div class="onboard-sub">${isAuthModeLogin ? 'Sign in to access your portal' : 'Register a resident account'}</div>
+        
+        <form id="auth-form">
+          <label>Email Address</label>
+          <input type="email" id="auth-email" placeholder="e.g. resident@rphs.pk" required />
+
+          <label>Password</label>
+          <input type="password" id="auth-password" placeholder="••••••••" required minlength="6" />
+
+          ${!isAuthModeLogin ? `
+            <label>Full Name</label>
+            <input type="text" id="auth-name" placeholder="e.g. Naveed Ahmed" required />
+
+            <div id="house-num-wrap">
+              <label>House / Plot Number</label>
+              <input type="text" id="auth-house" placeholder="e.g. House 42, Block B" required />
+            </div>
+
+            <div id="phone-wrap">
+              <label>Phone Number</label>
+              <input type="text" id="auth-phone" placeholder="e.g. +92 300 1234567" required />
+            </div>
+          ` : ''}
+
+          <button type="submit" class="btn primary block" style="margin-top:20px;">
+            ${isAuthModeLogin ? 'Sign In' : 'Register Resident Account'}
+          </button>
+        </form>
+
+        <div class="toggle-auth-mode" id="toggle-auth-btn">
+          ${isAuthModeLogin ? "Don't have an account? Register here" : 'Already registered? Sign In'}
+        </div>
+      </div>
+    `;
+
+    const toggleBtn = document.getElementById('toggle-auth-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        isAuthModeLogin = !isAuthModeLogin;
+        renderOnboarding();
+      });
+    }
+
+    document.getElementById('auth-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value.trim();
+
+      if (isAuthModeLogin) {
+        try {
+          await auth.signInWithEmailAndPassword(email, password);
+        } catch(err) {
+          alert('Authentication Error: ' + err.message);
+        }
+      } else {
+        const name = document.getElementById('auth-name').value.trim();
+        const house = document.getElementById('auth-house').value.trim();
+        const phone = document.getElementById('auth-phone').value.trim();
+
+        registrationInProgress = true;
+
+        try {
+          const cred = await auth.createUserWithEmailAndPassword(email, password);
+
+          await db.collection('users').doc(cred.user.uid).set({
+            name,
+            email,
+            role: 'resident',
+            house,
+            phone,
+            approved: false,
+            biodataSubmitted: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+          currentUserProfile = {
+            uid: cred.user.uid,
+            email,
+            name,
+            house,
+            phone,
+            role: 'resident',
+            approved: false,
+            biodataSubmitted: false
+          };
+
+          registrationInProgress = false;
+
+          try {
+            await cred.user.sendEmailVerification();
+          } catch (verificationError) {
+            console.error("Verification email dispatch failed:", verificationError);
+            alert("Account created! However, sending the verification email failed. Please use 'Resend Email Link' on the next screen.");
+          }
+
+          render();
+
+        } catch(err) {
+          registrationInProgress = false;
+          alert('Registration failed: ' + err.message);
+        }
+      }
+    });
+  }
+
+  function renderContent() {
+    const isAdmin = (currentUserProfile.role === 'admin');
+
+    if (activeTab === 'biodata') {
+      if (isAdmin) {
+        return `
+          <div class="section-title">Residents Directory</div>
+          <div class="section-sub">Approved residents database and records.</div>
+          <div id="residents-list">Loading residents directory...</div>
+        `;
+      } else {
+        return `
+          <div class="section-title">My Resident Biodata</div>
+          <div class="section-sub">Your registered society details on file.</div>
+          
+          <div class="card" style="cursor:default; padding:20px;">
+            <div style="font-weight:700; font-size:18px; color:var(--accent-2); margin-bottom:12px;">${escapeHtml(currentUserProfile.name)}</div>
+            <div style="font-size:13.5px; margin-bottom:8px;"><strong>House / Plot:</strong> ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
+            <div style="font-size:13.5px; margin-bottom:8px;"><strong>CNIC:</strong> ${escapeHtml(currentUserProfile.cnic || 'N/A')}</div>
+            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Phone:</strong> ${escapeHtml(currentUserProfile.phone || 'N/A')}</div>
+            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Email:</strong> ${escapeHtml(currentUserProfile.email || 'N/A')}</div>
+            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Blood Group:</strong> ${escapeHtml(currentUserProfile.bloodGroup || 'N/A')}</div>
+            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Occupancy Type:</strong> ${escapeHtml(currentUserProfile.occupancyType || 'N/A')}</div>
+            <div style="font-size:13.5px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft);">
+              <strong>Family / Dependents:</strong>
+              <div style="color:var(--text-muted); margin-top:4px; line-height:1.4;">${escapeHtml(currentUserProfile.familyDetails || 'N/A')}</div>
+            </div>
+            <button class="btn secondary block" onclick="openEditBiodataModal()" style="margin-top:16px;">Update Biodata</button>
+          </div>
+        `;
+      }
+    }
+
+    if (activeTab === 'approvals' && isAdmin) {
+      return `
+        <div class="section-title">Resident Approvals</div>
+        <div class="section-sub">Authorize or reject pending resident registrations.</div>
+        <div id="approvals-list">Loading pending applications...</div>
       `;
     }
+  }
 
-    async function saveBiodataProfile(e) {
-      e.preventDefault();
-      const uid = auth.currentUser.uid;
-
-      const bioData = {
-        firstName: document.getElementById('bioFirstName').value.trim(),
-        lastName: document.getElementById('bioLastName').value.trim(),
-        cnic: document.getElementById('bioCNIC').value.trim(),
-        cell: document.getElementById('bioCell').value.trim(),
-        address: document.getElementById('bioAddress').value.trim(),
-        bloodGroup: document.getElementById('bioBloodGroup').value,
-        occupancy: document.querySelector('input[name="occupancyType"]:checked').value,
-        familyText: document.getElementById('bioFamilyText').value.trim(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-
-      try {
-        await db.collection('users').doc(uid).set({ biodata: bioData }, { merge: true });
-        if (currentUserData) currentUserData.biodata = bioData;
-        
-        renderProfileCard(bioData);
-        alert("Biodata profile saved successfully!");
-
-        // Unlock portal
-        document.getElementById('mandatoryBiodataGate').classList.add('hidden');
-        document.getElementById('dashboardView').classList.remove('hidden');
-        document.getElementById('bottomNav').classList.remove('hidden');
-        switchTab('home');
-      } catch (err) {
-        alert("Save failed: " + err.message);
-      }
+  function bindGlobalEvents() {
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => auth.signOut());
     }
 
-    // COMPLAINTS
-    async function submitComplaint(e) {
-      e.preventDefault();
-      try {
-        await db.collection('complaints').add({
-          title: document.getElementById('compTitle').value.trim(),
-          description: document.getElementById('compDesc').value.trim(),
-          userId: auth.currentUser.uid,
-          userName: currentUserData.name || 'Resident',
-          house: currentUserData.house || 'N/A',
-          status: 'Open',
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        activeTab = e.currentTarget.getAttribute('data-tab');
+        render();
+      });
+    });
+  }
+
+  function loadData() {
+    loadNotifications();
+    const isAdmin = currentUserProfile.role === 'admin';
+    if (activeTab === 'biodata' && isAdmin) loadAllResidents();
+    if (activeTab === 'approvals' && isAdmin) loadPendingResidents();
+  }
+
+  // --- SUBCOLLECTION NOTIFICATION SYSTEM ---
+  async function sendNotification(targetUid, title, body, type = 'info') {
+    if (!db || !targetUid) return;
+    try {
+      await db.collection('users')
+        .doc(targetUid)
+        .collection('notifications')
+        .add({
+          title: title,
+          body: body,
+          text: body,
+          type: type,
+          read: false,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        document.getElementById('compTitle').value = '';
-        document.getElementById('compDesc').value = '';
-        toggleComplaintForm();
-      } catch (err) {
-        alert(err.message);
+    } catch (err) {
+      console.error("Targeted Notification failed:", err);
+    }
+  }
+
+  function loadNotifications() {
+    if (db && auth.currentUser) {
+      db.collection('users')
+        .doc(auth.currentUser.uid)
+        .collection('notifications')
+        .orderBy('createdAt', 'desc')
+        .limit(20)
+        .get()
+        .then(snapshot => {
+          notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          renderUnreadBadge();
+        })
+        .catch(err => console.error("Notifs load error:", err));
+    }
+  }
+
+  function renderUnreadBadge() {
+    const unreadCount = notifications.filter(n => !n.read).length;
+    const bellBtn = document.querySelector('.notif-bell-btn');
+    if (bellBtn) {
+      const existingBadge = bellBtn.querySelector('.notif-badge');
+      if (existingBadge) existingBadge.remove();
+      if (unreadCount > 0) {
+        bellBtn.innerHTML += `<span class="notif-badge">${unreadCount}</span>`;
       }
     }
+  }
 
-    function loadComplaints() {
-      const container = document.getElementById('complaintsListContainer');
-      let query = db.collection('complaints');
-      if (currentUserData.role !== 'admin') {
-        query = query.where('userId', '==', auth.currentUser.uid);
+  window.openNotificationsModal = async function() {
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Notifications</div>
+      ${notifications.length ? notifications.map(n => `
+        <div style="background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px; border-radius:10px; margin-bottom:8px;">
+          ${n.title ? `<div style="font-weight:700; font-size:13px; color:var(--accent-2);">${escapeHtml(n.title)}</div>` : ''}
+          <div style="font-size:13px; color:var(--text); line-height:1.4;">${escapeHtml(n.text || n.body)}</div>
+        </div>
+      `).join('') : '<div style="color:var(--text-muted); text-align:center; padding:20px;">No notifications yet.</div>'}
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    // Mark as read in batch
+    const unreadDocs = notifications.filter(n => !n.read);
+    if (unreadDocs.length && db && auth.currentUser) {
+      const batch = db.batch();
+      unreadDocs.forEach(n => {
+        const ref = db.collection('users').doc(auth.currentUser.uid).collection('notifications').doc(n.id);
+        batch.update(ref, { read: true });
+      });
+      await batch.commit().catch(e => console.error("Error marking notifs read:", e));
+      loadNotifications();
+    }
+  };
+
+  window.closeModal = function() {
+    document.getElementById('modal-view').classList.remove('active');
+  };
+
+  window.openEditBiodataModal = function() {
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Update Biodata</div>
+      <form id="edit-bio-form">
+        <label>Full Name</label>
+        <input type="text" id="edit-bio-name" value="${escapeHtml(currentUserProfile.name || '')}" required />
+
+        <label>CNIC Number</label>
+        <input type="text" id="edit-bio-cnic" value="${escapeHtml(currentUserProfile.cnic || '')}" required />
+
+        <label>Cell Number</label>
+        <input type="text" id="edit-bio-phone" value="${escapeHtml(currentUserProfile.phone || '')}" required />
+
+        <label>House / Plot Number</label>
+        <input type="text" id="edit-bio-house" value="${escapeHtml(currentUserProfile.house || '')}" required />
+
+        <label>Blood Group</label>
+        <select id="edit-bio-blood" required>
+          <option value="A+" ${currentUserProfile.bloodGroup==='A+'?'selected':''}>A+</option>
+          <option value="A-" ${currentUserProfile.bloodGroup==='A-'?'selected':''}>A-</option>
+          <option value="B+" ${currentUserProfile.bloodGroup==='B+'?'selected':''}>B+</option>
+          <option value="B-" ${currentUserProfile.bloodGroup==='B-'?'selected':''}>B-</option>
+          <option value="AB+" ${currentUserProfile.bloodGroup==='AB+'?'selected':''}>AB+</option>
+          <option value="AB-" ${currentUserProfile.bloodGroup==='AB-'?'selected':''}>AB-</option>
+          <option value="O+" ${currentUserProfile.bloodGroup==='O+'?'selected':''}>O+</option>
+          <option value="O-" ${currentUserProfile.bloodGroup==='O-'?'selected':''}>O-</option>
+        </select>
+
+        <label>Occupancy Type</label>
+        <select id="edit-bio-occupancy" required>
+          <option value="Owner" ${currentUserProfile.occupancyType==='Owner'?'selected':''}>Owner</option>
+          <option value="Tenant" ${currentUserProfile.occupancyType==='Tenant'?'selected':''}>Tenant</option>
+        </select>
+
+        <label>Family Members / Dependents Details</label>
+        <textarea id="edit-bio-family" required>${escapeHtml(currentUserProfile.familyDetails || '')}</textarea>
+
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save Changes</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('edit-bio-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('edit-bio-name').value.trim();
+      const cnic = document.getElementById('edit-bio-cnic').value.trim();
+      const phone = document.getElementById('edit-bio-phone').value.trim();
+      const house = document.getElementById('edit-bio-house').value.trim();
+      const bloodGroup = document.getElementById('edit-bio-blood').value;
+      const occupancyType = document.getElementById('edit-bio-occupancy').value;
+      const familyDetails = document.getElementById('edit-bio-family').value.trim();
+
+      try {
+        await db.collection('users').doc(auth.currentUser.uid).update({
+          name, cnic, phone, house, bloodGroup, occupancyType, familyDetails
+        });
+        currentUserProfile = {
+          ...currentUserProfile,
+          name, cnic, phone, house, bloodGroup, occupancyType, familyDetails
+        };
+        closeModal();
+        render();
+      } catch(err) {
+        alert("Error updating biodata: " + err.message);
       }
+    });
+  };
 
-      query.onSnapshot(snap => {
-        document.getElementById('statComplaints').innerText = snap.size;
-        if (snap.empty) {
-          container.innerHTML = `
-            <div class="card-custom p-4 text-center my-4">
-              <i class="bi bi-wrench text-muted fs-2 mb-2"></i>
-              <h6 class="fw-bold text-white mb-1">No complaints</h6>
-              <p class="text-muted small mb-0">Raise a complaint using the + button above.</p>
-            </div>`;
-          return;
-        }
+  // --- RESIDENTS DIRECTORY (ADMIN) ---
+  function loadAllResidents() {
+    if (!db) return;
+    db.collection('users').where('approved', '==', true).get().then(snapshot => {
+      allResidents = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      renderResidentsList();
+    }).catch(e => console.error("Error loading residents:", e));
+  }
 
-        let html = '';
-        snap.docs.forEach(doc => {
-          const c = doc.data();
-          html += `
-            <div class="card-custom p-3 mb-2">
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <h6 class="fw-bold text-warning mb-0">${c.title}</h6>
-                <span class="badge ${c.status === 'Open' ? 'bg-danger' : 'bg-success'}">${c.status}</span>
-              </div>
-              <p class="small text-light mb-1">${c.description}</p>
-              ${currentUserData.role === 'admin' ? `
-                <button onclick="printComplaintAdmin('${c.title}', '${c.description}', '${c.userName}')" class="btn btn-sm btn-outline-warning mt-2">🖨️ Print Record</button>
-              ` : ''}
-            </div>`;
-        });
-        container.innerHTML = html;
-      });
+  function renderResidentsList() {
+    const listEl = document.getElementById('residents-list');
+    if (!listEl) return;
+    if (!allResidents.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No approved residents found.</div>';
+      return;
     }
 
-    // ADMIN ONLY: Print Complaint
-    function printComplaintAdmin(title, desc, userName) {
-      const printWin = window.open('', '', 'width=600,height=400');
-      printWin.document.write(`<h4>Complaint: ${title}</h4><p>By: ${userName}</p><p>${desc}</p>`);
-      printWin.document.close();
-      printWin.print();
-    }
+    listEl.innerHTML = allResidents.map(r => `
+      <div class="card" style="cursor:default;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+          <div>
+            <div style="font-weight:700; font-size:15px; color:var(--accent-2);">${escapeHtml(r.name)}</div>
+            <div style="font-size:12.5px; color:var(--text-muted);">House: ${escapeHtml(r.house || 'N/A')}</div>
+          </div>
+          <button class="btn sm secondary" onclick="downloadResidentPDF('${r.uid}')">PDF Card</button>
+        </div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">CNIC: ${escapeHtml(r.cnic || 'N/A')} | Phone: ${escapeHtml(r.phone || 'N/A')}</div>
+        <div style="font-size:12px; color:var(--text-muted);">Blood Group: ${escapeHtml(r.bloodGroup || 'N/A')} (${escapeHtml(r.occupancyType || 'N/A')})</div>
+      </div>
+    `).join('');
+  }
 
-    // NOTICES
-    function loadNotices() {
-      db.collection('announcements').orderBy('createdAt', 'desc').onSnapshot(snap => {
-        const homeList = document.getElementById('homeNoticesList');
-        const fullList = document.getElementById('fullNoticesList');
+  window.downloadResidentPDF = function(uid) {
+    const r = allResidents.find(item => item.uid === uid);
+    if (!r) return;
 
-        if (snap.empty) return;
-
-        let html = '';
-        snap.docs.forEach(doc => {
-          const a = doc.data();
-          html += `<div class="card-custom p-3 mb-2 text-start">
-            <h6 class="fw-bold text-warning mb-1">${a.title}</h6>
-            <p class="small text-light mb-0">${a.content}</p>
-          </div>`;
-        });
-
-        homeList.innerHTML = html;
-        fullList.innerHTML = html;
-      });
-    }
-
-    // POLLS
-    function loadPolls() {
-      db.collection('polls').onSnapshot(snap => {
-        document.getElementById('statPolls').innerText = snap.size;
-        const container = document.getElementById('pollsListContainer');
-        if (snap.empty) {
-          container.innerHTML = `<div class="card-custom p-4 text-center"><p class="text-muted small mb-0">No active polls.</p></div>`;
-          return;
-        }
-        let html = '';
-        snap.docs.forEach(doc => {
-          const p = doc.data();
-          html += `<div class="card-custom p-3 mb-2"><h6 class="fw-bold text-warning">${p.question}</h6></div>`;
-        });
-        container.innerHTML = html;
-      });
-    }
-
-    // ADMIN DATA & PDF EXPORT
-    let adminCache = {};
-    function loadAdminAllResidents() {
-      db.collection('users').where('approved', '==', true).onSnapshot(snap => {
-        const container = document.getElementById('adminResidentsList');
-        let html = '';
-        snap.docs.forEach(doc => {
-          const u = doc.data();
-          adminCache[doc.id] = u.biodata;
-          html += `
-            <div class="border-bottom border-secondary py-2">
-              <div class="d-flex justify-content-between align-items-center">
-                <span class="text-white"><strong>${u.name}</strong> (${u.house})</span>
-                ${u.biodata ? `<button onclick="exportBiodataPDF('${doc.id}')" class="btn btn-sm btn-gold">PDF</button>` : `<small class="text-muted">No Biodata</small>`}
-              </div>
-            </div>`;
-        });
-        container.innerHTML = html;
-      });
-    }
-
-    function exportBiodataPDF(uid) {
-      const b = adminCache[uid];
-      if (!b) return;
+    try {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      doc.text(`Resident Biodata: ${b.firstName} ${b.lastName}`, 10, 10);
-      doc.text(`CNIC: ${b.cnic}`, 10, 20);
-      doc.text(`Cell: ${b.cell}`, 10, 30);
-      doc.text(`Address: ${b.address}`, 10, 40);
-      doc.save(`Biodata_${b.firstName}.pdf`);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Roshan Pakistan Housing Society", 105, 20, { align: "center" });
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text("Official Resident Biodata Record", 105, 28, { align: "center" });
+
+      doc.line(20, 35, 190, 35);
+
+      let y = 48;
+      const addRow = (label, val) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(label + ":", 25, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(val || 'N/A'), 75, y);
+        y += 10;
+      };
+
+      addRow("Full Name", r.name);
+      addRow("House / Plot", r.house);
+      addRow("CNIC Number", r.cnic);
+      addRow("Phone Number", r.phone);
+      addRow("Email Address", r.email);
+      addRow("Blood Group", r.bloodGroup);
+      addRow("Occupancy Type", r.occupancyType);
+
+      y += 5;
+      doc.setFont("helvetica", "bold");
+      doc.text("Family Members / Dependents:", 25, y);
+      y += 8;
+      doc.setFont("helvetica", "normal");
+      const splitFamily = doc.splitTextToSize(r.familyDetails || 'N/A', 160);
+      doc.text(splitFamily, 25, y);
+
+      doc.save(`Resident_${(r.house || 'Biodata').replace(/\s+/g, '_')}.pdf`);
+    } catch(err) {
+      alert("Error generating PDF: " + err.message);
+    }
+  };
+
+  // --- APPROVALS ---
+  function loadPendingResidents() {
+    if (!db) return;
+    db.collection('users').where('approved', '==', false).get().then(snapshot => {
+      pendingResidents = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      renderApprovalsList();
+    }).catch(e => console.error("Error loading approvals:", e));
+  }
+
+  function renderApprovalsList() {
+    const listEl = document.getElementById('approvals-list');
+    if (!listEl) return;
+    if (!pendingResidents.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No pending registration requests.</div>';
+      return;
     }
 
-    function loadAdminPendingUsers() {
-      db.collection('users').where('approved', '==', false).onSnapshot(snap => {
-        const container = document.getElementById('adminPendingList');
-        if (snap.empty) { container.innerHTML = `<p class="text-muted small">No pending requests.</p>`; return; }
-        let html = '';
-        snap.docs.forEach(doc => {
-          const u = doc.data();
-          html += `<div class="d-flex justify-content-between py-1"><span class="text-white">${u.name}</span><button onclick="approveUser('${doc.id}')" class="btn btn-sm btn-success py-0">Approve</button></div>`;
-        });
-        container.innerHTML = html;
-      });
-    }
+    listEl.innerHTML = pendingResidents.map(r => `
+      <div class="card" style="cursor:default;">
+        <div style="font-weight:700; font-size:15px; color:var(--accent-2);">${escapeHtml(r.name)}</div>
+        <div style="font-size:12.5px; color:var(--text-muted);">House: ${escapeHtml(r.house || 'N/A')}</div>
+        <div style="font-size:12.5px; color:var(--text-muted);">Phone: ${escapeHtml(r.phone || 'N/A')}</div>
+        <div style="font-size:12.5px; color:var(--text-muted);">Email: ${escapeHtml(r.email || 'N/A')}</div>
+        <div style="font-size:12.5px; color:var(--text-muted);">Biodata Status: ${r.biodataSubmitted ? 'Submitted' : 'Pending'}</div>
 
-    async function approveUser(uid) {
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <button class="btn sm primary block" onclick="approveUser('${r.uid}')">Approve</button>
+          <button class="btn sm danger block" onclick="rejectUser('${r.uid}')">Reject</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.approveUser = async function(uid) {
+    try {
       await db.collection('users').doc(uid).update({ approved: true });
-    }
+      await sendNotification(uid, "Account Approved", "Your account has been approved! You can now access your portal.", "success");
+      loadPendingResidents();
+    } catch(e) { alert("Error approving user: " + e.message); }
+  };
 
-    async function createNotice(e) {
-      e.preventDefault();
-      await db.collection('announcements').add({
-        title: document.getElementById('annTitle').value,
-        content: document.getElementById('annContent').value,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      document.getElementById('annTitle').value = '';
-      document.getElementById('annContent').value = '';
-    }
+  window.rejectUser = async function(uid) {
+    if (!confirm("Are you sure you want to delete this registration request?")) return;
+    try {
+      await db.collection('users').doc(uid).delete();
+      loadPendingResidents();
+    } catch(e) { alert("Error deleting user: " + e.message); }
+  };
 
-    async function createPoll(e) {
-      e.preventDefault();
-      await db.collection('polls').add({
-        question: document.getElementById('pollQuestion').value,
-        options: document.getElementById('pollOptions').value.split(','),
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    }
-  </script>
+})();
+</script>
 </body>
 </html>
