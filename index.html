@@ -23,54 +23,78 @@
   <style>
     :root {
       --bg-dark: #0B0F19;
-      --card-bg: #131B2E;
-      --card-border: #1E293B;
+      --card-bg: #1A2338;
+      --card-border: #2D3748;
       --accent-gold: #F5B041;
-      --text-main: #F1F5F9;
+      --text-main: #FFFFFF;
+      --text-body: #E2E8F0;
       --text-muted: #94A3B8;
+      --input-bg: #0F172A;
     }
 
     body {
       background-color: var(--bg-dark);
-      color: var(--text-main);
+      color: var(--text-body);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       min-height: 100vh;
-      padding-bottom: 75px;
+      padding-bottom: 80px;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text-main);
     }
 
     .card-custom {
       background-color: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 16px;
-      color: var(--text-main);
+      color: var(--text-body);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     }
 
+    /* Fixed High-Contrast Input Styles */
     .form-control, .form-select {
-      background-color: #0A0E1A;
-      border: 1px solid var(--card-border);
-      color: var(--text-main);
+      background-color: var(--input-bg) !important;
+      border: 1px solid var(--card-border) !important;
+      color: #FFFFFF !important;
       border-radius: 10px;
+      padding: 10px 14px;
+    }
+
+    .form-control::placeholder {
+      color: #64748B !important;
     }
 
     .form-control:focus, .form-select:focus {
-      background-color: #0A0E1A;
+      background-color: var(--input-bg) !important;
+      color: #FFFFFF !important;
+      border-color: var(--accent-gold) !important;
+      box-shadow: 0 0 0 0.25rem rgba(245, 176, 65, 0.25) !important;
+    }
+
+    .form-select option {
+      background-color: var(--input-bg);
       color: #FFFFFF;
-      border-color: var(--accent-gold);
-      box-shadow: 0 0 0 0.2rem rgba(245, 176, 65, 0.2);
+    }
+
+    .form-check-label {
+      color: var(--text-body);
     }
 
     .btn-gold {
       background: linear-gradient(180deg, #F5B041 0%, #E59866 100%);
-      color: #0B0F19;
+      color: #0B0F19 !important;
       font-weight: 700;
       border: none;
       border-radius: 12px;
       box-shadow: 0 4px 15px rgba(245, 176, 65, 0.3);
+      transition: all 0.2s ease;
     }
 
     .btn-gold:hover {
       background: #E59866;
-      color: #0B0F19;
+      color: #0B0F19 !important;
+      transform: translateY(-1px);
     }
 
     .badge-role {
@@ -83,17 +107,21 @@
       font-weight: 700;
     }
 
+    .extra-small {
+      font-size: 0.75rem;
+    }
+
     /* Bottom Navigation Bar */
     .bottom-nav {
       position: fixed;
       bottom: 0;
       left: 0;
       right: 0;
-      background-color: #0B0F19;
+      background-color: #0F172A;
       border-top: 1px solid var(--card-border);
       display: flex;
       justify-content: space-around;
-      padding: 8px 0;
+      padding: 10px 0;
       z-index: 1000;
     }
 
@@ -104,12 +132,13 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      font-size: 0.7rem;
-      gap: 2px;
+      font-size: 0.75rem;
+      gap: 3px;
+      transition: color 0.2s;
     }
 
     .nav-item-btn i {
-      font-size: 1.25rem;
+      font-size: 1.3rem;
     }
 
     .nav-item-btn.active {
@@ -120,6 +149,31 @@
     .hidden {
       display: none !important;
     }
+
+    .banner-mandatory {
+      background-color: rgba(245, 176, 65, 0.1);
+      border: 1px solid var(--accent-gold);
+      border-radius: 12px;
+    }
+
+    /* Logo Image Styling */
+    .app-logo {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+      border-radius: 10px;
+      background-color: rgba(255, 255, 255, 0.05);
+      padding: 2px;
+    }
+
+    .app-logo-large {
+      width: 90px;
+      height: 90px;
+      object-fit: contain;
+      border-radius: 20px;
+      background-color: rgba(255, 255, 255, 0.05);
+      padding: 6px;
+    }
   </style>
 </head>
 <body>
@@ -129,27 +183,25 @@
     <!-- HEADER BAR -->
     <div id="appHeader" class="d-flex justify-content-between align-items-center mb-4 hidden">
       <div class="d-flex align-items-center gap-2">
-        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-          <i class="bi bi-house-door-fill text-dark fs-5"></i>
-        </div>
+        <img src="logo.png" alt="Logo" class="app-logo shadow-sm" />
         <div>
-          <h6 class="mb-0 fw-bold">Roshan Pakistan Housing Society</h6>
-          <span id="headerUserName" class="text-muted small me-2"></span>
+          <h6 class="mb-0 fw-bold text-white">Roshan Pakistan Housing Society</h6>
+          <span id="headerUserName" class="text-warning small me-2"></span>
           <span id="headerRoleBadge" class="badge-role">RESIDENT</span>
         </div>
       </div>
-      <button onclick="handleSignOut()" class="btn btn-sm btn-outline-secondary rounded-circle">
-        <i class="bi bi-arrow-clockwise"></i>
+      <button onclick="handleSignOut()" class="btn btn-sm btn-outline-light rounded-circle">
+        <i class="bi bi-power"></i>
       </button>
     </div>
 
     <!-- VIEW 0: WELCOME SCREEN -->
     <div id="welcomeView" class="text-center py-5">
       <div class="my-5">
-        <div class="rounded-4 bg-white d-inline-flex p-3 mb-4 shadow">
-          <i class="bi bi-house-heart-fill text-dark display-4"></i>
+        <div class="d-inline-block mb-4 shadow-lg">
+          <img src="logo.png" alt="Logo" class="app-logo-large shadow" />
         </div>
-        <h2 class="fw-bold mb-2">Roshan Pakistan<br>Housing Society</h2>
+        <h2 class="fw-bold mb-2 text-white">Roshan Pakistan<br>Housing Society</h2>
         <p class="text-muted fs-6 px-3">
           Notices, complaints, maintenance bills, facility bookings, polls & visitor logs — all in one place for our community.
         </p>
@@ -160,31 +212,34 @@
     <!-- VIEW 1: AUTHENTICATION / PROFILE SETUP -->
     <div id="authView" class="py-4 hidden">
       <div class="text-center mb-4">
-        <h3 id="authTitle" class="fw-bold">Set up your profile</h3>
-        <p class="text-muted small">This is stored on your device and used to tag your activity.</p>
+        <div class="mb-3">
+          <img src="logo.png" alt="Logo" class="app-logo shadow-sm" style="width: 60px; height: 60px;" />
+        </div>
+        <h3 id="authTitle" class="fw-bold text-white">Set up your profile</h3>
+        <p class="text-muted small">Sign in or register to access society services.</p>
       </div>
 
       <form id="authForm" onsubmit="handleAuthSubmit(event)" class="card-custom p-4">
         <div class="mb-3">
-          <label class="form-label small text-muted fw-bold">YOUR EMAIL</label>
+          <label class="form-label extra-small text-muted fw-bold">YOUR EMAIL</label>
           <input type="email" id="authEmail" class="form-control" required placeholder="name@domain.com" />
         </div>
         <div class="mb-3">
-          <label class="form-label small text-muted fw-bold">PASSWORD</label>
-          <input type="password" id="authPassword" class="form-control" required />
+          <label class="form-label extra-small text-muted fw-bold">PASSWORD</label>
+          <input type="password" id="authPassword" class="form-control" required placeholder="••••••••" />
         </div>
 
         <div id="regFields" class="hidden">
           <div class="mb-3">
-            <label class="form-label small text-muted fw-bold">YOUR NAME</label>
+            <label class="form-label extra-small text-muted fw-bold">YOUR NAME</label>
             <input type="text" id="regName" class="form-control" placeholder="e.g. Ahmed Khan" />
           </div>
           <div class="mb-3">
-            <label class="form-label small text-muted fw-bold">HOUSE / FLAT NUMBER</label>
+            <label class="form-label extra-small text-muted fw-bold">HOUSE / FLAT NUMBER</label>
             <input type="text" id="regHouse" class="form-control" placeholder="e.g. Block B, House 24" />
           </div>
           <div class="mb-3">
-            <label class="form-label small text-muted fw-bold">YOU ARE JOINING AS</label>
+            <label class="form-label extra-small text-muted fw-bold">YOU ARE JOINING AS</label>
             <div class="row g-2">
               <div class="col-6">
                 <input type="radio" class="btn-check" name="joiningRole" id="roleResident" value="resident" checked>
@@ -205,7 +260,7 @@
       </form>
 
       <div class="text-center mt-3">
-        <a href="#" id="authToggleLink" onclick="toggleAuthMode(event)" class="text-warning small text-decoration-none">
+        <a href="#" id="authToggleLink" onclick="toggleAuthMode(event)" class="text-warning small text-decoration-none fw-bold">
           Need an account? Register Profile
         </a>
       </div>
@@ -215,9 +270,77 @@
     <div id="pendingView" class="text-center py-5 hidden">
       <div class="card-custom p-4 my-4">
         <i class="bi bi-hourglass-split text-warning display-3 mb-3"></i>
-        <h4 class="fw-bold">Approval Pending</h4>
-        <p class="text-muted small">Welcome, <span id="pendingName"></span>. Your registration for <strong id="pendingHouse"></strong> is waiting for committee approval.</p>
+        <h4 class="fw-bold text-white">Approval Pending</h4>
+        <p class="text-muted small">Welcome, <span id="pendingName" class="text-white"></span>. Your registration for <strong id="pendingHouse" class="text-warning"></strong> is waiting for committee approval.</p>
       </div>
+    </div>
+
+    <!-- MANDATORY BIODATA GATE (FOR USERS WITHOUT BIODATA) -->
+    <div id="mandatoryBiodataGate" class="py-3 hidden">
+      <div class="banner-mandatory p-3 mb-3 text-center">
+        <div class="mb-2">
+          <img src="logo.png" alt="Logo" class="app-logo shadow-sm" style="width: 36px; height: 36px;" />
+        </div>
+        <h5 class="fw-bold text-warning mb-1">Mandatory Registration Requirement</h5>
+        <p class="extra-small text-light mb-0">Please complete and save your official Resident Biodata form below before accessing the society portal.</p>
+      </div>
+
+      <form id="mandatoryBiodataForm" onsubmit="saveBiodataProfile(event)" class="card-custom p-3">
+        <div class="mb-2">
+          <label class="form-label extra-small text-muted mb-1">FIRST NAME *</label>
+          <input type="text" id="bioFirstName" class="form-control" required placeholder="Enter first name" />
+        </div>
+        <div class="mb-2">
+          <label class="form-label extra-small text-muted mb-1">LAST NAME *</label>
+          <input type="text" id="bioLastName" class="form-control" required placeholder="Enter last name" />
+        </div>
+        <div class="mb-2">
+          <label class="form-label extra-small text-muted mb-1">CNIC NUMBER *</label>
+          <input type="text" id="bioCNIC" class="form-control" placeholder="xxxxx-xxxxxxx-x" required />
+        </div>
+        <div class="mb-2">
+          <label class="form-label extra-small text-muted mb-1">CELL NUMBER *</label>
+          <input type="tel" id="bioCell" class="form-control" placeholder="+923001234567" required />
+        </div>
+        <div class="mb-2">
+          <label class="form-label extra-small text-muted mb-1">ADDRESS / HOUSE NO. *</label>
+          <input type="text" id="bioAddress" class="form-control" placeholder="e.g. House #12, Block C" required />
+        </div>
+        <div class="mb-2">
+          <label class="form-label extra-small text-muted mb-1">BLOOD GROUP *</label>
+          <select id="bioBloodGroup" class="form-select" required>
+            <option value="">Select blood group...</option>
+            <option value="A+">A+</option>
+            <option value="A-">A-</option>
+            <option value="B+">B+</option>
+            <option value="B-">B-</option>
+            <option value="O+">O+</option>
+            <option value="O-">O-</option>
+            <option value="AB+">AB+</option>
+            <option value="AB-">AB-</option>
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label extra-small text-muted mb-1 d-block">OCCUPANCY STATUS *</label>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="occupancyType" id="typeOwner" value="Owner" checked required />
+            <label class="form-check-label small" for="typeOwner">Owner</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="occupancyType" id="typeRent" value="Tenant/Rent" required />
+            <label class="form-check-label small" for="typeRent">Rent</label>
+          </div>
+        </div>
+        
+        <div class="mb-2">
+          <label class="form-label extra-small text-muted mb-1">FAMILY DETAILS / NAMES *</label>
+          <textarea id="bioFamilyText" class="form-control" rows="3" placeholder="List resident family details and member names..." required></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-gold w-100 py-3 mt-3 fs-6">
+          Save Profile & Access Portal <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+      </form>
     </div>
 
     <!-- VIEW 3: MAIN DASHBOARD TAB VIEWS -->
@@ -225,7 +348,7 @@
 
       <!-- TAB A: HOME DASHBOARD -->
       <div id="tab-content-home" class="tab-page">
-        <h3 class="fw-bold mb-1">Hi, <span id="homeWelcomeName">User</span> 👋</h3>
+        <h3 class="fw-bold mb-1 text-white">Hi, <span id="homeWelcomeName" class="text-warning">User</span> 👋</h3>
         <p class="text-muted small mb-4">Here's what's happening in your society.</p>
 
         <!-- Stats Grid -->
@@ -233,25 +356,25 @@
           <div class="col-6">
             <div class="card-custom p-3">
               <h3 class="fw-bold text-warning mb-0" id="statComplaints">0</h3>
-              <span class="text-muted small">Your open complaints</span>
+              <span class="text-muted extra-small">Your open complaints</span>
             </div>
           </div>
           <div class="col-6">
             <div class="card-custom p-3">
               <h3 class="fw-bold text-warning mb-0">Rs 0</h3>
-              <span class="text-muted small">Your dues</span>
+              <span class="text-muted extra-small">Your dues</span>
             </div>
           </div>
           <div class="col-6">
             <div class="card-custom p-3">
               <h3 class="fw-bold text-warning mb-0">0</h3>
-              <span class="text-muted small">Your bookings</span>
+              <span class="text-muted extra-small">Your bookings</span>
             </div>
           </div>
           <div class="col-6">
             <div class="card-custom p-3">
               <h3 class="fw-bold text-warning mb-0" id="statPolls">0</h3>
-              <span class="text-muted small">Active polls</span>
+              <span class="text-muted extra-small">Active polls</span>
             </div>
           </div>
         </div>
@@ -259,36 +382,36 @@
         <!-- Quick Action Tiles -->
         <div class="row g-3 mb-4">
           <div class="col-6" onclick="switchTab('complaints')">
-            <div class="card-custom p-3 h-100">
+            <div class="card-custom p-3 h-100 style-hover">
               <i class="bi bi-wrench text-warning fs-4 mb-2"></i>
-              <h6 class="fw-bold mb-1">Raise a complaint</h6>
+              <h6 class="fw-bold text-white mb-1">Raise a complaint</h6>
               <span class="text-muted extra-small">Report a maintenance issue</span>
             </div>
           </div>
-          <div class="col-6" onclick="switchTab('biodata')">
-            <div class="card-custom p-3 h-100">
+          <div class="col-6" onclick="switchTab('profile')">
+            <div class="card-custom p-3 h-100 style-hover">
               <i class="bi bi-person-vcard text-warning fs-4 mb-2"></i>
-              <h6 class="fw-bold mb-1">Fill Biodata</h6>
-              <span class="text-muted extra-small">Complete mandatory details</span>
+              <h6 class="fw-bold text-white mb-1">My Biodata</h6>
+              <span class="text-muted extra-small">View resident details</span>
             </div>
           </div>
         </div>
 
         <!-- Latest Notices Section -->
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="fw-bold mb-0">Latest notices</h5>
+          <h5 class="fw-bold text-white mb-0">Latest notices</h5>
           <a href="#" onclick="switchTab('notices')" class="text-warning small text-decoration-none">See all</a>
         </div>
         <div id="homeNoticesList" class="card-custom p-4 text-center">
           <i class="bi bi-bell text-muted fs-2 mb-2"></i>
-          <h6 class="fw-bold mb-1">No notices yet</h6>
+          <h6 class="fw-bold text-white mb-1">No notices yet</h6>
           <p class="text-muted small mb-0">Announcements from your committee will show up here.</p>
         </div>
       </div>
 
       <!-- TAB B: NOTICES -->
       <div id="tab-content-notices" class="tab-page hidden">
-        <h4 class="fw-bold mb-3">Society Notices</h4>
+        <h4 class="fw-bold text-white mb-3">Society Notices</h4>
         <div id="fullNoticesList"></div>
       </div>
 
@@ -296,7 +419,7 @@
       <div id="tab-content-complaints" class="tab-page hidden">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <div>
-            <h4 class="fw-bold mb-0">Complaints</h4>
+            <h4 class="fw-bold text-white mb-0">Complaints</h4>
             <p class="text-muted small">Track issues you've reported for your flat.</p>
           </div>
           <button class="btn btn-outline-warning btn-sm rounded-circle" onclick="toggleComplaintForm()">
@@ -323,80 +446,19 @@
 
       <!-- TAB D: POLLS -->
       <div id="tab-content-polls" class="tab-page hidden">
-        <h4 class="fw-bold mb-3">Resident Polls</h4>
+        <h4 class="fw-bold text-white mb-3">Resident Polls</h4>
         <div id="pollsListContainer"></div>
       </div>
 
-      <!-- TAB E: PROFILE -->
+      <!-- TAB E: PROFILE DETAILS -->
       <div id="tab-content-profile" class="tab-page hidden">
-        <h4 class="fw-bold mb-3">My Profile Details</h4>
-        <div class="card-custom p-4" id="profileDetailsContainer">
-          <p class="text-muted small">No biodata submitted yet. Please fill out the <strong>Biodata Form</strong> tab.</p>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="fw-bold text-white mb-0">My Profile Details</h4>
+          <button class="btn btn-outline-warning btn-sm" onclick="enableEditBiodata()">Edit Biodata</button>
         </div>
-      </div>
-
-      <!-- TAB F: BIODATA FORM (MANDATORY FIELDS) -->
-      <div id="tab-content-biodata" class="tab-page hidden">
-        <h4 class="fw-bold mb-1">Biodata Form</h4>
-        <p class="text-warning small mb-3">* All text fields are mandatory to save your record.</p>
-
-        <form id="biodataForm" onsubmit="saveBiodataProfile(event)" class="card-custom p-3">
-          <div class="mb-2">
-            <label class="form-label extra-small text-muted mb-1">FIRST NAME *</label>
-            <input type="text" id="bioFirstName" class="form-control" required />
-          </div>
-          <div class="mb-2">
-            <label class="form-label extra-small text-muted mb-1">LAST NAME *</label>
-            <input type="text" id="bioLastName" class="form-control" required />
-          </div>
-          <div class="mb-2">
-            <label class="form-label extra-small text-muted mb-1">CNIC NUMBER *</label>
-            <input type="text" id="bioCNIC" class="form-control" placeholder="xxxxx-xxxxxxx-x" required />
-          </div>
-          <div class="mb-2">
-            <label class="form-label extra-small text-muted mb-1">CELL NUMBER *</label>
-            <input type="tel" id="bioCell" class="form-control" placeholder="+923001234567" required />
-          </div>
-          <div class="mb-2">
-            <label class="form-label extra-small text-muted mb-1">ADDRESS / HOUSE NO. *</label>
-            <input type="text" id="bioAddress" class="form-control" required />
-          </div>
-          <div class="mb-2">
-            <label class="form-label extra-small text-muted mb-1">BLOOD GROUP *</label>
-            <select id="bioBloodGroup" class="form-select" required>
-              <option value="">Select...</option>
-              <option value="A+">A+</option>
-              <option value="A-">A-</option>
-              <option value="B+">B+</option>
-              <option value="B-">B-</option>
-              <option value="O+">O+</option>
-              <option value="O-">O-</option>
-              <option value="AB+">AB+</option>
-              <option value="AB-">AB-</option>
-            </select>
-          </div>
-          <div class="mb-2">
-            <label class="form-label extra-small text-muted mb-1 d-block">OCCUPANCY STATUS *</label>
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="occupancyType" id="typeOwner" value="Owner" checked required />
-              <label class="form-check-label small" for="typeOwner">Owner</label>
-            </div>
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="occupancyType" id="typeRent" value="Tenant/Rent" required />
-              <label class="form-check-label small" for="typeRent">Rent</label>
-            </div>
-          </div>
-          
-          <!-- ONLY FAMILY DETAILS TEXTAREA -->
-          <div class="mb-2">
-            <label class="form-label extra-small text-muted mb-1">FAMILY DETAILS / NAMES *</label>
-            <textarea id="bioFamilyText" class="form-control" rows="3" placeholder="List resident family details..." required></textarea>
-          </div>
-
-          <button type="submit" class="btn btn-gold w-100 py-2 mt-3">
-            Save Profile
-          </button>
-        </form>
+        <div class="card-custom p-4" id="profileDetailsContainer">
+          <p class="text-muted small">Loading details...</p>
+        </div>
       </div>
 
       <!-- TAB G: ADMIN CONTROL PANEL (ONLY ADMIN) -->
@@ -502,6 +564,7 @@
       isRegisterMode = !isRegisterMode;
       document.getElementById('authTitle').innerText = isRegisterMode ? "Register Profile" : "Set up your profile";
       document.getElementById('regFields').classList.toggle('hidden', !isRegisterMode);
+      document.getElementById('authToggleLink').innerText = isRegisterMode ? "Already have an account? Sign In" : "Need an account? Register Profile";
     }
 
     async function handleAuthSubmit(e) {
@@ -540,6 +603,7 @@
       const welcomeView = document.getElementById('welcomeView');
       const authView = document.getElementById('authView');
       const pendingView = document.getElementById('pendingView');
+      const mandatoryBiodataGate = document.getElementById('mandatoryBiodataGate');
       const dashboardView = document.getElementById('dashboardView');
       const appHeader = document.getElementById('appHeader');
       const bottomNav = document.getElementById('bottomNav');
@@ -561,17 +625,36 @@
           document.getElementById('pendingName').innerText = currentUserData.name || user.email;
           document.getElementById('pendingHouse').innerText = currentUserData.house || 'N/A';
           pendingView.classList.remove('hidden');
+          mandatoryBiodataGate.classList.add('hidden');
           dashboardView.classList.add('hidden');
           bottomNav.classList.add('hidden');
-        } else {
+        } 
+        // MANDATORY BIODATA CHECK
+        else if (!currentUserData.biodata) {
           pendingView.classList.add('hidden');
+          mandatoryBiodataGate.classList.remove('hidden');
+          dashboardView.classList.add('hidden');
+          bottomNav.classList.add('hidden');
+
+          // Pre-fill name/house if available from signup
+          if (currentUserData.name) {
+            const parts = currentUserData.name.split(' ');
+            document.getElementById('bioFirstName').value = parts[0] || '';
+            document.getElementById('bioLastName').value = parts.slice(1).join(' ') || '';
+          }
+          if (currentUserData.house) {
+            document.getElementById('bioAddress').value = currentUserData.house;
+          }
+        } 
+        // FULL DASHBOARD UNLOCKED
+        else {
+          pendingView.classList.add('hidden');
+          mandatoryBiodataGate.classList.add('hidden');
           dashboardView.classList.remove('hidden');
           bottomNav.classList.remove('hidden');
 
-          if (currentUserData.biodata) {
-            populateBiodataForm(currentUserData.biodata);
-            renderProfileCard(currentUserData.biodata);
-          }
+          populateBiodataForm(currentUserData.biodata);
+          renderProfileCard(currentUserData.biodata);
 
           if (currentUserData.role === 'admin') {
             document.getElementById('adminNavBtn').classList.remove('hidden');
@@ -587,6 +670,7 @@
         welcomeView.classList.remove('hidden');
         authView.classList.add('hidden');
         pendingView.classList.add('hidden');
+        mandatoryBiodataGate.classList.add('hidden');
         dashboardView.classList.add('hidden');
         appHeader.classList.add('hidden');
         bottomNav.classList.add('hidden');
@@ -608,6 +692,12 @@
       document.getElementById('complaintFormCard').classList.toggle('hidden');
     }
 
+    function enableEditBiodata() {
+      document.getElementById('mandatoryBiodataGate').classList.remove('hidden');
+      document.getElementById('dashboardView').classList.add('hidden');
+      document.getElementById('bottomNav').classList.add('hidden');
+    }
+
     // PROFILE & BIODATA LOGIC
     function populateBiodataForm(b) {
       document.getElementById('bioFirstName').value = b.firstName || '';
@@ -623,13 +713,13 @@
     function renderProfileCard(b) {
       const container = document.getElementById('profileDetailsContainer');
       container.innerHTML = `
-        <div class="row g-2">
-          <div class="col-6"><small class="text-muted">Name:</small><br><strong>${b.firstName} ${b.lastName}</strong></div>
-          <div class="col-6"><small class="text-muted">CNIC:</small><br><strong>${b.cnic}</strong></div>
-          <div class="col-6"><small class="text-muted">Cell:</small><br><strong>${b.cell}</strong></div>
-          <div class="col-6"><small class="text-muted">Blood Group:</small><br><strong>${b.bloodGroup}</strong></div>
-          <div class="col-12"><small class="text-muted">Address:</small><br><strong>${b.address} (${b.occupancy})</strong></div>
-          <div class="col-12 mt-2"><small class="text-muted">Family Details:</small><br><p class="small text-light bg-dark p-2 rounded mb-0">${b.familyText}</p></div>
+        <div class="row g-3">
+          <div class="col-6"><small class="text-muted extra-small">NAME</small><br><strong class="text-white">${b.firstName} ${b.lastName}</strong></div>
+          <div class="col-6"><small class="text-muted extra-small">CNIC</small><br><strong class="text-white">${b.cnic}</strong></div>
+          <div class="col-6"><small class="text-muted extra-small">CELL</small><br><strong class="text-white">${b.cell}</strong></div>
+          <div class="col-6"><small class="text-muted extra-small">BLOOD GROUP</small><br><strong class="text-warning">${b.bloodGroup}</strong></div>
+          <div class="col-12"><small class="text-muted extra-small">ADDRESS / OCCUPANCY</small><br><strong class="text-white">${b.address} (${b.occupancy})</strong></div>
+          <div class="col-12 mt-2"><small class="text-muted extra-small">FAMILY DETAILS</small><br><p class="small text-light bg-dark p-3 rounded mb-0 border border-secondary">${b.familyText}</p></div>
         </div>
       `;
     }
@@ -653,9 +743,15 @@
       try {
         await db.collection('users').doc(uid).set({ biodata: bioData }, { merge: true });
         if (currentUserData) currentUserData.biodata = bioData;
+        
         renderProfileCard(bioData);
-        alert("Profile saved successfully!");
-        switchTab('profile');
+        alert("Biodata profile saved successfully!");
+
+        // Unlock portal
+        document.getElementById('mandatoryBiodataGate').classList.add('hidden');
+        document.getElementById('dashboardView').classList.remove('hidden');
+        document.getElementById('bottomNav').classList.remove('hidden');
+        switchTab('home');
       } catch (err) {
         alert("Save failed: " + err.message);
       }
@@ -695,7 +791,7 @@
           container.innerHTML = `
             <div class="card-custom p-4 text-center my-4">
               <i class="bi bi-wrench text-muted fs-2 mb-2"></i>
-              <h6 class="fw-bold mb-1">No complaints</h6>
+              <h6 class="fw-bold text-white mb-1">No complaints</h6>
               <p class="text-muted small mb-0">Raise a complaint using the + button above.</p>
             </div>`;
           return;
@@ -710,7 +806,7 @@
                 <h6 class="fw-bold text-warning mb-0">${c.title}</h6>
                 <span class="badge ${c.status === 'Open' ? 'bg-danger' : 'bg-success'}">${c.status}</span>
               </div>
-              <p class="small text-muted mb-1">${c.description}</p>
+              <p class="small text-light mb-1">${c.description}</p>
               ${currentUserData.role === 'admin' ? `
                 <button onclick="printComplaintAdmin('${c.title}', '${c.description}', '${c.userName}')" class="btn btn-sm btn-outline-warning mt-2">🖨️ Print Record</button>
               ` : ''}
@@ -741,7 +837,7 @@
           const a = doc.data();
           html += `<div class="card-custom p-3 mb-2 text-start">
             <h6 class="fw-bold text-warning mb-1">${a.title}</h6>
-            <p class="small text-muted mb-0">${a.content}</p>
+            <p class="small text-light mb-0">${a.content}</p>
           </div>`;
         });
 
@@ -780,7 +876,7 @@
           html += `
             <div class="border-bottom border-secondary py-2">
               <div class="d-flex justify-content-between align-items-center">
-                <span><strong>${u.name}</strong> (${u.house})</span>
+                <span class="text-white"><strong>${u.name}</strong> (${u.house})</span>
                 ${u.biodata ? `<button onclick="exportBiodataPDF('${doc.id}')" class="btn btn-sm btn-gold">PDF</button>` : `<small class="text-muted">No Biodata</small>`}
               </div>
             </div>`;
@@ -808,7 +904,7 @@
         let html = '';
         snap.docs.forEach(doc => {
           const u = doc.data();
-          html += `<div class="d-flex justify-content-between py-1"><span>${u.name}</span><button onclick="approveUser('${doc.id}')" class="btn btn-sm btn-success py-0">Approve</button></div>`;
+          html += `<div class="d-flex justify-content-between py-1"><span class="text-white">${u.name}</span><button onclick="approveUser('${doc.id}')" class="btn btn-sm btn-success py-0">Approve</button></div>`;
         });
         container.innerHTML = html;
       });
