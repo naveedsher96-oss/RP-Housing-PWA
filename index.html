@@ -1,1076 +1,648 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-<title>Roshan Pakistan Housing Society</title>
-<meta name="theme-color" content="#10142A" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Roshan RPHS" />
-<meta name="mobile-web-app-capable" content="yes" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Roshan Housing Society (RPHS)</title>
+  
+  <!-- PWA Manifest & Theme Color -->
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#10142A" />
 
-<!-- Firebase Compatibility SDKs -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
 
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-180.png">
-<style>
-  :root{
-    --bg:#10142A;
-    --bg-elevated:#171C3B;
-    --bg-elevated-2:#1E2447;
-    --bg-elevated-3:#242B54;
-    --accent:#F2A93B;
-    --accent-2:#FFC670;
-    --accent-soft:rgba(242,169,59,0.14);
-    --text:#F1F2F9;
-    --text-muted:#9AA0C3;
-    --text-faint:#6B7099;
-    --success:#34B398;
-    --success-soft:rgba(52,179,152,0.14);
-    --danger:#E5615A;
-    --danger-soft:rgba(229,97,90,0.14);
-    --warning:#F2A93B;
-    --warning-soft:rgba(242,169,59,0.14);
-    --info:#6E8FF2;
-    --info-soft:rgba(110,143,242,0.14);
-    --border:rgba(255,255,255,0.08);
-    --border-soft:rgba(255,255,255,0.05);
-    --radius:16px;
-    --radius-sm:10px;
-    --shadow:0 8px 30px rgba(0,0,0,0.35);
-    --font-display:'Fraunces', serif;
-    --font-body:'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono:'JetBrains Mono', monospace;
-  }
-  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{height:100%;}
-  body{
-    margin:0;
-    background:
-      radial-gradient(circle at 20% -10%, rgba(242,169,59,0.10), transparent 45%),
-      radial-gradient(circle at 90% 0%, rgba(110,143,242,0.08), transparent 40%),
-      var(--bg);
-    color:var(--text);
-    font-family:var(--font-body);
-    -webkit-font-smoothing:antialiased;
-    min-height:100vh;
-  }
-  #app{
-    max-width:520px;
-    margin:0 auto;
-    min-height:100vh;
-    display:flex;
-    flex-direction:column;
-    position:relative;
-    padding-bottom:calc(78px + env(safe-area-inset-bottom));
-  }
-  a{color:inherit;}
-  button{font-family:inherit;}
-  ::selection{background:var(--accent-soft);}
+  <!-- jsPDF Library for PDF Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  .topbar{
-    position:sticky; top:0; z-index:30;
-    padding:calc(16px + env(safe-area-inset-top)) 18px 14px;
-    background:linear-gradient(180deg, rgba(16,20,42,0.97), rgba(16,20,42,0.88) 70%, rgba(16,20,42,0));
-    backdrop-filter:blur(10px);
-    display:flex; align-items:center; gap:10px;
-    border-bottom:1px solid var(--border-soft);
-  }
-  .brand-mark{
-    width:42px; height:42px; border-radius:12px;
-    background:#fff;
-    box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 0 18px 2px rgba(242,169,59,0.45);
-    display:flex; align-items:center; justify-content:center;
-    flex:none; padding:4px; overflow:hidden;
-  }
-  .brand-mark img{ width:100%; height:100%; object-fit:contain; display:block; }
-  .brand-text{flex:1; min-width:0;}
-  .brand-text .name{font-family:var(--font-display); font-weight:600; font-size:16.5px; line-height:1.2; letter-spacing:0.1px;}
-  .brand-text .sub{font-size:11.5px; color:var(--text-muted); margin-top:2px; display:flex; align-items:center; gap:6px;}
-  .role-pill{
-    font-size:10.5px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
-    padding:2px 8px; border-radius:20px; background:var(--accent-soft); color:var(--accent-2);
-    border:1px solid rgba(242,169,59,0.3);
-  }
+  <!-- Firebase SDKs (Compat Version) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-  .notif-bell-btn{
-    position:relative; background:var(--bg-elevated-2); border:1px solid var(--border);
-    border-radius:10px; width:38px; height:38px; display:flex; align-items:center;
-    justify-content:center; cursor:pointer; font-size:18px; color:var(--text);
-  }
-  .notif-badge{
-    position:absolute; top:-4px; right:-4px; background:var(--danger); color:#fff;
-    font-size:10px; font-weight:800; border-radius:10px; padding:2px 5px; min-width:16px; text-align:center;
-  }
-
-  .push-banner{
-    background:var(--accent-soft); border:1px solid rgba(242,169,59,0.3);
-    border-radius:12px; padding:12px 14px; margin-bottom:16px; display:flex;
-    align-items:center; justify-content:space-between; gap:10px;
-  }
-
-  main{flex:1; padding:18px 18px 10px;}
-  .section-title{
-    font-family:var(--font-display); font-weight:600; font-size:22px; margin:4px 0 4px;
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-  }
-  .section-sub{color:var(--text-muted); font-size:13px; margin:0 0 18px; line-height:1.5;}
-  .card{
-    background:var(--bg-elevated); border:1px solid var(--border);
-    border-radius:var(--radius); padding:16px; margin-bottom:12px;
-    box-shadow:var(--shadow); position:relative; cursor:pointer;
-  }
-
-  .ticket-no{
-    font-family:var(--font-mono); font-size:11px; color:var(--accent-2);
-    background:var(--accent-soft); padding:2px 6px; border-radius:4px; font-weight:600;
-  }
-
-  .badge{
-    display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.3px;
-    text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap;
-  }
-  .badge.pending{background:var(--warning-soft); color:var(--accent-2);}
-  .badge.assigned{background:var(--info-soft); color:var(--info);}
-  .badge.in-progress{background:var(--info-soft); color:var(--info);}
-  .badge.resolved{background:var(--success-soft); color:var(--success);}
-  .badge.closed{background:rgba(255,255,255,0.1); color:var(--text-muted);}
-  .badge.notice{background:var(--accent-soft); color:var(--accent-2);}
-
-  .btn{
-    font-family:inherit; font-weight:700; font-size:13.5px; border:none; border-radius:12px;
-    padding:12px 16px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px;
-  }
-  .btn.primary{background:linear-gradient(180deg, var(--accent-2), var(--accent)); color:#251400; box-shadow:0 4px 16px rgba(242,169,59,0.35);}
-  .btn.secondary{background:var(--bg-elevated-2); color:var(--text); border:1px solid var(--border);}
-  .btn.danger{background:var(--danger); color:#fff;}
-  .btn.sm{padding:6px 12px; font-size:11.5px; border-radius:8px;}
-  .btn.block{width:100%;}
-
-  .reactions-toolbar{
-    display:flex; align-items:center; gap:10px; margin-top:12px; padding-top:10px;
-    border-top:1px solid var(--border-soft);
-  }
-  .rxn-btn{
-    background:var(--bg-elevated-2); border:1px solid var(--border); color:var(--text-muted);
-    border-radius:20px; padding:4px 12px; font-size:12px; font-weight:700; display:inline-flex;
-    align-items:center; gap:6px; cursor:pointer;
-  }
-  .rxn-btn.active-like{ background:var(--success-soft); color:var(--success); border-color:rgba(52,179,152,0.4); }
-  .rxn-btn.active-dislike{ background:var(--danger-soft); color:var(--danger); border-color:rgba(229,97,90,0.4); }
-
-  label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
-  input[type=text], input[type=email], input[type=password], select, textarea{
-    width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
-    border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
-  }
-  textarea{resize:vertical; min-height:80px;}
-
-  .poll-opt-btn{
-    width:100%; text-align:left; padding:12px; border-radius:10px; background:var(--bg-elevated-2);
-    border:1px solid var(--border); color:var(--text); margin-top:8px; cursor:pointer;
-    display:flex; justify-content:space-between; align-items:center; position:relative; overflow:hidden;
-  }
-  .poll-progress-bar{ position:absolute; top:0; left:0; bottom:0; background:var(--accent-soft); z-index:1; pointer-events:none; }
-  .poll-opt-text{position:relative; z-index:2; font-weight:600; font-size:13.5px;}
-  .poll-opt-count{position:relative; z-index:2; font-family:var(--font-mono); font-size:12px; color:var(--accent-2);}
-
-  .modal-overlay{
-    position:fixed; top:0; left:0; right:0; bottom:0; z-index:100;
-    background:rgba(10,12,24,0.85); backdrop-filter:blur(8px);
-    display:none; align-items:center; justify-content:center; padding:20px;
-  }
-  .modal-overlay.active{ display:flex; }
-  .modal-card{
-    background:var(--bg-elevated); border:1px solid var(--border);
-    border-radius:var(--radius); padding:24px; max-width:480px; width:100%;
-    box-shadow:var(--shadow); position:relative; max-height:85vh; overflow-y:auto;
-  }
-  .modal-close{
-    position:absolute; top:16px; right:16px; background:var(--bg-elevated-2);
-    color:var(--text-muted); border:1px solid var(--border); border-radius:50%;
-    width:32px; height:32px; display:flex; align-items:center; justify-content:center;
-    cursor:pointer; font-size:16px; font-weight:bold;
-  }
-
-  nav.tabbar{
-    position:fixed; bottom:0; left:0; right:0; z-index:40;
-    display:flex; justify-content:center;
-    padding-bottom:env(safe-area-inset-bottom);
-    background:linear-gradient(0deg, rgba(16,20,42,0.98), rgba(16,20,42,0.9));
-    border-top:1px solid var(--border-soft); backdrop-filter:blur(10px);
-  }
-  .tabbar-inner{ max-width:520px; width:100%; display:flex; justify-content:space-around; padding:8px 6px; }
-  .tab-btn{ background:none; border:none; color:var(--text-faint); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; flex:1; }
-  .tab-btn.active{color:var(--accent-2);}
-  .tab-btn .lbl{font-size:11px; font-weight:700;}
-
-  .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
-  .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
-  .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:24px;}
-  .toggle-auth-mode{text-align:center; margin-top:16px; font-size:13px; color:var(--accent-2); cursor:pointer; text-decoration:underline;}
-</style>
+  <style>
+    body {
+      background-color: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .card {
+      background-color: #161b22;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+    }
+    .form-control, .form-select {
+      background-color: #0d1117;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+    }
+    .form-control:focus, .form-select:focus {
+      background-color: #0d1117;
+      color: #ffffff;
+      border-color: #58a6ff;
+      box-shadow: 0 0 0 0.25rem rgba(56, 139, 253, 0.25);
+    }
+    .btn-gold {
+      background-color: #d4af37;
+      color: #000;
+      font-weight: 600;
+    }
+    .btn-gold:hover {
+      background-color: #b5932a;
+      color: #000;
+    }
+    .hidden {
+      display: none !important;
+    }
+    @media print {
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
 </head>
 <body>
 
-<div id="app"></div>
+  <div class="container py-4">
 
-<!-- Modal Container -->
-<div id="modal-view" class="modal-overlay">
-  <div class="modal-card">
-    <button class="modal-close" onclick="closeModal()">✕</button>
-    <div id="modal-body"></div>
+    <!-- Header Navigation -->
+    <header class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom border-secondary no-print">
+      <h2 class="h4 mb-0 text-gold fw-bold">Roshan Housing Society</h2>
+      <div id="userInfo" class="hidden">
+        <span id="userDisplayName" class="me-2 text-light fw-semibold"></span>
+        <button onclick="handleSignOut()" class="btn btn-sm btn-outline-danger">Sign Out</button>
+      </div>
+    </header>
+
+    <!-- 1. Authentication View -->
+    <div id="authView" class="row justify-content-center">
+      <div class="col-md-6">
+        <div class="card p-4 shadow-lg">
+          <h3 id="authTitle" class="text-center mb-3">Sign In</h3>
+          
+          <form id="authForm" onsubmit="handleAuthSubmit(event)">
+            <div class="mb-3">
+              <label class="form-label">Email Address</label>
+              <input type="email" id="authEmail" class="form-control" required />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Password</label>
+              <input type="password" id="authPassword" class="form-control" required />
+            </div>
+
+            <!-- Additional Registration Fields -->
+            <div id="regFields" class="hidden">
+              <div class="mb-3">
+                <label class="form-label">Full Name</label>
+                <input type="text" id="regName" class="form-control" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">House / Plot Number</label>
+                <input type="text" id="regHouse" class="form-control" placeholder="e.g. C#237, St#56" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Phone Number</label>
+                <input type="tel" id="regPhone" class="form-control" placeholder="+923001234567" />
+              </div>
+            </div>
+
+            <button type="submit" id="authSubmitBtn" class="btn btn-gold w-100 py-2 mb-3">Sign In</button>
+          </form>
+
+          <div class="text-center">
+            <a href="#" id="authToggleLink" onclick="toggleAuthMode(event)" class="text-info text-decoration-none">
+              Need an account? Register Resident Account
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Pending Approval View -->
+    <div id="pendingView" class="text-center my-5 p-5 card hidden">
+      <h2 class="mb-3">Account Pending Approval</h2>
+      <p class="lead">Welcome, <span id="pendingName"></span>. Your account registration for house <strong id="pendingHouse"></strong> is under review by society administrators.</p>
+      <div class="alert alert-warning d-inline-block my-3">
+        ⏳ You will gain access to society complaints, polls, and notices once approved.
+      </div>
+    </div>
+
+    <!-- 3. Main Dashboard View -->
+    <div id="dashboardView" class="hidden">
+
+      <!-- Navigation Tabs -->
+      <ul class="nav nav-pills mb-4 no-print" id="pills-tab" role="tablist">
+        <li class="nav-item">
+          <button class="nav-link active" id="tab-biodata" data-bs-toggle="pill" data-bs-target="#view-biodata" type="button">Resident Biodata</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" id="tab-complaints" data-bs-toggle="pill" data-bs-target="#view-complaints" type="button">Complaints</button>
+        </li>
+        <li class="nav-item hidden" id="adminTabNav">
+          <button class="nav-link text-warning" id="tab-admin" data-bs-toggle="pill" data-bs-target="#view-admin" type="button">Admin Control Panel</button>
+        </li>
+      </ul>
+
+      <div class="tab-content" id="pills-tabContent">
+
+        <!-- TAB A: BIODATA FORM & PDF DOWNLOAD -->
+        <div class="tab-pane fade show active" id="view-biodata">
+          <div class="card p-4">
+            <h3 class="mb-3 border-bottom pb-2">Resident Profile & Biodata Form</h3>
+            <form id="biodataForm" onsubmit="saveBiodataAndDownloadPDF(event)">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">First Name</label>
+                  <input type="text" id="bioFirstName" class="form-control" required />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Last Name</label>
+                  <input type="text" id="bioLastName" class="form-control" required />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">CNIC Number</label>
+                  <input type="text" id="bioCNIC" class="form-control" placeholder="xxxxx-xxxxxxx-x" required />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Cell Number</label>
+                  <input type="tel" id="bioCell" class="form-control" placeholder="+923001234567" required />
+                </div>
+                <div class="col-md-8">
+                  <label class="form-label">Address / House No.</label>
+                  <input type="text" id="bioAddress" class="form-control" required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Blood Group</label>
+                  <select id="bioBloodGroup" class="form-select" required>
+                    <option value="">Select...</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                  </select>
+                </div>
+
+                <!-- Occupancy Status -->
+                <div class="col-12">
+                  <label class="form-label d-block">Occupancy Status</label>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="occupancyType" id="typeOwner" value="Owner" checked />
+                    <label class="form-check-label" for="typeOwner">Owner</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="occupancyType" id="typeRent" value="Tenant/Rent" />
+                    <label class="form-check-label" for="typeRent">Rent</label>
+                  </div>
+                </div>
+
+                <!-- Family Categories Checkboxes -->
+                <div class="col-12">
+                  <label class="form-label d-block">Family Members Residing in House</label>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input fam-check" type="checkbox" value="Father" id="famFather" />
+                    <label class="form-check-label" for="famFather">Father</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input fam-check" type="checkbox" value="Mother" id="famMother" />
+                    <label class="form-check-label" for="famMother">Mother</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input fam-check" type="checkbox" value="Son" id="famSon" />
+                    <label class="form-check-label" for="famSon">Son</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input fam-check" type="checkbox" value="Daughter" id="famDaughter" />
+                    <label class="form-check-label" for="famDaughter">Daughter</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input fam-check" type="checkbox" value="Other" id="famOther" />
+                    <label class="form-check-label" for="famOther">Other</label>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Additional Family Details / Names</label>
+                  <textarea id="bioFamilyText" class="form-control" rows="3" placeholder="List names or extra info regarding resident family..."></textarea>
+                </div>
+
+                <div class="col-12 pt-2">
+                  <button type="submit" class="btn btn-gold px-4 py-2">
+                    💾 Save Biodata & Export PDF
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- TAB B: COMPLAINTS & PRINTING -->
+        <div class="tab-pane fade" id="view-complaints">
+          <div class="row">
+            <div class="col-md-5 mb-4 no-print">
+              <div class="card p-4">
+                <h4>Submit New Complaint</h4>
+                <form id="complaintForm" onsubmit="submitComplaint(event)">
+                  <div class="mb-3">
+                    <label class="form-label">Title / Subject</label>
+                    <input type="text" id="compTitle" class="form-control" required />
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Complaint Details</label>
+                    <textarea id="compDesc" class="form-control" rows="4" required></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-primary w-100">Submit Complaint</button>
+                </form>
+              </div>
+            </div>
+
+            <div class="col-md-7">
+              <div class="card p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h4>Complaint Records</h4>
+                  <button onclick="window.print()" class="btn btn-sm btn-outline-light no-print">🖨️ Print Entire Page</button>
+                </div>
+                <div id="complaintsList">
+                  <p class="text-muted">Loading complaints...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB C: ADMIN CONTROL PANEL -->
+        <div class="tab-pane fade" id="view-admin">
+          <div class="card p-4">
+            <h4>Pending Resident Approvals</h4>
+            <div id="adminPendingList" class="my-3">
+              <p class="text-muted">Loading pending approval requests...</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
-</div>
 
-<script>
-(function(){
-  "use strict";
+  <!-- Bootstrap 5 Bundle JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
+  <!-- Application Logic -->
+  <script>
+    // Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyA5jR_KvDtN52sIUQiYffXL_1pcoN5vNpk",
+      authDomain: "rp-housing-society.firebaseapp.com",
+      projectId: "rp-housing-society",
+      storageBucket: "rp-housing-society.firebasestorage.app",
+      messagingSenderId: "964175352040",
+      appId: "1:964175352040:web:a5aadfe8bf9a6d53af395d",
+      measurementId: "G-ZKW41KY8QX"
+    };
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyA5jR_KvDtN52sIUQiYffXL_1pcoN5vNpk",
-    authDomain: "rp-housing-society.firebaseapp.com",
-    projectId: "rp-housing-society",
-    storageBucket: "rp-housing-society.firebasestorage.app",
-    messagingSenderId: "964175352040",
-    appId: "1:964175352040:web:a5aadfe8bf9a6d53af395d",
-    measurementId: "G-ZKW41KY8QX"
-  };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
 
-  let db = null;
-  let auth = null;
-  let messaging = null;
+    let isRegisterMode = false;
+    let currentUserData = null;
 
-  try {
-    if (typeof firebase !== 'undefined') {
-      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-      db = firebase.firestore();
-      auth = firebase.auth();
-
-      firebase.messaging.isSupported().then(supported => {
-        if (supported) {
-          messaging = firebase.messaging();
-          initPushMessaging();
-        }
-      }).catch(err => console.log("Messaging unsupported:", err));
+    // Service Worker Registration for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('Service Worker Active:', reg.scope))
+        .catch(err => console.error('SW Registration Failed:', err));
     }
-  } catch(e) {
-    console.error("Firebase Init Error:", e);
-  }
 
-  // Application State Variables
-  let currentUserProfile = null;
-  let registrationInProgress = false;
-  let isAuthModeLogin = true;
-  let activeTab = 'announcements';
-  let complaints = [];
-  let notices = [];
-  let polls = [];
-  let notifications = [];
-  let pendingResidents = [];
+    // Toggle Registration Mode
+    function toggleAuthMode(e) {
+      if (e) e.preventDefault();
+      isRegisterMode = !isRegisterMode;
+      
+      const title = document.getElementById('authTitle');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      const toggleLink = document.getElementById('authToggleLink');
+      const regFields = document.getElementById('regFields');
 
-  const appEl = document.getElementById('app');
-
-  // Observer
-  if (auth) {
-    auth.onAuthStateChanged(async (user) => {
-      if (registrationInProgress) return; 
-
-      if (user) {
-        try {
-          const userDoc = await db.collection('users').doc(user.uid).get();
-          if (userDoc.exists) {
-            currentUserProfile = { uid: user.uid, email: user.email, ...userDoc.data() };
-            saveDeviceToken();
-          } else {
-            currentUserProfile = null;
-            await auth.signOut();
-          }
-        } catch(e) {
-          console.error("Failed fetching user profile:", e);
-        }
+      if (isRegisterMode) {
+        title.innerText = "Register Resident Account";
+        submitBtn.innerText = "Register Account";
+        toggleLink.innerText = "Already registered? Sign In";
+        regFields.classList.remove('hidden');
       } else {
-        currentUserProfile = null;
+        title.innerText = "Sign In";
+        submitBtn.innerText = "Sign In";
+        toggleLink.innerText = "Need an account? Register Resident Account";
+        regFields.classList.add('hidden');
       }
-      render();
-    });
-  }
-
-  function initPushMessaging() {
-    if (!messaging) return;
-    if (Notification.permission === 'granted') {
-      saveDeviceToken();
-    }
-    messaging.onMessage((payload) => {
-      new Notification(payload.notification.title, {
-        body: payload.notification.body,
-        icon: '/icon-192.png'
-      });
-      loadNotifications();
-    });
-  }
-
-  function saveDeviceToken() {
-    if (!messaging || !currentUserProfile || !auth.currentUser) return;
-    messaging.getToken().then((currentToken) => {
-      if (currentToken && db) {
-        db.collection('fcm_tokens').doc(auth.currentUser.uid).set({
-          token: currentToken,
-          uid: auth.currentUser.uid,
-          name: currentUserProfile.name,
-          role: currentUserProfile.role,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch(err => console.error("FCM Token Save Error:", err));
-      }
-    }).catch((err) => console.log('Push token registration error:', err));
-  }
-
-  function render() {
-    if (!auth || !auth.currentUser || !currentUserProfile) {
-      renderOnboarding();
-      return;
     }
 
-    // EMAIL VERIFICATION GUARD
-    if (currentUserProfile.role === 'resident' && !auth.currentUser.emailVerified) {
-      renderEmailVerificationScreen();
-      return;
-    }
-
-    // HARDENED PENDING APPROVAL GUARD
-    if (currentUserProfile.role === 'resident' && currentUserProfile.approved !== true) {
-      renderPendingApprovalScreen();
-      return;
-    }
-
-    const unreadCount = notifications.filter(n => !n.read).length;
-
-    appEl.innerHTML = `
-      <header class="topbar">
-        <div class="brand-mark">
-          <img src="icon-192.png" alt="Logo" onerror="this.style.display='none'">
-        </div>
-        <div class="brand-text">
-          <div class="name">Roshan Housing Society</div>
-          <div class="sub">
-            <span>${escapeHtml(currentUserProfile.name)} ${currentUserProfile.house ? '(' + escapeHtml(currentUserProfile.house) + ')' : ''}</span>
-            <span class="role-pill">${escapeHtml(currentUserProfile.role)}</span>
-          </div>
-        </div>
-        <button class="notif-bell-btn" onclick="openNotificationsModal()" title="Notifications">
-          🔔
-          ${unreadCount > 0 ? `<span class="notif-badge">${unreadCount}</span>` : ''}
-        </button>
-        <button class="btn sm" id="logout-btn" style="background:var(--bg-elevated-2); color:var(--text-muted);">Logout</button>
-      </header>
-
-      <main style="padding-bottom:20px;">
-        ${('Notification' in window && Notification.permission !== 'granted') ? `
-          <div class="push-banner">
-            <span style="font-size:12.5px; font-weight:600; color:var(--accent-2);">Enable push notifications for instant alerts!</span>
-            <button class="btn sm primary" onclick="requestPushPermission()">Enable</button>
-          </div>
-        ` : ''}
-
-        ${renderContent()}
-      </main>
-
-      <nav class="tabbar">
-        <div class="tabbar-inner">
-          <button class="tab-btn ${activeTab==='announcements'?'active':''}" data-tab="announcements">
-            <span class="lbl">Announcements</span>
-          </button>
-          <button class="tab-btn ${activeTab==='polls'?'active':''}" data-tab="polls">
-            <span class="lbl">Polls</span>
-          </button>
-          <button class="tab-btn ${activeTab==='complaints'?'active':''}" data-tab="complaints">
-            <span class="lbl">Complaints</span>
-          </button>
-          ${currentUserProfile.role === 'admin' ? `
-            <button class="tab-btn ${activeTab==='approvals'?'active':''}" data-tab="approvals">
-              <span class="lbl">Approvals</span>
-            </button>
-          ` : ''}
-        </div>
-      </nav>
-    `;
-
-    bindGlobalEvents();
-    loadData();
-  }
-
-  function renderEmailVerificationScreen() {
-    appEl.innerHTML = `
-      <div class="onboard-wrap">
-        <div class="onboard-title">Verify Your Email</div>
-        <div class="onboard-sub">A verification link has been sent to <strong>${escapeHtml(auth.currentUser.email)}</strong>. Please verify your email to proceed to society approval.</div>
-        
-        <div class="card" style="text-align:center; padding:20px; cursor:default;">
-          <div style="font-size:36px; margin-bottom:10px;">📧</div>
-          <div style="font-size:13.5px; color:var(--text-muted);">Check your inbox and spam folder. Once verified, refresh this page or click below.</div>
-        </div>
-
-        <button class="btn primary block" id="check-verification-btn" style="margin-top:16px;">I Have Verified My Email</button>
-        <button class="btn secondary block" id="resend-verification-btn" style="margin-top:8px;">Resend Email Link</button>
-        <button class="btn danger block" id="logout-verification-btn" style="margin-top:8px;">Sign Out</button>
-      </div>
-    `;
-
-    document.getElementById('check-verification-btn').addEventListener('click', async () => {
-      await auth.currentUser.reload();
-      if (auth.currentUser.emailVerified) {
-        render();
-      } else {
-        alert("Email is not verified yet. Please check your inbox.");
-      }
-    });
-
-    document.getElementById('resend-verification-btn').addEventListener('click', async () => {
-      try {
-        await auth.currentUser.sendEmailVerification();
-        alert("Verification email resent!");
-      } catch(err) {
-        alert("Error sending verification email: " + err.message);
-      }
-    });
-
-    document.getElementById('logout-verification-btn').addEventListener('click', () => auth.signOut());
-  }
-
-  function renderPendingApprovalScreen() {
-    appEl.innerHTML = `
-      <div class="onboard-wrap">
-        <div class="onboard-title">Account Pending Approval</div>
-        <div class="onboard-sub">Welcome, <strong>${escapeHtml(currentUserProfile.name)}</strong>. Your registration for <strong>${escapeHtml(currentUserProfile.house)}</strong> is currently under review by society administrators.</div>
-        
-        <div class="card" style="text-align:center; padding:20px; cursor:default;">
-          <div style="font-size:36px; margin-bottom:10px;">⏳</div>
-          <div style="font-size:14px; color:var(--text-muted);">Email verified! You will gain full access to community polls, notices, and complaint submissions once verified by management.</div>
-        </div>
-
-        <button class="btn primary block" id="logout-pending-btn" style="margin-top:20px;">Sign Out</button>
-      </div>
-    `;
-
-    document.getElementById('logout-pending-btn').addEventListener('click', () => auth.signOut());
-  }
-
-  window.requestPushPermission = function() {
-    Notification.requestPermission().then((permission) => {
-      if (permission === 'granted') saveDeviceToken();
-      render();
-    });
-  };
-
-  function renderOnboarding() {
-    appEl.innerHTML = `
-      <div class="onboard-wrap">
-        <div class="onboard-title">Roshan Housing Society</div>
-        <div class="onboard-sub">${isAuthModeLogin ? 'Sign in to access your portal' : 'Register a resident account'}</div>
-        
-        <form id="auth-form">
-          <label>Email Address</label>
-          <input type="email" id="auth-email" placeholder="e.g. resident@rphs.pk" required />
-
-          <label>Password</label>
-          <input type="password" id="auth-password" placeholder="••••••••" required minlength="6" />
-
-          ${!isAuthModeLogin ? `
-            <label>Full Name</label>
-            <input type="text" id="auth-name" placeholder="e.g. Naveed Ahmed" required />
-
-            <div id="house-num-wrap">
-              <label>House / Plot Number</label>
-              <input type="text" id="auth-house" placeholder="e.g. House 42, Block B" required />
-            </div>
-
-            <div id="phone-wrap">
-              <label>Phone Number</label>
-              <input type="text" id="auth-phone" placeholder="e.g. +92 300 1234567" required />
-            </div>
-          ` : ''}
-
-          <button type="submit" class="btn primary block" style="margin-top:20px;">
-            ${isAuthModeLogin ? 'Sign In' : 'Register Resident Account'}
-          </button>
-        </form>
-
-        <div class="toggle-auth-mode" id="toggle-auth-btn">
-          ${isAuthModeLogin ? "Don't have an account? Register here" : 'Already registered? Sign In'}
-        </div>
-      </div>
-    `;
-
-    const toggleBtn = document.getElementById('toggle-auth-btn');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => {
-        isAuthModeLogin = !isAuthModeLogin;
-        renderOnboarding();
-      });
-    }
-
-    document.getElementById('auth-form').addEventListener('submit', async (e) => {
+    // Authentication Form Handler
+    async function handleAuthSubmit(e) {
       e.preventDefault();
-      const email = document.getElementById('auth-email').value.trim();
-      const password = document.getElementById('auth-password').value.trim();
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value.trim();
 
-      if (isAuthModeLogin) {
-        try {
-          await auth.signInWithEmailAndPassword(email, password);
-        } catch(err) {
-          alert('Authentication Error: ' + err.message);
-        }
-      } else {
-        const name = document.getElementById('auth-name').value.trim();
-        const house = document.getElementById('auth-house').value.trim();
-        const phone = document.getElementById('auth-phone').value.trim();
+      try {
+        if (isRegisterMode) {
+          const name = document.getElementById('regName').value.trim();
+          const house = document.getElementById('regHouse').value.trim();
+          const phone = document.getElementById('regPhone').value.trim();
 
-        registrationInProgress = true;
-
-        try {
           const cred = await auth.createUserWithEmailAndPassword(email, password);
-
+          
           await db.collection('users').doc(cred.user.uid).set({
-            name,
-            email,
+            name: name,
+            house: house,
+            phone: phone,
+            email: email,
             role: 'resident',
-            house,
-            phone,
             approved: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-          currentUserProfile = {
-            uid: cred.user.uid,
-            email,
-            name,
-            house,
-            phone,
-            role: 'resident',
-            approved: false
-          };
+        } else {
+          await auth.signInWithEmailAndPassword(email, password);
+        }
+      } catch (err) {
+        alert("Authentication Error: " + err.message);
+      }
+    }
 
-          registrationInProgress = false;
+    // Sign Out
+    function handleSignOut() {
+      auth.signOut();
+    }
 
-          try {
-            await cred.user.sendEmailVerification();
-          } catch (verificationError) {
-            console.error("Verification email dispatch failed:", verificationError);
-            alert("Account created! However, sending the verification email failed. Please use 'Resend Email Link' on the next screen.");
+    // Auth State Observer
+    auth.onAuthStateChanged(async (user) => {
+      const authView = document.getElementById('authView');
+      const pendingView = document.getElementById('pendingView');
+      const dashboardView = document.getElementById('dashboardView');
+      const userInfo = document.getElementById('userInfo');
+
+      if (user) {
+        const userDoc = await db.collection('users').doc(user.uid).get();
+        currentUserData = userDoc.data() || {};
+
+        document.getElementById('userDisplayName').innerText = currentUserData.name || user.email;
+        userInfo.classList.remove('hidden');
+        authView.classList.add('hidden');
+
+        if (!currentUserData.approved) {
+          document.getElementById('pendingName').innerText = currentUserData.name || user.email;
+          document.getElementById('pendingHouse').innerText = currentUserData.house || 'N/A';
+          pendingView.classList.remove('hidden');
+          dashboardView.classList.add('hidden');
+        } else {
+          pendingView.classList.add('hidden');
+          dashboardView.classList.remove('hidden');
+
+          if (currentUserData.biodata) {
+            populateBiodataForm(currentUserData.biodata);
           }
 
-          render();
+          if (currentUserData.role === 'admin') {
+            document.getElementById('adminTabNav').classList.remove('hidden');
+            loadAdminPendingUsers();
+          }
 
-        } catch(err) {
-          registrationInProgress = false;
-          alert('Registration failed: ' + err.message);
+          loadComplaints();
         }
+
+      } else {
+        authView.classList.remove('hidden');
+        pendingView.classList.add('hidden');
+        dashboardView.classList.add('hidden');
+        userInfo.classList.add('hidden');
       }
     });
-  }
 
-  function renderContent() {
-    const isAdmin = (currentUserProfile.role === 'admin');
+    // Populate Biodata Form
+    function populateBiodataForm(b) {
+      document.getElementById('bioFirstName').value = b.firstName || '';
+      document.getElementById('bioLastName').value = b.lastName || '';
+      document.getElementById('bioCNIC').value = b.cnic || '';
+      document.getElementById('bioCell').value = b.cell || '';
+      document.getElementById('bioAddress').value = b.address || '';
+      document.getElementById('bioBloodGroup').value = b.bloodGroup || '';
+      
+      if (b.occupancy === 'Tenant/Rent') {
+        document.getElementById('typeRent').checked = true;
+      } else {
+        document.getElementById('typeOwner').checked = true;
+      }
 
-    if (activeTab === 'announcements') {
-      return `
-        <div class="section-title">Notices & Announcements</div>
-        <div class="section-sub">Official updates from society management.</div>
-        
-        ${isAdmin ? `
-          <div class="card" style="cursor:default;">
-            <div style="font-weight:700; margin-bottom:8px;">Post New Announcement</div>
-            <form id="notice-form">
-              <input type="text" id="notice-title" placeholder="Notice Title" required style="margin-bottom:8px;" />
-              <textarea id="notice-desc" placeholder="Notice details..." required></textarea>
-              <button type="submit" class="btn primary block" style="margin-top:10px;">Publish Notice</button>
-            </form>
-          </div>
-        ` : ''}
+      if (Array.isArray(b.familyTypes)) {
+        document.querySelectorAll('.fam-check').forEach(cb => {
+          cb.checked = b.familyTypes.includes(cb.value);
+        });
+      }
 
-        <div id="notices-list">Loading announcements...</div>
-      `;
+      document.getElementById('bioFamilyText').value = b.familyText || '';
     }
 
-    if (activeTab === 'polls') {
-      return `
-        <div class="section-title">Society Community Polls</div>
-        <div class="section-sub">Cast your vote on ongoing decisions.</div>
+    // Save Biodata to Firestore and Export PDF
+    async function saveBiodataAndDownloadPDF(e) {
+      e.preventDefault();
+      const uid = auth.currentUser.uid;
 
-        ${isAdmin ? `
-          <div class="card" style="cursor:default;">
-            <div style="font-weight:700; margin-bottom:8px;">Create New Poll</div>
-            <form id="poll-form">
-              <input type="text" id="poll-title" placeholder="Poll Question" required style="margin-bottom:8px;" />
-              <input type="text" id="poll-opt1" placeholder="Option 1" required style="margin-bottom:6px;" />
-              <input type="text" id="poll-opt2" placeholder="Option 2" required style="margin-bottom:8px;" />
-              <button type="submit" class="btn primary block">Publish Poll</button>
-            </form>
-          </div>
-        ` : ''}
+      const firstName = document.getElementById('bioFirstName').value.trim();
+      const lastName = document.getElementById('bioLastName').value.trim();
+      const cnic = document.getElementById('bioCNIC').value.trim();
+      const cell = document.getElementById('bioCell').value.trim();
+      const address = document.getElementById('bioAddress').value.trim();
+      const bloodGroup = document.getElementById('bioBloodGroup').value;
+      const occupancy = document.querySelector('input[name="occupancyType"]:checked').value;
+      const familyText = document.getElementById('bioFamilyText').value.trim();
 
-        <div id="polls-list">Loading polls...</div>
-      `;
+      const familyTypes = [];
+      document.querySelectorAll('.fam-check:checked').forEach(cb => familyTypes.push(cb.value));
+
+      const bioData = {
+        firstName,
+        lastName,
+        cnic,
+        cell,
+        address,
+        bloodGroup,
+        occupancy,
+        familyTypes,
+        familyText,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      try {
+        await db.collection('users').doc(uid).set({ biodata: bioData }, { merge: true });
+        alert("Biodata saved successfully!");
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        doc.setFontSize(18);
+        doc.text("Roshan Housing Society - Resident Biodata", 14, 20);
+        doc.setFontSize(10);
+        doc.text(`Exported Date: ${new Date().toLocaleDateString()}`, 14, 27);
+        doc.line(14, 30, 196, 30);
+
+        doc.setFontSize(12);
+        let y = 40;
+        doc.text(`Full Name: ${firstName} ${lastName}`, 14, y); y += 9;
+        doc.text(`CNIC: ${cnic}`, 14, y); y += 9;
+        doc.text(`Cell Number: ${cell}`, 14, y); y += 9;
+        doc.text(`Address / House: ${address}`, 14, y); y += 9;
+        doc.text(`Status: ${occupancy}`, 14, y); y += 9;
+        doc.text(`Blood Group: ${bloodGroup}`, 14, y); y += 9;
+        doc.text(`Family Categories: ${familyTypes.join(', ') || 'None'}`, 14, y); y += 12;
+
+        if (familyText) {
+          doc.text("Additional Family Details:", 14, y); y += 7;
+          const splitText = doc.splitTextToSize(familyText, 180);
+          doc.text(splitText, 14, y);
+        }
+
+        doc.save(`Biodata_${firstName}_${lastName}.pdf`);
+
+      } catch (err) {
+        alert("Failed to save or export PDF: " + err.message);
+      }
     }
 
-    if (activeTab === 'complaints') {
-      return `
-        <div class="section-title">${isAdmin ? 'Complaints & Suggestions Directory' : 'My Complaints & Suggestions'}</div>
-        <div class="section-sub">${isAdmin ? 'Review and manage status of resident requests.' : 'Track your submitted issues and feedback.'}</div>
+    // Submit Complaint
+    async function submitComplaint(e) {
+      e.preventDefault();
+      const title = document.getElementById('compTitle').value.trim();
+      const desc = document.getElementById('compDesc').value.trim();
 
-        ${!isAdmin ? `
-          <div class="card" style="cursor:default;">
-            <div style="font-weight:700; margin-bottom:10px;">Submit New Issue / Suggestion</div>
-            <form id="complaint-form">
-              <label>Issue Title</label>
-              <input type="text" id="c-title" placeholder="e.g. Water Supply Interruption" required />
-
-              <label>Category</label>
-              <select id="c-category" required>
-                <option value="Electricity / Street Lights">Electricity / Street Lights</option>
-                <option value="Water Supply">Water Supply</option>
-                <option value="Sewerage / Drainage">Sewerage / Drainage</option>
-                <option value="Roads / Footpaths">Roads / Footpaths</option>
-                <option value="Garbage / Sanitation">Garbage / Sanitation</option>
-                <option value="Security">Security</option>
-                <option value="Parks / Landscaping">Parks / Landscaping</option>
-                <option value="Maintenance">Maintenance & Repair</option>
-                <option value="Encroachment">Encroachment</option>
-                <option value="Billing / Dues">Billing / Dues</option>
-                <option value="Administration">Administration</option>
-                <option value="Suggestion / Feedback">Suggestion / Feedback</option>
-                <option value="Other">Other</option>
-              </select>
-
-              <label>Details</label>
-              <textarea id="c-desc" placeholder="Provide full details here..." required></textarea>
-
-              <button type="submit" class="btn primary block" style="margin-top:14px;">Submit Ticket</button>
-            </form>
-          </div>
-        ` : ''}
-
-        <div id="complaints-list">Loading tickets...</div>
-      `;
-    }
-
-    if (activeTab === 'approvals' && isAdmin) {
-      return `
-        <div class="section-title">Resident Approvals</div>
-        <div class="section-sub">Authorize or reject pending resident registrations.</div>
-        <div id="approvals-list">Loading pending applications...</div>
-      `;
-    }
-  }
-
-  function bindGlobalEvents() {
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => auth.signOut());
-    }
-
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        activeTab = e.currentTarget.getAttribute('data-tab');
-        render();
-      });
-    });
-
-    bindFormEvents();
-  }
-
-  function bindFormEvents() {
-    const noticeForm = document.getElementById('notice-form');
-    if (noticeForm) noticeForm.onsubmit = (e) => { e.preventDefault(); postNotice(); };
-
-    const pollForm = document.getElementById('poll-form');
-    if (pollForm) pollForm.onsubmit = (e) => { e.preventDefault(); postPoll(); };
-
-    const complaintForm = document.getElementById('complaint-form');
-    if (complaintForm) complaintForm.onsubmit = (e) => { e.preventDefault(); submitComplaint(); };
-  }
-
-  function loadData() {
-    loadNotifications();
-    if (activeTab === 'announcements') loadNotices();
-    if (activeTab === 'polls') loadPolls();
-    if (activeTab === 'complaints') loadComplaints();
-    if (activeTab === 'approvals' && currentUserProfile.role === 'admin') loadPendingResidents();
-  }
-
-  // --- SUBCOLLECTION NOTIFICATION SYSTEM ---
-  async function sendNotification(targetUid, title, body, type = 'info') {
-    if (!db || !targetUid) return;
-    try {
-      await db.collection('users')
-        .doc(targetUid)
-        .collection('notifications')
-        .add({
+      try {
+        await db.collection('complaints').add({
           title: title,
-          body: body,
-          text: body,
-          type: type,
-          read: false,
+          description: desc,
+          userId: auth.currentUser.uid,
+          userName: currentUserData.name || 'Resident',
+          house: currentUserData.house || 'N/A',
+          status: 'Open',
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-    } catch (err) {
-      console.error("Targeted Notification failed:", err);
-    }
-  }
 
-  function loadNotifications() {
-    if (db && auth.currentUser) {
-      db.collection('users')
-        .doc(auth.currentUser.uid)
-        .collection('notifications')
-        .orderBy('createdAt', 'desc')
-        .limit(20)
-        .get()
-        .then(snapshot => {
-          notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          renderUnreadBadge();
-        })
-        .catch(err => console.error("Notifs load error:", err));
-    }
-  }
-
-  function renderUnreadBadge() {
-    const unreadCount = notifications.filter(n => !n.read).length;
-    const bellBtn = document.querySelector('.notif-bell-btn');
-    if (bellBtn) {
-      const existingBadge = bellBtn.querySelector('.notif-badge');
-      if (existingBadge) existingBadge.remove();
-      if (unreadCount > 0) {
-        bellBtn.innerHTML += `<span class="notif-badge">${unreadCount}</span>`;
+        document.getElementById('complaintForm').reset();
+        alert("Complaint submitted successfully.");
+      } catch (err) {
+        alert("Submission failed: " + err.message);
       }
     }
-  }
 
-  window.openNotificationsModal = async function() {
-    document.getElementById('modal-body').innerHTML = `
-      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Notifications</div>
-      ${notifications.length ? notifications.map(n => `
-        <div style="background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px; border-radius:10px; margin-bottom:8px;">
-          ${n.title ? `<div style="font-weight:700; font-size:13px; color:var(--accent-2);">${escapeHtml(n.title)}</div>` : ''}
-          <div style="font-size:13px; color:var(--text); line-height:1.4;">${escapeHtml(n.text || n.body)}</div>
-        </div>
-      `).join('') : '<div style="color:var(--text-muted); text-align:center; padding:20px;">No notifications yet.</div>'}
-    `;
-    document.getElementById('modal-view').classList.add('active');
+    // Load Complaints List
+    function loadComplaints() {
+      const container = document.getElementById('complaintsList');
 
-    // Mark as read in batch
-    const unreadDocs = notifications.filter(n => !n.read);
-    if (unreadDocs.length && db && auth.currentUser) {
-      const batch = db.batch();
-      unreadDocs.forEach(n => {
-        const ref = db.collection('users').doc(auth.currentUser.uid).collection('notifications').doc(n.id);
-        batch.update(ref, { read: true });
-      });
-      await batch.commit().catch(e => console.error("Error marking notifs read:", e));
-      loadNotifications();
-    }
-  };
+      let query = db.collection('complaints');
+      if (currentUserData.role !== 'admin') {
+        query = query.where('userId', '==', auth.currentUser.uid);
+      }
 
-  window.closeModal = function() {
-    document.getElementById('modal-view').classList.remove('active');
-  };
+      query.onSnapshot(snap => {
+        if (snap.empty) {
+          container.innerHTML = '<p class="text-muted">No complaints found.</p>';
+          return;
+        }
 
-  // --- ANNOUNCEMENTS ---
-  function loadNotices() {
-    if (!db) return;
-    db.collection('notices').orderBy('createdAt', 'desc').limit(15).get().then(snapshot => {
-      notices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      renderNoticesList();
-    }).catch(e => console.error("Error loading notices:", e));
-  }
-
-  function renderNoticesList() {
-    const listEl = document.getElementById('notices-list');
-    if (!listEl) return;
-    if (!notices.length) {
-      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No notices posted yet.</div>';
-      return;
-    }
-    listEl.innerHTML = notices.map(n => `
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <span class="badge notice">Announcement</span>
-        </div>
-        <div style="font-weight:700; font-size:15px; margin-bottom:4px;">${escapeHtml(n.title)}</div>
-        <div style="font-size:13.5px; color:var(--text-muted); line-height:1.4;">${escapeHtml(n.description)}</div>
-      </div>
-    `).join('');
-  }
-
-  async function postNotice() {
-    const title = document.getElementById('notice-title').value.trim();
-    const description = document.getElementById('notice-desc').value.trim();
-    if (!title || !description) return;
-
-    try {
-      await db.collection('notices').add({
-        title,
-        description,
-        createdBy: auth.currentUser.uid,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      document.getElementById('notice-form').reset();
-      loadNotices();
-    } catch(e) { alert("Failed to post notice: " + e.message); }
-  }
-
-  // --- POLLS ---
-  function loadPolls() {
-    if (!db) return;
-    db.collection('polls').orderBy('createdAt', 'desc').limit(10).get().then(snapshot => {
-      polls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      renderPollsList();
-    }).catch(e => console.error("Error loading polls:", e));
-  }
-
-  function renderPollsList() {
-    const listEl = document.getElementById('polls-list');
-    if (!listEl) return;
-    if (!polls.length) {
-      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No active polls.</div>';
-      return;
-    }
-
-    listEl.innerHTML = polls.map(p => {
-      const votes = p.votes || {};
-      const totalVotes = Object.keys(votes).length;
-      const userVote = votes[auth.currentUser.uid];
-
-      return `
-        <div class="card" style="cursor:default;">
-          <div style="font-weight:700; font-size:15px; margin-bottom:10px;">${escapeHtml(p.question)}</div>
-          ${p.options.map((opt, idx) => {
-            const count = Object.values(votes).filter(v => v === idx).length;
-            const pct = totalVotes ? Math.round((count / totalVotes) * 100) : 0;
-            return `
-              <button class="poll-opt-btn" onclick="castVote('${p.id}', ${idx})">
-                <div class="poll-progress-bar" style="width:${pct}%;"></div>
-                <span class="poll-opt-text">${userVote === idx ? '✓ ' : ''}${escapeHtml(opt)}</span>
-                <span class="poll-opt-count">${pct}% (${count})</span>
-              </button>
-            `;
-          }).join('')}
-          <div style="font-size:11.5px; color:var(--text-faint); margin-top:8px;">Total votes: ${totalVotes}</div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  window.castVote = async function(pollId, optionIndex) {
-    try {
-      const pollRef = db.collection('polls').doc(pollId);
-      await pollRef.update({
-        [`votes.${auth.currentUser.uid}`]: optionIndex
-      });
-      loadPolls();
-    } catch(e) { alert("Error voting: " + e.message); }
-  };
-
-  async function postPoll() {
-    const question = document.getElementById('poll-title').value.trim();
-    const opt1 = document.getElementById('poll-opt1').value.trim();
-    const opt2 = document.getElementById('poll-opt2').value.trim();
-    if (!question || !opt1 || !opt2) return;
-
-    try {
-      await db.collection('polls').add({
-        question,
-        options: [opt1, opt2],
-        votes: {},
-        createdBy: auth.currentUser.uid,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      document.getElementById('poll-form').reset();
-      loadPolls();
-    } catch(e) { alert("Failed to create poll: " + e.message); }
-  }
-
-  // --- COMPLAINTS ---
-  function loadComplaints() {
-    if (!db) return;
-    let query = db.collection('complaints');
-    if (currentUserProfile.role !== 'admin') {
-      query = query.where('createdBy', '==', auth.currentUser.uid);
-    }
-
-    query.get().then(snapshot => {
-      complaints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      renderComplaintsList();
-    }).catch(e => console.error("Error loading complaints:", e));
-  }
-
-  function renderComplaintsList() {
-    const listEl = document.getElementById('complaints-list');
-    if (!listEl) return;
-    if (!complaints.length) {
-      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No complaints or feedback found.</div>';
-      return;
-    }
-
-    const isAdmin = currentUserProfile.role === 'admin';
-
-    listEl.innerHTML = complaints.map(c => {
-      const status = c.status || 'Pending';
-      const statusClass = status.toLowerCase().replace(/\s+/g, '-');
-
-      return `
-        <div class="card" style="cursor:default;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <span class="ticket-no">#${escapeHtml(c.ticketId || c.id.substring(0,6))}</span>
-            <span class="badge ${statusClass}">${escapeHtml(status)}</span>
-          </div>
-
-          <div style="font-weight:700; font-size:15px; margin-bottom:4px;">${escapeHtml(c.title)}</div>
-          <div style="font-size:12px; color:var(--accent-2); margin-bottom:6px;">Category: ${escapeHtml(c.category)}</div>
-          <div style="font-size:13.5px; color:var(--text-muted); line-height:1.4;">${escapeHtml(c.description)}</div>
-
-          <!-- ASSIGNED DEPARTMENT DISPLAY -->
-          ${c.assignedDept && c.assignedDept !== 'Unassigned' ? `
-            <div style="font-size: 12px; font-weight: 600; color: var(--info); margin-top: 8px; display: flex; align-items: center; gap: 4px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="8.5" cy="7" r="4"></circle>
-                <polyline points="17 11 19 13 23 9"></polyline>
-              </svg>
-              Assigned to: ${escapeHtml(c.assignedDept)}
+        let html = '';
+        snap.docs.forEach(doc => {
+          const d = doc.data();
+          html += `
+            <div class="card mb-3 p-3" id="complaint-${doc.id}">
+              <div class="d-flex justify-content-between align-items-start">
+                <h5 class="mb-1">${d.title}</h5>
+                <span class="badge ${d.status === 'Open' ? 'bg-danger' : 'bg-success'}">${d.status}</span>
+              </div>
+              <p class="mb-2 text-light">${d.description}</p>
+              <div class="text-muted small mb-2">
+                Submitted by: ${d.userName} (${d.house})
+              </div>
+              <div class="no-print">
+                <button onclick="printSingleComplaint('${d.title}', '${d.description}', '${d.userName}', '${d.house}', '${d.status}')" class="btn btn-sm btn-outline-info">
+                  🖨️ Print Complaint
+                </button>
+              </div>
             </div>
-          ` : ''}
-
-          ${c.adminNote ? `
-            <div style="margin-top: 10px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-left: 3px solid var(--accent); border-radius: 4px;">
-              <div style="font-size: 11px; opacity: 0.7;">Admin Note:</div>
-              <div style="font-size: 13px;">${escapeHtml(c.adminNote)}</div>
-            </div>
-          ` : ''}
-
-          ${isAdmin ? `
-            <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border-soft); display:flex; gap:8px;">
-              <button class="btn sm secondary" onclick="promptUpdateComplaint('${c.id}', '${c.createdBy}')">Update Status</button>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    }).join('');
-  }
-
-  async function submitComplaint() {
-    const title = document.getElementById('c-title').value.trim();
-    const category = document.getElementById('c-category').value;
-    const description = document.getElementById('c-desc').value.trim();
-
-    if (!title || !description) return;
-
-    try {
-      const ticketId = 'T-' + Math.floor(1000 + Math.random() * 9000);
-      await db.collection('complaints').add({
-        ticketId,
-        title,
-        category,
-        description,
-        status: 'Pending',
-        assignedDept: 'Unassigned',
-        createdBy: auth.currentUser.uid,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          `;
+        });
+        container.innerHTML = html;
+      }, err => {
+        container.innerHTML = `<p class="text-danger">Error loading complaints: ${err.message}</p>`;
       });
+    }
 
-      document.getElementById('complaint-form').reset();
-      loadComplaints();
-    } catch(e) { alert("Failed to submit ticket: " + e.message); }
-  }
-
-  window.promptUpdateComplaint = async function(id, targetUid) {
-    const status = prompt("Set status (Pending, In Progress, Resolved, Closed):");
-    if (!status) return;
-    const assignedDept = prompt("Assign Department (e.g. Electrical, Plumbing, Maintenance):");
-    const adminNote = prompt("Add Admin Note (optional):");
-
-    try {
-      const updateData = { status };
-      if (assignedDept) updateData.assignedDept = assignedDept;
-      if (adminNote) updateData.adminNote = adminNote;
-
-      await db.collection('complaints').doc(id).update(updateData);
+    // Print Individual Complaint (Clean Popup)
+    function printSingleComplaint(title, desc, userName, house, status) {
+      const printWin = window.open('', '', 'width=800,height=600');
       
-      // Dispatch notification directly to user's subcollection
-      await sendNotification(targetUid, "Complaint Updated", `Your complaint ticket #${id.substring(0,6)} status changed to: ${status}`, "info");
+      printWin.document.write('<html><head><title>Complaint Printable Report</title>');
+      printWin.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">');
+      printWin.document.write('</head><body class="p-4">');
+      printWin.document.write('<h2>Roshan Housing Society - Official Complaint Report</h2><hr>');
+      printWin.document.write(`
+        <h4>Title: ${title}</h4>
+        <p><strong>Status:</strong> ${status}</p>
+        <p><strong>Submitted By:</strong> ${userName} (${house})</p>
+        <p><strong>Details:</strong></p>
+        <p class="p-3 border rounded">${desc}</p>
+      `);
+      printWin.document.write('</body></html>');
+      
+      printWin.document.close();
+      printWin.focus();
 
-      loadComplaints();
-    } catch(e) { alert("Failed updating complaint: " + e.message); }
-  };
-
-  // --- APPROVALS ---
-  function loadPendingResidents() {
-    if (!db) return;
-    db.collection('users').where('approved', '==', false).get().then(snapshot => {
-      pendingResidents = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
-      renderApprovalsList();
-    }).catch(e => console.error("Error loading approvals:", e));
-  }
-
-  function renderApprovalsList() {
-    const listEl = document.getElementById('approvals-list');
-    if (!listEl) return;
-    if (!pendingResidents.length) {
-      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No pending registration requests.</div>';
-      return;
+      setTimeout(() => {
+        printWin.print();
+        printWin.close();
+      }, 500);
     }
 
-    listEl.innerHTML = pendingResidents.map(r => `
-      <div class="card" style="cursor:default;">
-        <div style="font-weight:700; font-size:15px;">${escapeHtml(r.name)}</div>
-        <div style="font-size:12.5px; color:var(--text-muted);">House: ${escapeHtml(r.house)}</div>
-        <div style="font-size:12.5px; color:var(--text-muted);">Phone: ${escapeHtml(r.phone)}</div>
-        <div style="font-size:12.5px; color:var(--text-muted);">Email: ${escapeHtml(r.email)}</div>
+    // Admin Function: Load Pending Users
+    function loadAdminPendingUsers() {
+      const container = document.getElementById('adminPendingList');
+      db.collection('users').where('approved', '==', false).onSnapshot(snap => {
+        if (snap.empty) {
+          container.innerHTML = '<p class="text-success">No pending approval requests.</p>';
+          return;
+        }
 
-        <div style="display:flex; gap:10px; margin-top:12px;">
-          <button class="btn sm primary block" onclick="approveUser('${r.uid}')">Approve</button>
-          <button class="btn sm danger block" onclick="rejectUser('${r.uid}')">Reject</button>
-        </div>
-      </div>
-    `).join('');
-  }
+        let html = '';
+        snap.docs.forEach(doc => {
+          const u = doc.data();
+          html += `
+            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-2">
+              <div>
+                <strong>${u.name}</strong> (${u.email})<br>
+                <small class="text-muted">House: ${u.house} | Phone: ${u.phone}</small>
+              </div>
+              <button onclick="approveUser('${doc.id}')" class="btn btn-sm btn-success">Approve</button>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
+      });
+    }
 
-  window.approveUser = async function(uid) {
-    try {
-      await db.collection('users').doc(uid).update({ approved: true });
-      await sendNotification(uid, "Account Approved", "Your account has been approved! You can now access all features.", "success");
-      loadPendingResidents();
-    } catch(e) { alert("Error approving user: " + e.message); }
-  };
-
-  window.rejectUser = async function(uid) {
-    if (!confirm("Are you sure you want to delete this registration request?")) return;
-    try {
-      await db.collection('users').doc(uid).delete();
-      loadPendingResidents();
-    } catch(e) { alert("Error deleting user: " + e.message); }
-  };
-
-})();
-</script>
+    // Admin Function: Approve User
+    async function approveUser(uid) {
+      try {
+        await db.collection('users').doc(uid).update({ approved: true });
+        alert("User account approved!");
+      } catch (err) {
+        alert("Approval failed: " + err.message);
+      }
+    }
+  </script>
 </body>
 </html>
