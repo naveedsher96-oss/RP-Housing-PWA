@@ -16,6 +16,7 @@
 <!-- Firebase Compatibility SDKs -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -75,7 +76,7 @@
   button{font-family:inherit;}
   ::selection{background:var(--accent-soft);}
 
-  /* Header */
+  /* Top App Bar */
   .topbar{
     position:sticky; top:0; z-index:30;
     padding:calc(16px + env(safe-area-inset-top)) 18px 14px;
@@ -101,7 +102,7 @@
     border:1px solid rgba(242,169,59,0.3);
   }
 
-  /* Notifications Bell Header Button */
+  /* Notifications Bell */
   .notif-bell-btn{
     position:relative; background:var(--bg-elevated-2); border:1px solid var(--border);
     border-radius:10px; width:38px; height:38px; display:flex; align-items:center;
@@ -112,7 +113,13 @@
     font-size:10px; font-weight:800; border-radius:10px; padding:2px 5px; min-width:16px; text-align:center;
   }
 
-  /* Main & UI Elements */
+  /* Push Banner */
+  .push-banner{
+    background:var(--accent-soft); border:1px solid rgba(242,169,59,0.3);
+    border-radius:12px; padding:12px 14px; margin-bottom:16px; display:flex;
+    align-items:center; justify-content:space-between; gap:10px;
+  }
+
   main{flex:1; padding:18px 18px 10px;}
   .section-title{
     font-family:var(--font-display); font-weight:600; font-size:22px; margin:4px 0 4px;
@@ -120,44 +127,26 @@
   }
   .section-sub{color:var(--text-muted); font-size:13px; margin:0 0 18px; line-height:1.5;}
   .card{
-    background:var(--bg-elevated);
-    border:1px solid var(--border);
-    border-radius:var(--radius);
-    padding:16px;
-    margin-bottom:12px;
-    box-shadow:var(--shadow);
-    position:relative;
-    cursor:pointer;
+    background:var(--bg-elevated); border:1px solid var(--border);
+    border-radius:var(--radius); padding:16px; margin-bottom:12px;
+    box-shadow:var(--shadow); position:relative; cursor:pointer;
   }
-
-  .delete-btn{
-    position:absolute; top:12px; right:12px;
-    background:var(--danger-soft); color:var(--danger);
-    border:1px solid rgba(229,97,90,0.3); border-radius:8px;
-    width:28px; height:28px; display:flex; align-items:center; justify-content:center;
-    cursor:pointer; font-size:14px; font-weight:bold; z-index:10;
-  }
-  .delete-btn:hover{ background:var(--danger); color:#fff; }
 
   .badge{
     display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.3px;
     text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap;
   }
-  .badge.open, .badge.pending{background:var(--warning-soft); color:var(--accent-2);}
-  .badge.progress{background:var(--info-soft); color:#A9BCF7;}
-  .badge.resolved{background:var(--success-soft); color:#6BD9BE;}
+  .badge.pending{background:var(--warning-soft); color:var(--accent-2);}
   .badge.notice{background:var(--accent-soft); color:var(--accent-2);}
 
   .btn{
     font-family:inherit; font-weight:700; font-size:13.5px; border:none; border-radius:12px;
     padding:12px 16px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px;
-    transition:transform .1s ease, opacity .15s ease;
   }
   .btn.primary{background:linear-gradient(180deg, var(--accent-2), var(--accent)); color:#251400; box-shadow:0 4px 16px rgba(242,169,59,0.35);}
   .btn.sm{padding:6px 12px; font-size:11.5px; border-radius:8px;}
   .btn.block{width:100%;}
 
-  /* Reactions Toolbar */
   .reactions-toolbar{
     display:flex; align-items:center; gap:10px; margin-top:12px; padding-top:10px;
     border-top:1px solid var(--border-soft);
@@ -165,7 +154,7 @@
   .rxn-btn{
     background:var(--bg-elevated-2); border:1px solid var(--border); color:var(--text-muted);
     border-radius:20px; padding:4px 12px; font-size:12px; font-weight:700; display:inline-flex;
-    align-items:center; gap:6px; cursor:pointer; transition:all 0.15s ease;
+    align-items:center; gap:6px; cursor:pointer;
   }
   .rxn-btn.active-like{ background:var(--success-soft); color:var(--success); border-color:rgba(52,179,152,0.4); }
   .rxn-btn.active-dislike{ background:var(--danger-soft); color:var(--danger); border-color:rgba(229,97,90,0.4); }
@@ -177,19 +166,15 @@
   }
   textarea{resize:vertical; min-height:80px;}
 
-  /* Poll Options UI */
   .poll-opt-btn{
     width:100%; text-align:left; padding:12px; border-radius:10px; background:var(--bg-elevated-2);
     border:1px solid var(--border); color:var(--text); margin-top:8px; cursor:pointer;
     display:flex; justify-content:space-between; align-items:center; position:relative; overflow:hidden;
   }
-  .poll-progress-bar{
-    position:absolute; top:0; left:0; bottom:0; background:var(--accent-soft); z-index:1; pointer-events:none;
-  }
+  .poll-progress-bar{ position:absolute; top:0; left:0; bottom:0; background:var(--accent-soft); z-index:1; pointer-events:none; }
   .poll-opt-text{position:relative; z-index:2; font-weight:600; font-size:13.5px;}
   .poll-opt-count{position:relative; z-index:2; font-family:var(--font-mono); font-size:12px; color:var(--accent-2);}
 
-  /* Modal Pop-up */
   .modal-overlay{
     position:fixed; top:0; left:0; right:0; bottom:0; z-index:100;
     background:rgba(10,12,24,0.85); backdrop-filter:blur(8px);
@@ -208,26 +193,18 @@
     cursor:pointer; font-size:16px; font-weight:bold;
   }
 
-  /* Bottom Navigation */
   nav.tabbar{
     position:fixed; bottom:0; left:0; right:0; z-index:40;
     display:flex; justify-content:center;
     padding-bottom:env(safe-area-inset-bottom);
     background:linear-gradient(0deg, rgba(16,20,42,0.98), rgba(16,20,42,0.9));
-    border-top:1px solid var(--border-soft);
-    backdrop-filter:blur(10px);
+    border-top:1px solid var(--border-soft); backdrop-filter:blur(10px);
   }
-  .tabbar-inner{
-    max-width:520px; width:100%; display:flex; justify-content:space-around; padding:8px 6px;
-  }
-  .tab-btn{
-    background:none; border:none; color:var(--text-faint); cursor:pointer;
-    display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; flex:1;
-  }
+  .tabbar-inner{ max-width:520px; width:100%; display:flex; justify-content:space-around; padding:8px 6px; }
+  .tab-btn{ background:none; border:none; color:var(--text-faint); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; flex:1; }
   .tab-btn.active{color:var(--accent-2);}
   .tab-btn .lbl{font-size:11px; font-weight:700;}
 
-  /* Onboarding */
   .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
   .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
   .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:30px;}
@@ -249,7 +226,6 @@
 (function(){
   "use strict";
 
-  // Firebase Configuration
   const firebaseConfig = {
     apiKey: "AIzaSyA5jR_KvDtN52sIUQiYffXL_1pcoN5vNpk",
     authDomain: "rp-housing-society.firebaseapp.com",
@@ -264,8 +240,9 @@
     firebase.initializeApp(firebaseConfig);
   }
   const db = (typeof firebase !== 'undefined') ? firebase.firestore() : null;
+  const messaging = (typeof firebase !== 'undefined' && firebase.messaging.isSupported()) ? firebase.messaging() : null;
 
-  // App State
+  // App State - Auto restores session from browser storage
   let currentUser = JSON.parse(localStorage.getItem('rphs_user')) || null;
   let activeTab = 'announcements';
   let complaints = [];
@@ -275,7 +252,38 @@
 
   const appEl = document.getElementById('app');
 
+  function initPushNotifications() {
+    if (!messaging) return;
+
+    if (Notification.permission === 'granted') {
+      saveDeviceToken();
+    }
+
+    messaging.onMessage((payload) => {
+      new Notification(payload.notification.title, {
+        body: payload.notification.body,
+        icon: '/icon-192.png'
+      });
+      loadNotifications();
+    });
+  }
+
+  function saveDeviceToken() {
+    if (!messaging || !currentUser) return;
+    messaging.getToken().then((currentToken) => {
+      if (currentToken && db) {
+        db.collection('fcm_tokens').doc(currentUser.name.toLowerCase().replace(/\s+/g, '_')).set({
+          token: currentToken,
+          user: currentUser.name,
+          role: currentUser.role,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    }).catch((err) => console.log('Push token registration error:', err));
+  }
+
   function render() {
+    // If user profile exists, bypass onboarding completely
     if (!currentUser) {
       renderOnboarding();
       return;
@@ -303,6 +311,13 @@
       </header>
 
       <main style="padding-bottom:20px;">
+        ${('Notification' in window && Notification.permission !== 'granted') ? `
+          <div class="push-banner">
+            <span style="font-size:12.5px; font-weight:600; color:var(--accent-2);">Enable push notifications for instant alerts!</span>
+            <button class="btn sm primary" onclick="requestPushPermission()">Enable</button>
+          </div>
+        ` : ''}
+
         ${renderContent()}
       </main>
 
@@ -323,13 +338,23 @@
 
     bindGlobalEvents();
     loadData();
+    initPushNotifications();
   }
+
+  window.requestPushPermission = function() {
+    Notification.requestPermission().then((permission) => {
+      if (permission === 'granted') {
+        saveDeviceToken();
+      }
+      render();
+    });
+  };
 
   function renderOnboarding() {
     appEl.innerHTML = `
       <div class="onboard-wrap">
         <div class="onboard-title">Roshan Pakistan Housing Society</div>
-        <div class="onboard-sub">Select your role to log into the portal.</div>
+        <div class="onboard-sub">Create or access your resident account.</div>
         
         <form id="onboard-form">
           <label>Full Name</label>
@@ -348,11 +373,10 @@
 
           <div id="pin-wrap" style="display:none;">
             <label id="pin-label">Admin Security PIN</label>
-            <input type="password" id="admin-pin" placeholder="Enter or set 4-digit PIN" maxlength="4" />
-            <div id="pin-hint" style="font-size:11px; color:var(--text-muted); margin-top:4px;">First time logging in? Enter a new 4-digit PIN to secure your admin profile.</div>
+            <input type="password" id="admin-pin" placeholder="Enter 4-digit PIN" maxlength="4" />
           </div>
 
-          <button type="submit" class="btn primary block" style="margin-top:20px;">Access Portal</button>
+          <button type="submit" class="btn primary block" style="margin-top:20px;">Login & Stay Signed In</button>
         </form>
       </div>
     `;
@@ -382,30 +406,14 @@
           try {
             const adminDoc = await db.collection('admins').doc(adminId).get();
             if (adminDoc.exists) {
-              if (adminDoc.data().pin !== pinEntered) {
-                alert('Incorrect PIN for this Admin profile.');
-                return;
-              }
+              if (adminDoc.data().pin !== pinEntered) { alert('Incorrect PIN.'); return; }
             } else {
               await db.collection('admins').doc(adminId).set({ pin: pinEntered, name: name });
-              alert('First time login detected! Your Admin PIN has been created successfully.');
             }
           } catch(err) {
-            if (adminPinStore[adminId]) {
-              if (adminPinStore[adminId] !== pinEntered) { alert('Incorrect Admin PIN.'); return; }
-            } else {
-              adminPinStore[adminId] = pinEntered;
-              localStorage.setItem('rphs_admin_pins', JSON.stringify(adminPinStore));
-              alert('Admin PIN created successfully.');
-            }
-          }
-        } else {
-          if (adminPinStore[adminId]) {
-            if (adminPinStore[adminId] !== pinEntered) { alert('Incorrect Admin PIN.'); return; }
-          } else {
+            if (adminPinStore[adminId] && adminPinStore[adminId] !== pinEntered) { alert('Incorrect PIN.'); return; }
             adminPinStore[adminId] = pinEntered;
             localStorage.setItem('rphs_admin_pins', JSON.stringify(adminPinStore));
-            alert('Admin PIN created successfully.');
           }
         }
       }
@@ -416,6 +424,7 @@
         house: (role === 'admin') ? 'Admin Office' : document.getElementById('user-house').value.trim()
       };
 
+      // Save permanently into LocalStorage
       localStorage.setItem('rphs_user', JSON.stringify(currentUser));
       render();
     });
@@ -427,7 +436,7 @@
     if (activeTab === 'announcements') {
       return `
         <div class="section-title">Notices & Announcements</div>
-        <div class="section-sub">Official updates from society management. Tap to expand.</div>
+        <div class="section-sub">Official updates from society management.</div>
         
         ${isAdmin ? `
           <div class="card" style="cursor:default;">
@@ -447,7 +456,7 @@
     if (activeTab === 'polls') {
       return `
         <div class="section-title">Society Community Polls</div>
-        <div class="section-sub">Cast your vote on ongoing decisions. Tap to expand.</div>
+        <div class="section-sub">Cast your vote on ongoing decisions.</div>
 
         ${isAdmin ? `
           <div class="card" style="cursor:default;">
@@ -519,28 +528,13 @@
 
   function bindFormEvents() {
     const noticeForm = document.getElementById('notice-form');
-    if (noticeForm) {
-      noticeForm.onsubmit = function(e) {
-        e.preventDefault();
-        postNotice();
-      };
-    }
+    if (noticeForm) noticeForm.onsubmit = (e) => { e.preventDefault(); postNotice(); };
 
     const pollForm = document.getElementById('poll-form');
-    if (pollForm) {
-      pollForm.onsubmit = function(e) {
-        e.preventDefault();
-        postPoll();
-      };
-    }
+    if (pollForm) pollForm.onsubmit = (e) => { e.preventDefault(); postPoll(); };
 
     const complaintForm = document.getElementById('complaint-form');
-    if (complaintForm) {
-      complaintForm.onsubmit = function(e) {
-        e.preventDefault();
-        submitComplaint();
-      };
-    }
+    if (complaintForm) complaintForm.onsubmit = (e) => { e.preventDefault(); submitComplaint(); };
   }
 
   function loadData() {
@@ -550,7 +544,6 @@
     if (activeTab === 'complaints') loadComplaints();
   }
 
-  // Notification Push Engine
   function sendNotification(target, text) {
     const item = { target, text, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), read: false, createdAt: new Date().toISOString() };
     if (db) {
@@ -558,6 +551,10 @@
     } else {
       notifications.unshift(item);
       localStorage.setItem('rphs_notifs', JSON.stringify(notifications));
+    }
+
+    if (Notification.permission === 'granted') {
+      new Notification("Roshan Housing Society", { body: text, icon: 'icon-192.png' });
     }
   }
 
@@ -588,34 +585,6 @@
     document.getElementById('modal-view').classList.add('active');
   };
 
-  // Global Delete Handlers
-  window.deleteNotice = function(e, key) {
-    e.stopPropagation();
-    if (!confirm('Are you sure you want to remove this announcement?')) return;
-
-    if (db && typeof key === 'string' && key.length > 10) {
-      db.collection('notices').doc(key).delete().then(() => loadNotices());
-    } else {
-      notices = notices.filter((n, idx) => (n.id !== key && idx != key));
-      localStorage.setItem('rphs_notices', JSON.stringify(notices));
-      renderNoticesList();
-    }
-  };
-
-  window.deletePoll = function(e, key) {
-    e.stopPropagation();
-    if (!confirm('Are you sure you want to remove this poll?')) return;
-
-    if (db && typeof key === 'string' && key.length > 10) {
-      db.collection('polls').doc(key).delete().then(() => loadPolls());
-    } else {
-      polls = polls.filter((p, idx) => (p.id !== key && idx != key));
-      localStorage.setItem('rphs_polls', JSON.stringify(polls));
-      renderPollsList();
-    }
-  };
-
-  // Reactions Engine
   window.reactNotice = function(e, key, type) {
     if(e) e.stopPropagation();
     let n = notices.find((item, idx) => (item.id === key || idx == key));
@@ -629,19 +598,11 @@
     const hasDisliked = n.dislikes.includes(user);
 
     if (type === 'like') {
-      if (hasLiked) {
-        n.likes = n.likes.filter(u => u !== user);
-      } else {
-        n.likes.push(user);
-        n.dislikes = n.dislikes.filter(u => u !== user);
-      }
+      if (hasLiked) { n.likes = n.likes.filter(u => u !== user); } 
+      else { n.likes.push(user); n.dislikes = n.dislikes.filter(u => u !== user); }
     } else if (type === 'dislike') {
-      if (hasDisliked) {
-        n.dislikes = n.dislikes.filter(u => u !== user);
-      } else {
-        n.dislikes.push(user);
-        n.likes = n.likes.filter(u => u !== user);
-      }
+      if (hasDisliked) { n.dislikes = n.dislikes.filter(u => u !== user); } 
+      else { n.dislikes.push(user); n.likes = n.likes.filter(u => u !== user); }
     }
 
     if (db && n.id) {
@@ -656,7 +617,6 @@
     }
   };
 
-  // Global Modal View Handlers
   window.openNoticeModal = function(key) {
     let item = notices.find((n, idx) => (n.id === key || idx == key));
     if (!item) return;
@@ -688,7 +648,7 @@
     const hasVoted = p.voters && p.voters.includes(currentUser.name);
 
     document.getElementById('modal-body').innerHTML = `
-      <div style="margin-bottom:10px;"><span class="badge open">Community Poll</span></div>
+      <div style="margin-bottom:10px;"><span class="badge pending">Community Poll</span></div>
       <div style="font-family:var(--font-display); font-size:19px; font-weight:600; margin-bottom:16px; line-height:1.3;">${p.title}</div>
       ${p.options.map((opt, oIndex) => {
         const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
@@ -711,7 +671,6 @@
     document.getElementById('modal-view').classList.remove('active');
   };
 
-  // Announcements
   function postNotice() {
     const title = document.getElementById('notice-title').value.trim();
     const desc = document.getElementById('notice-desc').value.trim();
@@ -724,21 +683,8 @@
         sendNotification('resident', `📢 New Announcement: "${title}"`);
         document.getElementById('notice-form').reset();
         loadNotices();
-      }).catch(err => {
-        fallbackPostNotice(item);
       });
-    } else {
-      fallbackPostNotice(item);
     }
-  }
-
-  function fallbackPostNotice(item) {
-    notices.unshift(item);
-    localStorage.setItem('rphs_notices', JSON.stringify(notices));
-    sendNotification('resident', `📢 New Announcement: "${item.title}"`);
-    const form = document.getElementById('notice-form');
-    if (form) form.reset();
-    renderNoticesList();
   }
 
   function loadNotices() {
@@ -746,13 +692,7 @@
       db.collection('notices').orderBy('createdAt', 'desc').get().then(snapshot => {
         notices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderNoticesList();
-      }).catch(() => {
-        notices = JSON.parse(localStorage.getItem('rphs_notices')) || [];
-        renderNoticesList();
       });
-    } else {
-      notices = JSON.parse(localStorage.getItem('rphs_notices')) || [];
-      renderNoticesList();
     }
   }
 
@@ -760,8 +700,6 @@
     const el = document.getElementById('notices-list');
     if (!el) return;
     if (!notices.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No announcements posted yet.</div>'; return; }
-
-    const isAdmin = (currentUser.role === 'admin');
 
     el.innerHTML = notices.map((n, idx) => {
       const itemKey = n.id ? n.id : idx;
@@ -772,8 +710,7 @@
 
       return `
         <div class="card" onclick="openNoticeModal('${itemKey}')">
-          ${isAdmin ? `<button class="delete-btn" onclick="deleteNotice(event, '${itemKey}')" title="Delete Announcement">✕</button>` : ''}
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding-right:${isAdmin ? '30px' : '0'};">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <span class="badge notice">Official Notice</span>
             <span style="font-size:11px; color:var(--text-muted);">${n.date || 'Today'}</span>
           </div>
@@ -789,74 +726,29 @@
     }).join('');
   }
 
-  // Polls
   function postPoll() {
     const title = document.getElementById('poll-title').value.trim();
     const opt1 = document.getElementById('poll-opt1').value.trim();
     const opt2 = document.getElementById('poll-opt2').value.trim();
-
     if (!title || !opt1 || !opt2) return;
 
-    const item = {
-      title,
-      options: [ { text: opt1, votes: 0 }, { text: opt2, votes: 0 } ],
-      voters: [],
-      createdAt: new Date().toISOString()
-    };
-
-    if (db) {
-      db.collection('polls').add(item).then(() => {
-        sendNotification('resident', `🗳️ New Poll: "${title}"`);
-        document.getElementById('poll-form').reset();
-        loadPolls();
-      }).catch(err => {
-        fallbackPostPoll(item);
-      });
-    } else {
-      fallbackPostPoll(item);
-    }
-  }
-
-  function fallbackPostPoll(item) {
-    polls.unshift(item);
-    localStorage.setItem('rphs_polls', JSON.stringify(polls));
-    sendNotification('resident', `🗳️ New Poll: "${item.title}"`);
-    const form = document.getElementById('poll-form');
-    if (form) form.reset();
-    renderPollsList();
+    const item = { title, options: [{text: opt1, votes: 0}, {text: opt2, votes: 0}], voters: [], createdAt: new Date().toISOString() };
+    if (db) db.collection('polls').add(item).then(() => { sendNotification('resident', `🗳️ New Poll: "${title}"`); document.getElementById('poll-form').reset(); loadPolls(); });
   }
 
   function loadPolls() {
-    if (db) {
-      db.collection('polls').orderBy('createdAt', 'desc').get().then(snapshot => {
-        polls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderPollsList();
-      }).catch(() => {
-        polls = JSON.parse(localStorage.getItem('rphs_polls')) || [];
-        renderPollsList();
-      });
-    } else {
-      polls = JSON.parse(localStorage.getItem('rphs_polls')) || [];
-      renderPollsList();
-    }
+    if (db) db.collection('polls').orderBy('createdAt', 'desc').get().then(snapshot => { polls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); renderPollsList(); });
   }
 
   function renderPollsList() {
     const el = document.getElementById('polls-list');
-    if (!el) return;
-    if (!polls.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No active polls.</div>'; return; }
-
-    const isAdmin = (currentUser.role === 'admin');
-
+    if (!el || !polls.length) return;
     el.innerHTML = polls.map((p, pIndex) => {
       const totalVotes = p.options.reduce((sum, opt) => sum + opt.votes, 0);
-      const hasVoted = p.voters && p.voters.includes(currentUser.name);
       const itemKey = p.id ? p.id : pIndex;
-
       return `
         <div class="card" onclick="openPollModal('${itemKey}')">
-          ${isAdmin ? `<button class="delete-btn" onclick="deletePoll(event, '${itemKey}')" title="Delete Poll">✕</button>` : ''}
-          <div style="font-weight:700; font-size:15px; margin-bottom:10px; padding-right:${isAdmin ? '30px' : '0'};">${p.title}</div>
+          <div style="font-weight:700; font-size:15px; margin-bottom:10px;">${p.title}</div>
           ${p.options.map((opt, oIndex) => {
             const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
             return `
@@ -867,9 +759,6 @@
               </button>
             `;
           }).join('')}
-          <div style="font-size:11px; color:var(--text-muted); margin-top:10px;">
-            Total Votes: ${totalVotes} ${hasVoted ? '• (You voted)' : ''}
-          </div>
         </div>
       `;
     }).join('');
@@ -877,166 +766,45 @@
 
   window.votePoll = function(pollIdentifier, optIndex) {
     let poll = polls.find((p, idx) => (p.id === pollIdentifier || idx == pollIdentifier));
-    if (!poll) return;
-
-    if (poll.voters && poll.voters.includes(currentUser.name)) {
-      alert('You have already voted in this poll.');
-      return;
-    }
+    if (!poll || (poll.voters && poll.voters.includes(currentUser.name))) return alert('Already voted.');
 
     if (!poll.voters) poll.voters = [];
     poll.voters.push(currentUser.name);
     poll.options[optIndex].votes += 1;
 
     sendNotification('admin', `📊 ${currentUser.name} voted on poll: "${poll.title}"`);
-
-    if (db && poll.id) {
-      db.collection('polls').doc(poll.id).update({
-        options: poll.options,
-        voters: poll.voters
-      }).then(() => {
-        loadPolls();
-        if (document.getElementById('modal-view').classList.contains('active')) {
-          openPollModal(pollIdentifier);
-        }
-      });
-    } else {
-      localStorage.setItem('rphs_polls', JSON.stringify(polls));
-      renderPollsList();
-      if (document.getElementById('modal-view').classList.contains('active')) {
-        openPollModal(pollIdentifier);
-      }
-    }
+    if (db && poll.id) db.collection('polls').doc(poll.id).update({ options: poll.options, voters: poll.voters }).then(() => loadPolls());
   };
 
-  // Complaints
   function submitComplaint() {
     const title = document.getElementById('c-title').value.trim();
     const category = document.getElementById('c-category').value;
     const desc = document.getElementById('c-desc').value.trim();
-
     if (!title || !desc) return;
 
-    const newComplaint = {
-      title,
-      category,
-      desc,
-      resident: currentUser.name,
-      house: currentUser.house || 'N/A',
-      status: 'Pending',
-      createdAt: new Date().toISOString()
-    };
-
-    if (db) {
-      db.collection('complaints').add(newComplaint).then(() => {
-        sendNotification('admin', `⚠️ New Complaint from ${currentUser.name}: "${title}"`);
-        alert('Complaint submitted!');
-        document.getElementById('complaint-form').reset();
-        loadComplaints();
-      }).catch(err => {
-        fallbackSubmitComplaint(newComplaint);
-      });
-    } else {
-      fallbackSubmitComplaint(newComplaint);
-    }
-  }
-
-  function fallbackSubmitComplaint(item) {
-    complaints.unshift(item);
-    localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
-    sendNotification('admin', `⚠️ New Complaint from ${currentUser.name}: "${item.title}"`);
-    alert('Complaint submitted!');
-    const form = document.getElementById('complaint-form');
-    if (form) form.reset();
-    renderComplaintsList();
+    const newComplaint = { title, category, desc, resident: currentUser.name, house: currentUser.house || 'N/A', status: 'Pending', createdAt: new Date().toISOString() };
+    if (db) db.collection('complaints').add(newComplaint).then(() => { sendNotification('admin', `⚠️ New Complaint from ${currentUser.name}: "${title}"`); alert('Submitted!'); document.getElementById('complaint-form').reset(); loadComplaints(); });
   }
 
   function loadComplaints() {
-    if (db) {
-      db.collection('complaints').orderBy('createdAt', 'desc').get().then(snapshot => {
-        complaints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderComplaintsList();
-      }).catch(() => {
-        complaints = JSON.parse(localStorage.getItem('rphs_complaints')) || [];
-        renderComplaintsList();
-      });
-    } else {
-      complaints = JSON.parse(localStorage.getItem('rphs_complaints')) || [];
-      renderComplaintsList();
-    }
+    if (db) db.collection('complaints').orderBy('createdAt', 'desc').get().then(snapshot => { complaints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); renderComplaintsList(); });
   }
 
   function renderComplaintsList() {
     const el = document.getElementById('complaints-list');
-    if (!el) return;
-    if (!complaints.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No complaints recorded.</div>'; return; }
-
-    const isAdmin = (currentUser.role === 'admin');
-
-    el.innerHTML = complaints.map((c, idx) => {
-      const badgeClass = c.status === 'Resolved' ? 'resolved' : (c.status === 'In Progress' ? 'progress' : 'pending');
-      const itemKey = c.id ? c.id : idx;
-
-      return `
-        <div class="card" style="cursor:default;">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-            <div style="font-weight:700; font-size:15px;">${c.title}</div>
-            <span class="badge ${badgeClass}">${c.status}</span>
-          </div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">
-            ${c.category} • By ${c.resident} (${c.house})
-          </div>
-          <div style="font-size:13.5px; color:#D6D9EC; line-height:1.4;">${c.desc}</div>
-
-          ${isAdmin ? `
-            <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border-soft); display:flex; align-items:center; gap:8px;">
-              <label style="margin:0; font-size:11px;">Update Status:</label>
-              <select class="status-select" data-key="${itemKey}" style="padding:4px 8px; font-size:12px; width:auto;">
-                <option value="Pending" ${c.status==='Pending'?'selected':''}>Pending</option>
-                <option value="In Progress" ${c.status==='In Progress'?'selected':''}>In Progress</option>
-                <option value="Resolved" ${c.status==='Resolved'?'selected':''}>Resolved</option>
-              </select>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    }).join('');
-
-    if (isAdmin) {
-      document.querySelectorAll('.status-select').forEach(select => {
-        select.addEventListener('change', (e) => {
-          const key = e.target.getAttribute('data-key');
-          const newStatus = e.target.value;
-          updateComplaintStatus(key, newStatus);
-        });
-      });
-    }
+    if (!el || !complaints.length) return;
+    el.innerHTML = complaints.map((c) => `
+      <div class="card" style="cursor:default;">
+        <div style="display:flex; justify-content:space-between;"><div style="font-weight:700;">${c.title}</div><span class="badge pending">${c.status}</span></div>
+        <div style="font-size:12px; color:var(--text-muted);">${c.category} • By ${c.resident}</div>
+        <div style="font-size:13.5px; margin-top:6px;">${c.desc}</div>
+      </div>
+    `).join('');
   }
 
-  function updateComplaintStatus(key, newStatus) {
-    let target = complaints.find((c, idx) => c.id === key || idx == key);
-    if (!target) return;
-
-    target.status = newStatus;
-    sendNotification(target.resident, `🛠️ Your complaint "${target.title}" is now set to ${newStatus}.`);
-
-    if (db && target.id) {
-      db.collection('complaints').doc(target.id).update({ status: newStatus })
-        .then(() => loadComplaints())
-        .catch(() => {
-          localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
-          renderComplaintsList();
-        });
-    } else {
-      localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
-      renderComplaintsList();
-    }
-  }
-
-  // Initial execution
+  // Launch initial render
   render();
 })();
 </script>
-
 </body>
 </html>
