@@ -81,7 +81,7 @@
     padding:calc(16px + env(safe-area-inset-top)) 18px 14px;
     background:linear-gradient(180deg, rgba(16,20,42,0.97), rgba(16,20,42,0.88) 70%, rgba(16,20,42,0));
     backdrop-filter:blur(10px);
-    display:flex; align-items:center; gap:12px;
+    display:flex; align-items:center; gap:10px;
     border-bottom:1px solid var(--border-soft);
   }
   .brand-mark{
@@ -99,6 +99,17 @@
     font-size:10.5px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
     padding:2px 8px; border-radius:20px; background:var(--accent-soft); color:var(--accent-2);
     border:1px solid rgba(242,169,59,0.3);
+  }
+
+  /* Notifications Bell Header Button */
+  .notif-bell-btn{
+    position:relative; background:var(--bg-elevated-2); border:1px solid var(--border);
+    border-radius:10px; width:38px; height:38px; display:flex; align-items:center;
+    justify-content:center; cursor:pointer; font-size:18px; color:var(--text);
+  }
+  .notif-badge{
+    position:absolute; top:-4px; right:-4px; background:var(--danger); color:#fff;
+    font-size:10px; font-weight:800; border-radius:10px; padding:2px 5px; min-width:16px; text-align:center;
   }
 
   /* Main & UI Elements */
@@ -145,6 +156,19 @@
   .btn.primary{background:linear-gradient(180deg, var(--accent-2), var(--accent)); color:#251400; box-shadow:0 4px 16px rgba(242,169,59,0.35);}
   .btn.sm{padding:6px 12px; font-size:11.5px; border-radius:8px;}
   .btn.block{width:100%;}
+
+  /* Reactions Toolbar */
+  .reactions-toolbar{
+    display:flex; align-items:center; gap:10px; margin-top:12px; padding-top:10px;
+    border-top:1px solid var(--border-soft);
+  }
+  .rxn-btn{
+    background:var(--bg-elevated-2); border:1px solid var(--border); color:var(--text-muted);
+    border-radius:20px; padding:4px 12px; font-size:12px; font-weight:700; display:inline-flex;
+    align-items:center; gap:6px; cursor:pointer; transition:all 0.15s ease;
+  }
+  .rxn-btn.active-like{ background:var(--success-soft); color:var(--success); border-color:rgba(52,179,152,0.4); }
+  .rxn-btn.active-dislike{ background:var(--danger-soft); color:var(--danger); border-color:rgba(229,97,90,0.4); }
 
   label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
   input[type=text], input[type=password], select, textarea{
@@ -247,6 +271,7 @@
   let complaints = [];
   let notices = [];
   let polls = [];
+  let notifications = [];
 
   const appEl = document.getElementById('app');
 
@@ -255,6 +280,8 @@
       renderOnboarding();
       return;
     }
+
+    const unreadCount = notifications.filter(n => !n.read && (n.target === currentUser.role || n.target === 'all' || n.target === currentUser.name)).length;
 
     appEl.innerHTML = `
       <header class="topbar">
@@ -268,6 +295,10 @@
             <span class="role-pill">${currentUser.role}</span>
           </div>
         </div>
+        <button class="notif-bell-btn" onclick="openNotificationsModal()" title="Notifications">
+          🔔
+          ${unreadCount > 0 ? `<span class="notif-badge">${unreadCount}</span>` : ''}
+        </button>
         <button class="btn sm" id="logout-btn" style="background:var(--bg-elevated-2); color:var(--text-muted);">Logout</button>
       </header>
 
@@ -356,12 +387,10 @@
                 return;
               }
             } else {
-              // Register new Admin PIN on first sign in
               await db.collection('admins').doc(adminId).set({ pin: pinEntered, name: name });
               alert('First time login detected! Your Admin PIN has been created successfully.');
             }
           } catch(err) {
-            // Local fallback check
             if (adminPinStore[adminId]) {
               if (adminPinStore[adminId] !== pinEntered) { alert('Incorrect Admin PIN.'); return; }
             } else {
@@ -515,10 +544,49 @@
   }
 
   function loadData() {
+    loadNotifications();
     if (activeTab === 'announcements') loadNotices();
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'complaints') loadComplaints();
   }
+
+  // Notification Push Engine
+  function sendNotification(target, text) {
+    const item = { target, text, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), read: false, createdAt: new Date().toISOString() };
+    if (db) {
+      db.collection('notifications').add(item);
+    } else {
+      notifications.unshift(item);
+      localStorage.setItem('rphs_notifs', JSON.stringify(notifications));
+    }
+  }
+
+  function loadNotifications() {
+    if (db) {
+      db.collection('notifications').orderBy('createdAt', 'desc').get().then(snapshot => {
+        notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }).catch(() => {
+        notifications = JSON.parse(localStorage.getItem('rphs_notifs')) || [];
+      });
+    } else {
+      notifications = JSON.parse(localStorage.getItem('rphs_notifs')) || [];
+    }
+  }
+
+  window.openNotificationsModal = function() {
+    const userNotifs = notifications.filter(n => n.target === currentUser.role || n.target === 'all' || n.target === currentUser.name);
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Notifications</div>
+      ${userNotifs.length ? userNotifs.map(n => `
+        <div style="background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px; border-radius:10px; margin-bottom:8px;">
+          <div style="font-size:13px; color:var(--text); line-height:1.4;">${n.text}</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">${n.time || 'Recently'}</div>
+        </div>
+      `).join('') : '<div style="color:var(--text-muted); text-align:center; padding:20px;">No notifications yet.</div>'}
+    `;
+    document.getElementById('modal-view').classList.add('active');
+  };
 
   // Global Delete Handlers
   window.deleteNotice = function(e, key) {
@@ -547,16 +615,67 @@
     }
   };
 
+  // Reactions Engine
+  window.reactNotice = function(e, key, type) {
+    if(e) e.stopPropagation();
+    let n = notices.find((item, idx) => (item.id === key || idx == key));
+    if (!n) return;
+
+    if (!n.likes) n.likes = [];
+    if (!n.dislikes) n.dislikes = [];
+
+    const user = currentUser.name;
+    const hasLiked = n.likes.includes(user);
+    const hasDisliked = n.dislikes.includes(user);
+
+    if (type === 'like') {
+      if (hasLiked) {
+        n.likes = n.likes.filter(u => u !== user);
+      } else {
+        n.likes.push(user);
+        n.dislikes = n.dislikes.filter(u => u !== user);
+      }
+    } else if (type === 'dislike') {
+      if (hasDisliked) {
+        n.dislikes = n.dislikes.filter(u => u !== user);
+      } else {
+        n.dislikes.push(user);
+        n.likes = n.likes.filter(u => u !== user);
+      }
+    }
+
+    if (db && n.id) {
+      db.collection('notices').doc(n.id).update({ likes: n.likes, dislikes: n.dislikes }).then(() => {
+        loadNotices();
+        if (document.getElementById('modal-view').classList.contains('active')) openNoticeModal(key);
+      });
+    } else {
+      localStorage.setItem('rphs_notices', JSON.stringify(notices));
+      renderNoticesList();
+      if (document.getElementById('modal-view').classList.contains('active')) openNoticeModal(key);
+    }
+  };
+
   // Global Modal View Handlers
   window.openNoticeModal = function(key) {
     let item = notices.find((n, idx) => (n.id === key || idx == key));
     if (!item) return;
+
+    const likesCount = (item.likes || []).length;
+    const dislikesCount = (item.dislikes || []).length;
+    const userLiked = (item.likes || []).includes(currentUser.name);
+    const userDisliked = (item.dislikes || []).includes(currentUser.name);
 
     document.getElementById('modal-body').innerHTML = `
       <div style="margin-bottom:10px;"><span class="badge notice">Official Notice</span></div>
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:8px; line-height:1.3;">${item.title}</div>
       <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Published: ${item.date || 'Today'}</div>
       <div style="font-size:14.5px; color:#D6D9EC; line-height:1.6; white-space:pre-wrap;">${item.desc}</div>
+      
+      <div class="reactions-toolbar">
+        <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${item.id || key}', 'like')">👍 ${likesCount}</button>
+        <button class="rxn-btn ${userDisliked ? 'active-dislike' : ''}" onclick="reactNotice(event, '${item.id || key}', 'dislike')">👎 ${dislikesCount}</button>
+      </div>
     `;
     document.getElementById('modal-view').classList.add('active');
   };
@@ -598,10 +717,11 @@
     const desc = document.getElementById('notice-desc').value.trim();
     if (!title || !desc) return;
 
-    const item = { title, desc, date: new Date().toLocaleDateString(), createdAt: new Date().toISOString() };
+    const item = { title, desc, date: new Date().toLocaleDateString(), likes: [], dislikes: [], createdAt: new Date().toISOString() };
 
     if (db) {
       db.collection('notices').add(item).then(() => {
+        sendNotification('resident', `📢 New Announcement: "${title}"`);
         document.getElementById('notice-form').reset();
         loadNotices();
       }).catch(err => {
@@ -615,6 +735,7 @@
   function fallbackPostNotice(item) {
     notices.unshift(item);
     localStorage.setItem('rphs_notices', JSON.stringify(notices));
+    sendNotification('resident', `📢 New Announcement: "${item.title}"`);
     const form = document.getElementById('notice-form');
     if (form) form.reset();
     renderNoticesList();
@@ -644,6 +765,11 @@
 
     el.innerHTML = notices.map((n, idx) => {
       const itemKey = n.id ? n.id : idx;
+      const likesCount = (n.likes || []).length;
+      const dislikesCount = (n.dislikes || []).length;
+      const userLiked = (n.likes || []).includes(currentUser.name);
+      const userDisliked = (n.dislikes || []).includes(currentUser.name);
+
       return `
         <div class="card" onclick="openNoticeModal('${itemKey}')">
           ${isAdmin ? `<button class="delete-btn" onclick="deleteNotice(event, '${itemKey}')" title="Delete Announcement">✕</button>` : ''}
@@ -653,6 +779,11 @@
           </div>
           <div style="font-weight:700; font-size:16px; margin-bottom:6px;">${n.title}</div>
           <div style="font-size:13.5px; color:#D6D9EC; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${n.desc}</div>
+          
+          <div class="reactions-toolbar">
+            <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${itemKey}', 'like')">👍 ${likesCount}</button>
+            <button class="rxn-btn ${userDisliked ? 'active-dislike' : ''}" onclick="reactNotice(event, '${itemKey}', 'dislike')">👎 ${dislikesCount}</button>
+          </div>
         </div>
       `;
     }).join('');
@@ -675,6 +806,7 @@
 
     if (db) {
       db.collection('polls').add(item).then(() => {
+        sendNotification('resident', `🗳️ New Poll: "${title}"`);
         document.getElementById('poll-form').reset();
         loadPolls();
       }).catch(err => {
@@ -688,6 +820,7 @@
   function fallbackPostPoll(item) {
     polls.unshift(item);
     localStorage.setItem('rphs_polls', JSON.stringify(polls));
+    sendNotification('resident', `🗳️ New Poll: "${item.title}"`);
     const form = document.getElementById('poll-form');
     if (form) form.reset();
     renderPollsList();
@@ -755,6 +888,8 @@
     poll.voters.push(currentUser.name);
     poll.options[optIndex].votes += 1;
 
+    sendNotification('admin', `📊 ${currentUser.name} voted on poll: "${poll.title}"`);
+
     if (db && poll.id) {
       db.collection('polls').doc(poll.id).update({
         options: poll.options,
@@ -794,6 +929,7 @@
 
     if (db) {
       db.collection('complaints').add(newComplaint).then(() => {
+        sendNotification('admin', `⚠️ New Complaint from ${currentUser.name}: "${title}"`);
         alert('Complaint submitted!');
         document.getElementById('complaint-form').reset();
         loadComplaints();
@@ -808,6 +944,7 @@
   function fallbackSubmitComplaint(item) {
     complaints.unshift(item);
     localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
+    sendNotification('admin', `⚠️ New Complaint from ${currentUser.name}: "${item.title}"`);
     alert('Complaint submitted!');
     const form = document.getElementById('complaint-form');
     if (form) form.reset();
@@ -881,6 +1018,7 @@
     if (!target) return;
 
     target.status = newStatus;
+    sendNotification(target.resident, `🛠️ Your complaint "${target.title}" is now set to ${newStatus}.`);
 
     if (db && target.id) {
       db.collection('complaints').doc(target.id).update({ status: newStatus })
