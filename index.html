@@ -76,7 +76,6 @@
   button{font-family:inherit;}
   ::selection{background:var(--accent-soft);}
 
-  /* Top App Bar */
   .topbar{
     position:sticky; top:0; z-index:30;
     padding:calc(16px + env(safe-area-inset-top)) 18px 14px;
@@ -102,7 +101,6 @@
     border:1px solid rgba(242,169,59,0.3);
   }
 
-  /* Notifications Bell */
   .notif-bell-btn{
     position:relative; background:var(--bg-elevated-2); border:1px solid var(--border);
     border-radius:10px; width:38px; height:38px; display:flex; align-items:center;
@@ -113,7 +111,6 @@
     font-size:10px; font-weight:800; border-radius:10px; padding:2px 5px; min-width:16px; text-align:center;
   }
 
-  /* Push Banner */
   .push-banner{
     background:var(--accent-soft); border:1px solid rgba(242,169,59,0.3);
     border-radius:12px; padding:12px 14px; margin-bottom:16px; display:flex;
@@ -236,13 +233,30 @@
     measurementId: "G-ZKW41KY8QX"
   };
 
-  if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-  }
-  const db = (typeof firebase !== 'undefined') ? firebase.firestore() : null;
-  const messaging = (typeof firebase !== 'undefined' && firebase.messaging.isSupported()) ? firebase.messaging() : null;
+  // Safe Initialize Firebase
+  let db = null;
+  let messaging = null;
 
-  // App State - Auto restores session from browser storage
+  try {
+    if (typeof firebase !== 'undefined') {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.firestore();
+      
+      // Async messaging check to avoid thread blocking
+      firebase.messaging.isSupported().then(supported => {
+        if (supported) {
+          messaging = firebase.messaging();
+          initPushMessaging();
+        }
+      }).catch(err => console.log("Messaging unsupported:", err));
+    }
+  } catch(e) {
+    console.error("Firebase Init Error:", e);
+  }
+
+  // App State
   let currentUser = JSON.parse(localStorage.getItem('rphs_user')) || null;
   let activeTab = 'announcements';
   let complaints = [];
@@ -252,7 +266,7 @@
 
   const appEl = document.getElementById('app');
 
-  function initPushNotifications() {
+  function initPushMessaging() {
     if (!messaging) return;
 
     if (Notification.permission === 'granted') {
@@ -283,7 +297,6 @@
   }
 
   function render() {
-    // If user profile exists, bypass onboarding completely
     if (!currentUser) {
       renderOnboarding();
       return;
@@ -338,7 +351,6 @@
 
     bindGlobalEvents();
     loadData();
-    initPushNotifications();
   }
 
   window.requestPushPermission = function() {
@@ -424,7 +436,6 @@
         house: (role === 'admin') ? 'Admin Office' : document.getElementById('user-house').value.trim()
       };
 
-      // Save permanently into LocalStorage
       localStorage.setItem('rphs_user', JSON.stringify(currentUser));
       render();
     });
@@ -683,7 +694,16 @@
         sendNotification('resident', `📢 New Announcement: "${title}"`);
         document.getElementById('notice-form').reset();
         loadNotices();
+      }).catch(err => {
+        console.error("Error posting notice:", err);
+        notices.unshift(item);
+        localStorage.setItem('rphs_notices', JSON.stringify(notices));
+        renderNoticesList();
       });
+    } else {
+      notices.unshift(item);
+      localStorage.setItem('rphs_notices', JSON.stringify(notices));
+      renderNoticesList();
     }
   }
 
@@ -692,7 +712,14 @@
       db.collection('notices').orderBy('createdAt', 'desc').get().then(snapshot => {
         notices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderNoticesList();
+      }).catch(err => {
+        console.warn("Firestore offline/error, falling back to local storage:", err);
+        notices = JSON.parse(localStorage.getItem('rphs_notices')) || [];
+        renderNoticesList();
       });
+    } else {
+      notices = JSON.parse(localStorage.getItem('rphs_notices')) || [];
+      renderNoticesList();
     }
   }
 
@@ -733,16 +760,43 @@
     if (!title || !opt1 || !opt2) return;
 
     const item = { title, options: [{text: opt1, votes: 0}, {text: opt2, votes: 0}], voters: [], createdAt: new Date().toISOString() };
-    if (db) db.collection('polls').add(item).then(() => { sendNotification('resident', `🗳️ New Poll: "${title}"`); document.getElementById('poll-form').reset(); loadPolls(); });
+    if (db) {
+      db.collection('polls').add(item).then(() => { 
+        sendNotification('resident', `🗳️ New Poll: "${title}"`); 
+        document.getElementById('poll-form').reset(); 
+        loadPolls(); 
+      }).catch(err => {
+        polls.unshift(item);
+        localStorage.setItem('rphs_polls', JSON.stringify(polls));
+        renderPollsList();
+      });
+    } else {
+      polls.unshift(item);
+      localStorage.setItem('rphs_polls', JSON.stringify(polls));
+      renderPollsList();
+    }
   }
 
   function loadPolls() {
-    if (db) db.collection('polls').orderBy('createdAt', 'desc').get().then(snapshot => { polls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); renderPollsList(); });
+    if (db) {
+      db.collection('polls').orderBy('createdAt', 'desc').get().then(snapshot => { 
+        polls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
+        renderPollsList(); 
+      }).catch(() => {
+        polls = JSON.parse(localStorage.getItem('rphs_polls')) || [];
+        renderPollsList();
+      });
+    } else {
+      polls = JSON.parse(localStorage.getItem('rphs_polls')) || [];
+      renderPollsList();
+    }
   }
 
   function renderPollsList() {
     const el = document.getElementById('polls-list');
-    if (!el || !polls.length) return;
+    if (!el) return;
+    if (!polls.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No polls available yet.</div>'; return; }
+
     el.innerHTML = polls.map((p, pIndex) => {
       const totalVotes = p.options.reduce((sum, opt) => sum + opt.votes, 0);
       const itemKey = p.id ? p.id : pIndex;
@@ -773,7 +827,12 @@
     poll.options[optIndex].votes += 1;
 
     sendNotification('admin', `📊 ${currentUser.name} voted on poll: "${poll.title}"`);
-    if (db && poll.id) db.collection('polls').doc(poll.id).update({ options: poll.options, voters: poll.voters }).then(() => loadPolls());
+    if (db && poll.id) {
+      db.collection('polls').doc(poll.id).update({ options: poll.options, voters: poll.voters }).then(() => loadPolls());
+    } else {
+      localStorage.setItem('rphs_polls', JSON.stringify(polls));
+      renderPollsList();
+    }
   };
 
   function submitComplaint() {
@@ -783,16 +842,46 @@
     if (!title || !desc) return;
 
     const newComplaint = { title, category, desc, resident: currentUser.name, house: currentUser.house || 'N/A', status: 'Pending', createdAt: new Date().toISOString() };
-    if (db) db.collection('complaints').add(newComplaint).then(() => { sendNotification('admin', `⚠️ New Complaint from ${currentUser.name}: "${title}"`); alert('Submitted!'); document.getElementById('complaint-form').reset(); loadComplaints(); });
+    if (db) {
+      db.collection('complaints').add(newComplaint).then(() => { 
+        sendNotification('admin', `⚠️ New Complaint from ${currentUser.name}: "${title}"`); 
+        alert('Submitted!'); 
+        document.getElementById('complaint-form').reset(); 
+        loadComplaints(); 
+      }).catch(err => {
+        complaints.unshift(newComplaint);
+        localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
+        alert('Submitted!');
+        renderComplaintsList();
+      });
+    } else {
+      complaints.unshift(newComplaint);
+      localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
+      alert('Submitted!');
+      renderComplaintsList();
+    }
   }
 
   function loadComplaints() {
-    if (db) db.collection('complaints').orderBy('createdAt', 'desc').get().then(snapshot => { complaints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); renderComplaintsList(); });
+    if (db) {
+      db.collection('complaints').orderBy('createdAt', 'desc').get().then(snapshot => { 
+        complaints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
+        renderComplaintsList(); 
+      }).catch(() => {
+        complaints = JSON.parse(localStorage.getItem('rphs_complaints')) || [];
+        renderComplaintsList();
+      });
+    } else {
+      complaints = JSON.parse(localStorage.getItem('rphs_complaints')) || [];
+      renderComplaintsList();
+    }
   }
 
   function renderComplaintsList() {
     const el = document.getElementById('complaints-list');
-    if (!el || !complaints.length) return;
+    if (!el) return;
+    if (!complaints.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No complaints filed yet.</div>'; return; }
+
     el.innerHTML = complaints.map((c) => `
       <div class="card" style="cursor:default;">
         <div style="display:flex; justify-content:space-between;"><div style="font-weight:700;">${c.title}</div><span class="badge pending">${c.status}</span></div>
@@ -802,7 +891,7 @@
     `).join('');
   }
 
-  // Launch initial render
+  // Launch app
   render();
 })();
 </script>
