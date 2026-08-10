@@ -22,41 +22,52 @@
 
   <style>
     body {
-      background-color: #0d1117;
-      color: #c9d1d9;
+      background-color: #10142A;
+      color: #E2E8F0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
+    .text-gold {
+      color: #D4AF37 !important;
+    }
     .card {
-      background-color: #161b22;
-      border: 1px solid #30363d;
-      color: #c9d1d9;
+      background-color: #192040;
+      border: 1px solid #2A345B;
+      color: #E2E8F0;
     }
     .form-control, .form-select {
-      background-color: #0d1117;
-      border: 1px solid #30363d;
-      color: #c9d1d9;
+      background-color: #10142A;
+      border: 1px solid #2A345B;
+      color: #E2E8F0;
     }
     .form-control:focus, .form-select:focus {
-      background-color: #0d1117;
-      color: #ffffff;
-      border-color: #58a6ff;
-      box-shadow: 0 0 0 0.25rem rgba(56, 139, 253, 0.25);
+      background-color: #10142A;
+      color: #FFFFFF;
+      border-color: #D4AF37;
+      box-shadow: 0 0 0 0.25rem rgba(212, 175, 55, 0.25);
     }
     .btn-gold {
-      background-color: #d4af37;
-      color: #000;
+      background-color: #D4AF37;
+      color: #10142A;
       font-weight: 600;
     }
     .btn-gold:hover {
-      background-color: #b5932a;
-      color: #000;
+      background-color: #B5932A;
+      color: #10142A;
+    }
+    .nav-pills .nav-link {
+      color: #A0AEC0;
+    }
+    .nav-pills .nav-link.active {
+      background-color: #D4AF37;
+      color: #10142A;
+      font-weight: 600;
     }
     .hidden {
       display: none !important;
     }
     @media print {
       body {
-        background-color: #ffffff !important;
+        background-color: #FFFFFF !important;
         color: #000000 !important;
       }
       .no-print {
@@ -82,7 +93,7 @@
     <div id="authView" class="row justify-content-center">
       <div class="col-md-6">
         <div class="card p-4 shadow-lg">
-          <h3 id="authTitle" class="text-center mb-3">Sign In</h3>
+          <h3 id="authTitle" class="text-center mb-3 text-gold">Sign In</h3>
           
           <form id="authForm" onsubmit="handleAuthSubmit(event)">
             <div class="mb-3">
@@ -114,7 +125,7 @@
           </form>
 
           <div class="text-center">
-            <a href="#" id="authToggleLink" onclick="toggleAuthMode(event)" class="text-info text-decoration-none">
+            <a href="#" id="authToggleLink" onclick="toggleAuthMode(event)" class="text-gold text-decoration-none">
               Need an account? Register Resident Account
             </a>
           </div>
@@ -124,7 +135,7 @@
 
     <!-- 2. Pending Approval View -->
     <div id="pendingView" class="text-center my-5 p-5 card hidden">
-      <h2 class="mb-3">Account Pending Approval</h2>
+      <h2 class="mb-3 text-gold">Account Pending Approval</h2>
       <p class="lead">Welcome, <span id="pendingName"></span>. Your account registration for house <strong id="pendingHouse"></strong> is under review by society administrators.</p>
       <div class="alert alert-warning d-inline-block my-3">
         ⏳ You will gain access to society complaints, polls, and notices once approved.
@@ -137,7 +148,16 @@
       <!-- Navigation Tabs -->
       <ul class="nav nav-pills mb-4 no-print" id="pills-tab" role="tablist">
         <li class="nav-item">
-          <button class="nav-link active" id="tab-biodata" data-bs-toggle="pill" data-bs-target="#view-biodata" type="button">Resident Biodata</button>
+          <button class="nav-link active" id="tab-announcements" data-bs-toggle="pill" data-bs-target="#view-announcements" type="button">Announcements</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" id="tab-polls" data-bs-toggle="pill" data-bs-target="#view-polls" type="button">Polls</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" id="tab-profile" data-bs-toggle="pill" data-bs-target="#view-profile" type="button">My Profile</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" id="tab-biodata" data-bs-toggle="pill" data-bs-target="#view-biodata" type="button">Fill Biodata Form</button>
         </li>
         <li class="nav-item">
           <button class="nav-link" id="tab-complaints" data-bs-toggle="pill" data-bs-target="#view-complaints" type="button">Complaints</button>
@@ -149,34 +169,68 @@
 
       <div class="tab-content" id="pills-tabContent">
 
-        <!-- TAB A: BIODATA FORM & PDF DOWNLOAD -->
-        <div class="tab-pane fade show active" id="view-biodata">
+        <!-- TAB A: ANNOUNCEMENTS & NOTICES -->
+        <div class="tab-pane fade show active" id="view-announcements">
           <div class="card p-4">
-            <h3 class="mb-3 border-bottom pb-2">Resident Profile & Biodata Form</h3>
+            <h3 class="mb-3 border-bottom pb-2 text-gold">Society Announcements & Notices</h3>
+            <div id="announcementsList">
+              <p class="text-muted">Loading announcements...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB B: POLLS -->
+        <div class="tab-pane fade" id="view-polls">
+          <div class="card p-4">
+            <h3 class="mb-3 border-bottom pb-2 text-gold">Resident Polls & Voting</h3>
+            <div id="pollsList">
+              <p class="text-muted">Loading active polls...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB C: USER PROFILE (VIEW BIODATA) -->
+        <div class="tab-pane fade" id="view-profile">
+          <div class="card p-4">
+            <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+              <h3 class="text-gold mb-0">Resident Profile Details</h3>
+              <button onclick="downloadMyPDF()" class="btn btn-sm btn-gold">📥 Export PDF</button>
+            </div>
+            <div id="profileDetailsContainer">
+              <p class="text-muted">No biodata submitted yet. Please fill out the <strong>Fill Biodata Form</strong> tab.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB D: BIODATA FORM (MANDATORY FIELDS) -->
+        <div class="tab-pane fade" id="view-biodata">
+          <div class="card p-4">
+            <h3 class="mb-3 border-bottom pb-2 text-gold">Resident Profile & Biodata Form</h3>
+            <p class="text-warning small">* All fields are mandatory to complete your profile record.</p>
             <form id="biodataForm" onsubmit="saveBiodataAndDownloadPDF(event)">
               <div class="row g-3">
                 <div class="col-md-6">
-                  <label class="form-label">First Name</label>
+                  <label class="form-label">First Name <span class="text-danger">*</span></label>
                   <input type="text" id="bioFirstName" class="form-control" required />
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label">Last Name</label>
+                  <label class="form-label">Last Name <span class="text-danger">*</span></label>
                   <input type="text" id="bioLastName" class="form-control" required />
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label">CNIC Number</label>
+                  <label class="form-label">CNIC Number <span class="text-danger">*</span></label>
                   <input type="text" id="bioCNIC" class="form-control" placeholder="xxxxx-xxxxxxx-x" required />
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label">Cell Number</label>
+                  <label class="form-label">Cell Number <span class="text-danger">*</span></label>
                   <input type="tel" id="bioCell" class="form-control" placeholder="+923001234567" required />
                 </div>
                 <div class="col-md-8">
-                  <label class="form-label">Address / House No.</label>
+                  <label class="form-label">Address / House No. <span class="text-danger">*</span></label>
                   <input type="text" id="bioAddress" class="form-control" required />
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label">Blood Group</label>
+                  <label class="form-label">Blood Group <span class="text-danger">*</span></label>
                   <select id="bioBloodGroup" class="form-select" required>
                     <option value="">Select...</option>
                     <option value="A+">A+</option>
@@ -192,13 +246,13 @@
 
                 <!-- Occupancy Status -->
                 <div class="col-12">
-                  <label class="form-label d-block">Occupancy Status</label>
+                  <label class="form-label d-block">Occupancy Status <span class="text-danger">*</span></label>
                   <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="occupancyType" id="typeOwner" value="Owner" checked />
+                    <input class="form-check-input" type="radio" name="occupancyType" id="typeOwner" value="Owner" checked required />
                     <label class="form-check-label" for="typeOwner">Owner</label>
                   </div>
                   <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="occupancyType" id="typeRent" value="Tenant/Rent" />
+                    <input class="form-check-input" type="radio" name="occupancyType" id="typeRent" value="Tenant/Rent" required />
                     <label class="form-check-label" for="typeRent">Rent</label>
                   </div>
                 </div>
@@ -229,8 +283,8 @@
                 </div>
 
                 <div class="col-12">
-                  <label class="form-label">Additional Family Details / Names</label>
-                  <textarea id="bioFamilyText" class="form-control" rows="3" placeholder="List names or extra info regarding resident family..."></textarea>
+                  <label class="form-label">Additional Family Details / Names <span class="text-danger">*</span></label>
+                  <textarea id="bioFamilyText" class="form-control" rows="3" placeholder="List full names, ages, or extra details regarding resident family..." required></textarea>
                 </div>
 
                 <div class="col-12 pt-2">
@@ -243,12 +297,12 @@
           </div>
         </div>
 
-        <!-- TAB B: COMPLAINTS & PRINTING -->
+        <!-- TAB E: COMPLAINTS & PRINTING -->
         <div class="tab-pane fade" id="view-complaints">
           <div class="row">
             <div class="col-md-5 mb-4 no-print">
               <div class="card p-4">
-                <h4>Submit New Complaint</h4>
+                <h4 class="text-gold">Submit New Complaint</h4>
                 <form id="complaintForm" onsubmit="submitComplaint(event)">
                   <div class="mb-3">
                     <label class="form-label">Title / Subject</label>
@@ -258,7 +312,7 @@
                     <label class="form-label">Complaint Details</label>
                     <textarea id="compDesc" class="form-control" rows="4" required></textarea>
                   </div>
-                  <button type="submit" class="btn btn-primary w-100">Submit Complaint</button>
+                  <button type="submit" class="btn btn-gold w-100">Submit Complaint</button>
                 </form>
               </div>
             </div>
@@ -266,8 +320,8 @@
             <div class="col-md-7">
               <div class="card p-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h4>Complaint Records</h4>
-                  <button onclick="window.print()" class="btn btn-sm btn-outline-light no-print">🖨️ Print Entire Page</button>
+                  <h4 class="text-gold">Complaint Records</h4>
+                  <button onclick="window.print()" class="btn btn-sm btn-outline-light no-print">🖨️ Print Page</button>
                 </div>
                 <div id="complaintsList">
                   <p class="text-muted">Loading complaints...</p>
@@ -277,12 +331,63 @@
           </div>
         </div>
 
-        <!-- TAB C: ADMIN CONTROL PANEL -->
+        <!-- TAB F: ADMIN CONTROL PANEL -->
         <div class="tab-pane fade" id="view-admin">
-          <div class="card p-4">
-            <h4>Pending Resident Approvals</h4>
-            <div id="adminPendingList" class="my-3">
-              <p class="text-muted">Loading pending approval requests...</p>
+          <div class="row g-4">
+            <!-- User Approvals -->
+            <div class="col-12">
+              <div class="card p-4">
+                <h4 class="text-gold">Pending Resident Approvals</h4>
+                <div id="adminPendingList" class="my-2">
+                  <p class="text-muted">Loading pending requests...</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- All Approved Residents Directory & Biodata (ADMIN ACCESS) -->
+            <div class="col-12">
+              <div class="card p-4">
+                <h4 class="text-gold mb-3">Resident Profiles & Biodata Directory</h4>
+                <div id="adminResidentsList">
+                  <p class="text-muted">Loading resident profiles...</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Create Announcement -->
+            <div class="col-md-6">
+              <div class="card p-4">
+                <h4 class="text-gold">Create Announcement</h4>
+                <form onsubmit="createAnnouncement(event)">
+                  <div class="mb-3">
+                    <label class="form-label">Title</label>
+                    <input type="text" id="annTitle" class="form-control" required />
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Content</label>
+                    <textarea id="annContent" class="form-control" rows="3" required></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-gold w-100">Post Announcement</button>
+                </form>
+              </div>
+            </div>
+
+            <!-- Create Poll -->
+            <div class="col-md-6">
+              <div class="card p-4">
+                <h4 class="text-gold">Create Poll</h4>
+                <form onsubmit="createPoll(event)">
+                  <div class="mb-3">
+                    <label class="form-label">Question</label>
+                    <input type="text" id="pollQuestion" class="form-control" required />
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Options (Comma Separated)</label>
+                    <input type="text" id="pollOptions" class="form-control" placeholder="Option A, Option B, Option C" required />
+                  </div>
+                  <button type="submit" class="btn btn-gold w-100">Create Poll</button>
+                </form>
+              </div>
             </div>
           </div>
         </div>
@@ -315,7 +420,7 @@
     let isRegisterMode = false;
     let currentUserData = null;
 
-    // Service Worker Registration for PWA
+    // Service Worker Registration
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js')
         .then(reg => console.log('Service Worker Active:', reg.scope))
@@ -408,13 +513,17 @@
 
           if (currentUserData.biodata) {
             populateBiodataForm(currentUserData.biodata);
+            renderProfileCard(currentUserData.biodata);
           }
 
           if (currentUserData.role === 'admin') {
             document.getElementById('adminTabNav').classList.remove('hidden');
             loadAdminPendingUsers();
+            loadAdminAllResidents();
           }
 
+          loadAnnouncements();
+          loadPolls();
           loadComplaints();
         }
 
@@ -426,7 +535,230 @@
       }
     });
 
-    // Populate Biodata Form
+    // RENDER USER PROFILE CARD
+    function renderProfileCard(b) {
+      const container = document.getElementById('profileDetailsContainer');
+      if (!b) {
+        container.innerHTML = '<p class="text-muted">No biodata submitted yet. Please fill out the <strong>Fill Biodata Form</strong> tab.</p>';
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="row g-3">
+          <div class="col-md-6"><strong>Full Name:</strong> ${b.firstName || ''} ${b.lastName || ''}</div>
+          <div class="col-md-6"><strong>CNIC:</strong> ${b.cnic || 'N/A'}</div>
+          <div class="col-md-6"><strong>Cell Number:</strong> ${b.cell || 'N/A'}</div>
+          <div class="col-md-6"><strong>Blood Group:</strong> ${b.bloodGroup || 'N/A'}</div>
+          <div class="col-md-6"><strong>Address:</strong> ${b.address || 'N/A'}</div>
+          <div class="col-md-6"><strong>Occupancy Status:</strong> ${b.occupancy || 'N/A'}</div>
+          <div class="col-12"><strong>Family Categories:</strong> ${(b.familyTypes || []).join(', ') || 'None'}</div>
+          <div class="col-12 border-top border-secondary pt-2">
+            <strong>Additional Family Details:</strong>
+            <p class="mt-1 text-light bg-dark p-3 rounded">${b.familyText || 'None provided'}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    // Download Profile PDF helper
+    function downloadMyPDF() {
+      if (!currentUserData || !currentUserData.biodata) {
+        alert("Please complete and save your biodata form first!");
+        return;
+      }
+      generatePDF(currentUserData.biodata);
+    }
+
+    // PDF Generator Utility
+    function generatePDF(b) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFontSize(18);
+      doc.text("Roshan Housing Society - Resident Biodata", 14, 20);
+      doc.setFontSize(10);
+      doc.text(`Exported Date: ${new Date().toLocaleDateString()}`, 14, 27);
+      doc.line(14, 30, 196, 30);
+
+      doc.setFontSize(12);
+      let y = 40;
+      doc.text(`Full Name: ${b.firstName || ''} ${b.lastName || ''}`, 14, y); y += 9;
+      doc.text(`CNIC: ${b.cnic || ''}`, 14, y); y += 9;
+      doc.text(`Cell Number: ${b.cell || ''}`, 14, y); y += 9;
+      doc.text(`Address / House: ${b.address || ''}`, 14, y); y += 9;
+      doc.text(`Status: ${b.occupancy || ''}`, 14, y); y += 9;
+      doc.text(`Blood Group: ${b.bloodGroup || ''}`, 14, y); y += 9;
+      doc.text(`Family Categories: ${(b.familyTypes || []).join(', ') || 'None'}`, 14, y); y += 12;
+
+      if (b.familyText) {
+        doc.text("Additional Family Details:", 14, y); y += 7;
+        const splitText = doc.splitTextToSize(b.familyText, 180);
+        doc.text(splitText, 14, y);
+      }
+
+      doc.save(`Biodata_${b.firstName}_${b.lastName}.pdf`);
+    }
+
+    // ANNOUNCEMENTS MODULE
+    function loadAnnouncements() {
+      const container = document.getElementById('announcementsList');
+      db.collection('announcements').orderBy('createdAt', 'desc').onSnapshot(snap => {
+        if (snap.empty) {
+          container.innerHTML = '<p class="text-muted">No announcements posted yet.</p>';
+          return;
+        }
+
+        let html = '';
+        const uid = auth.currentUser.uid;
+
+        snap.docs.forEach(doc => {
+          const ann = doc.data();
+          const likes = ann.likes || [];
+          const dislikes = ann.dislikes || [];
+
+          const isLiked = likes.includes(uid);
+          const isDisliked = dislikes.includes(uid);
+
+          html += `
+            <div class="card mb-3 p-3">
+              <h5 class="text-gold mb-1">${ann.title}</h5>
+              <p class="mb-2">${ann.content}</p>
+              <div class="d-flex align-items-center gap-2 pt-2 border-top border-secondary">
+                <button onclick="reactAnnouncement('${doc.id}', 'like')" class="btn btn-sm ${isLiked ? 'btn-success' : 'btn-outline-success'}">
+                  👍 Like (${likes.length})
+                </button>
+                <button onclick="reactAnnouncement('${doc.id}', 'dislike')" class="btn btn-sm ${isDisliked ? 'btn-danger' : 'btn-outline-danger'}">
+                  👎 Dislike (${dislikes.length})
+                </button>
+              </div>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
+      });
+    }
+
+    async function reactAnnouncement(docId, type) {
+      const uid = auth.currentUser.uid;
+      const ref = db.collection('announcements').doc(docId);
+
+      if (type === 'like') {
+        await ref.update({
+          likes: firebase.firestore.FieldValue.arrayUnion(uid),
+          dislikes: firebase.firestore.FieldValue.arrayRemove(uid)
+        });
+      } else {
+        await ref.update({
+          dislikes: firebase.firestore.FieldValue.arrayUnion(uid),
+          likes: firebase.firestore.FieldValue.arrayRemove(uid)
+        });
+      }
+    }
+
+    async function createAnnouncement(e) {
+      e.preventDefault();
+      const title = document.getElementById('annTitle').value.trim();
+      const content = document.getElementById('annContent').value.trim();
+
+      try {
+        await db.collection('announcements').add({
+          title: title,
+          content: content,
+          likes: [],
+          dislikes: [],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        document.getElementById('annTitle').value = '';
+        document.getElementById('annContent').value = '';
+        alert("Announcement posted!");
+      } catch (err) {
+        alert("Error posting announcement: " + err.message);
+      }
+    }
+
+    // POLLS MODULE
+    function loadPolls() {
+      const container = document.getElementById('pollsList');
+      db.collection('polls').orderBy('createdAt', 'desc').onSnapshot(snap => {
+        if (snap.empty) {
+          container.innerHTML = '<p class="text-muted">No active polls found.</p>';
+          return;
+        }
+
+        let html = '';
+        const uid = auth.currentUser.uid;
+
+        snap.docs.forEach(doc => {
+          const poll = doc.data();
+          const votes = poll.votes || {};
+          const totalVotes = Object.keys(votes).length;
+          const userVotedOption = votes[uid];
+
+          html += `<div class="card mb-3 p-3">
+            <h5 class="text-gold mb-3">${poll.question}</h5>`;
+
+          poll.options.forEach((opt, idx) => {
+            let count = 0;
+            Object.values(votes).forEach(val => { if (val === idx) count++; });
+            const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+
+            html += `
+              <div class="mb-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span>${opt} ${userVotedOption === idx ? '<span class="badge bg-gold text-dark ms-1">Your Vote</span>' : ''}</span>
+                  <button onclick="votePoll('${doc.id}', ${idx})" class="btn btn-sm btn-outline-warning">Vote</button>
+                </div>
+                <div class="progress" style="height: 18px; background-color: #10142A;">
+                  <div class="progress-bar bg-warning text-dark fw-bold" role="progressbar" style="width: ${pct}%">${pct}% (${count})</div>
+                </div>
+              </div>
+            `;
+          });
+
+          html += `<small class="text-muted d-block mt-2">Total Votes: ${totalVotes}</small></div>`;
+        });
+        container.innerHTML = html;
+      });
+    }
+
+    async function votePoll(pollId, optionIndex) {
+      const uid = auth.currentUser.uid;
+      try {
+        await db.collection('polls').doc(pollId).update({
+          [`votes.${uid}`]: optionIndex
+        });
+      } catch (err) {
+        alert("Error submitting vote: " + err.message);
+      }
+    }
+
+    async function createPoll(e) {
+      e.preventDefault();
+      const question = document.getElementById('pollQuestion').value.trim();
+      const optionsRaw = document.getElementById('pollOptions').value.trim();
+      const options = optionsRaw.split(',').map(o => o.trim()).filter(o => o.length > 0);
+
+      if (options.length < 2) {
+        alert("Please enter at least 2 options for the poll.");
+        return;
+      }
+
+      try {
+        await db.collection('polls').add({
+          question: question,
+          options: options,
+          votes: {},
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        document.getElementById('pollQuestion').value = '';
+        document.getElementById('pollOptions').value = '';
+        alert("Poll created!");
+      } catch (err) {
+        alert("Error creating poll: " + err.message);
+      }
+    }
+
+    // BIODATA MODULE
     function populateBiodataForm(b) {
       document.getElementById('bioFirstName').value = b.firstName || '';
       document.getElementById('bioLastName').value = b.lastName || '';
@@ -450,7 +782,6 @@
       document.getElementById('bioFamilyText').value = b.familyText || '';
     }
 
-    // Save Biodata to Firestore and Export PDF
     async function saveBiodataAndDownloadPDF(e) {
       e.preventDefault();
       const uid = auth.currentUser.uid;
@@ -482,41 +813,27 @@
 
       try {
         await db.collection('users').doc(uid).set({ biodata: bioData }, { merge: true });
-        alert("Biodata saved successfully!");
+        
+        // Update Local State & Profile Tab View
+        if (currentUserData) currentUserData.biodata = bioData;
+        renderProfileCard(bioData);
 
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
+        alert("Biodata saved successfully! Switching to Profile...");
 
-        doc.setFontSize(18);
-        doc.text("Roshan Housing Society - Resident Biodata", 14, 20);
-        doc.setFontSize(10);
-        doc.text(`Exported Date: ${new Date().toLocaleDateString()}`, 14, 27);
-        doc.line(14, 30, 196, 30);
+        // Automatically view profile tab
+        const profileTabBtn = document.getElementById('tab-profile');
+        const tabInstance = new bootstrap.Tab(profileTabBtn);
+        tabInstance.show();
 
-        doc.setFontSize(12);
-        let y = 40;
-        doc.text(`Full Name: ${firstName} ${lastName}`, 14, y); y += 9;
-        doc.text(`CNIC: ${cnic}`, 14, y); y += 9;
-        doc.text(`Cell Number: ${cell}`, 14, y); y += 9;
-        doc.text(`Address / House: ${address}`, 14, y); y += 9;
-        doc.text(`Status: ${occupancy}`, 14, y); y += 9;
-        doc.text(`Blood Group: ${bloodGroup}`, 14, y); y += 9;
-        doc.text(`Family Categories: ${familyTypes.join(', ') || 'None'}`, 14, y); y += 12;
-
-        if (familyText) {
-          doc.text("Additional Family Details:", 14, y); y += 7;
-          const splitText = doc.splitTextToSize(familyText, 180);
-          doc.text(splitText, 14, y);
-        }
-
-        doc.save(`Biodata_${firstName}_${lastName}.pdf`);
+        // Export PDF
+        generatePDF(bioData);
 
       } catch (err) {
         alert("Failed to save or export PDF: " + err.message);
       }
     }
 
-    // Submit Complaint
+    // COMPLAINTS MODULE
     async function submitComplaint(e) {
       e.preventDefault();
       const title = document.getElementById('compTitle').value.trim();
@@ -540,7 +857,6 @@
       }
     }
 
-    // Load Complaints List
     function loadComplaints() {
       const container = document.getElementById('complaintsList');
 
@@ -558,10 +874,13 @@
         let html = '';
         snap.docs.forEach(doc => {
           const d = doc.data();
+          const titleEscaped = d.title.replace(/'/g, "\\'");
+          const descEscaped = d.description.replace(/'/g, "\\'").replace(/\n/g, "<br>");
+
           html += `
             <div class="card mb-3 p-3" id="complaint-${doc.id}">
               <div class="d-flex justify-content-between align-items-start">
-                <h5 class="mb-1">${d.title}</h5>
+                <h5 class="mb-1 text-gold">${d.title}</h5>
                 <span class="badge ${d.status === 'Open' ? 'bg-danger' : 'bg-success'}">${d.status}</span>
               </div>
               <p class="mb-2 text-light">${d.description}</p>
@@ -569,7 +888,7 @@
                 Submitted by: ${d.userName} (${d.house})
               </div>
               <div class="no-print">
-                <button onclick="printSingleComplaint('${d.title}', '${d.description}', '${d.userName}', '${d.house}', '${d.status}')" class="btn btn-sm btn-outline-info">
+                <button onclick="printSingleComplaint('${titleEscaped}', '${descEscaped}', '${d.userName}', '${d.house}', '${d.status}')" class="btn btn-sm btn-outline-info">
                   🖨️ Print Complaint
                 </button>
               </div>
@@ -582,11 +901,10 @@
       });
     }
 
-    // Print Individual Complaint (Clean Popup)
     function printSingleComplaint(title, desc, userName, house, status) {
       const printWin = window.open('', '', 'width=800,height=600');
       
-      printWin.document.write('<html><head><title>Complaint Printable Report</title>');
+      printWin.document.write('<html><head><title>Complaint Report</title>');
       printWin.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">');
       printWin.document.write('</head><body class="p-4">');
       printWin.document.write('<h2>Roshan Housing Society - Official Complaint Report</h2><hr>');
@@ -608,7 +926,7 @@
       }, 500);
     }
 
-    // Admin Function: Load Pending Users
+    // ADMIN MODULE: Load Pending Approval Users
     function loadAdminPendingUsers() {
       const container = document.getElementById('adminPendingList');
       db.collection('users').where('approved', '==', false).onSnapshot(snap => {
@@ -634,7 +952,67 @@
       });
     }
 
-    // Admin Function: Approve User
+    // ADMIN MODULE: Load All Approved Residents & Biodata Access
+    let allResidentsCache = {};
+
+    function loadAdminAllResidents() {
+      const container = document.getElementById('adminResidentsList');
+      db.collection('users').where('approved', '==', true).onSnapshot(snap => {
+        if (snap.empty) {
+          container.innerHTML = '<p class="text-muted">No approved residents registered yet.</p>';
+          return;
+        }
+
+        let html = '<div class="accordion" id="residentsAccordion">';
+        allResidentsCache = {};
+
+        snap.docs.forEach((doc, idx) => {
+          const u = doc.data();
+          const b = u.biodata || null;
+          allResidentsCache[doc.id] = b;
+
+          html += `
+            <div class="accordion-item bg-dark text-light border-secondary">
+              <h2 class="accordion-header" id="heading-${idx}">
+                <button class="accordion-button collapsed bg-dark text-gold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${idx}">
+                  🏠 House: ${u.house || 'N/A'} - ${u.name} (${u.email})
+                </button>
+              </h2>
+              <div id="collapse-${idx}" class="accordion-collapse collapse" data-bs-parent="#residentsAccordion">
+                <div class="accordion-body border-top border-secondary">
+                  ${b ? `
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                      <h6 class="text-gold mb-0">Biodata Information</h6>
+                      <button onclick="exportResidentPDF('${doc.id}')" class="btn btn-sm btn-gold">📥 Export Resident PDF</button>
+                    </div>
+                    <p class="mb-1"><strong>CNIC:</strong> ${b.cnic || 'N/A'} | <strong>Cell:</strong> ${b.cell || 'N/A'}</p>
+                    <p class="mb-1"><strong>Blood Group:</strong> ${b.bloodGroup || 'N/A'} | <strong>Status:</strong> ${b.occupancy || 'N/A'}</p>
+                    <p class="mb-1"><strong>Family Categories:</strong> ${(b.familyTypes || []).join(', ') || 'None'}</p>
+                    <p class="mb-0"><strong>Family Details:</strong> ${b.familyText || 'None'}</p>
+                  ` : `
+                    <p class="text-warning mb-0">⚠️ This resident has not filled out their biodata form yet.</p>
+                  `}
+                </div>
+              </div>
+            </div>
+          `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+      });
+    }
+
+    // Export PDF for Specific Resident by Admin
+    function exportResidentPDF(userId) {
+      const bioData = allResidentsCache[userId];
+      if (!bioData) {
+        alert("No biodata available to export for this resident.");
+        return;
+      }
+      generatePDF(bioData);
+    }
+
     async function approveUser(uid) {
       try {
         await db.collection('users').doc(uid).update({ approved: true });
