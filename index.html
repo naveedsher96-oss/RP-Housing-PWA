@@ -15,6 +15,7 @@
 
 <!-- Firebase Compatibility SDKs -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 
@@ -111,6 +112,7 @@
     font-size:10px; font-weight:800; border-radius:10px; padding:2px 5px; min-width:16px; text-align:center;
   }
 
+  /* Fixed CSS Syntax */
   .push-banner{
     background:var(--accent-soft); border:1px solid rgba(242,169,59,0.3);
     border-radius:12px; padding:12px 14px; margin-bottom:16px; display:flex;
@@ -129,6 +131,11 @@
     box-shadow:var(--shadow); position:relative; cursor:pointer;
   }
 
+  .ticket-no{
+    font-family:var(--font-mono); font-size:11px; color:var(--accent-2);
+    background:var(--accent-soft); padding:2px 6px; border-radius:4px; font-weight:600;
+  }
+
   .badge{
     display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.3px;
     text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap;
@@ -145,6 +152,8 @@
     padding:12px 16px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px;
   }
   .btn.primary{background:linear-gradient(180deg, var(--accent-2), var(--accent)); color:#251400; box-shadow:0 4px 16px rgba(242,169,59,0.35);}
+  .btn.secondary{background:var(--bg-elevated-2); color:var(--text); border:1px solid var(--border);}
+  .btn.danger{background:var(--danger); color:#fff;}
   .btn.sm{padding:6px 12px; font-size:11.5px; border-radius:8px;}
   .btn.block{width:100%;}
 
@@ -161,7 +170,7 @@
   .rxn-btn.active-dislike{ background:var(--danger-soft); color:var(--danger); border-color:rgba(229,97,90,0.4); }
 
   label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
-  input[type=text], input[type=password], select, textarea{
+  input[type=text], input[type=email], input[type=password], select, textarea{
     width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
     border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
   }
@@ -208,14 +217,15 @@
 
   .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
   .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
-  .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:30px;}
+  .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:24px;}
+  .toggle-auth-mode{text-align:center; margin-top:16px; font-size:13px; color:var(--accent-2); cursor:pointer; text-decoration:underline;}
 </style>
 </head>
 <body>
 
 <div id="app"></div>
 
-<!-- Detailed Modal View -->
+<!-- Modal Container -->
 <div id="modal-view" class="modal-overlay">
   <div class="modal-card">
     <button class="modal-close" onclick="closeModal()">✕</button>
@@ -227,7 +237,6 @@
 (function(){
   "use strict";
 
-  // HTML Sanitization Utility to prevent XSS
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -248,17 +257,16 @@
     measurementId: "G-ZKW41KY8QX"
   };
 
-  // Safe Initialize Firebase
   let db = null;
+  let auth = null;
   let messaging = null;
 
   try {
     if (typeof firebase !== 'undefined') {
-      if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-      }
+      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
       db = firebase.firestore();
-      
+      auth = firebase.auth();
+
       firebase.messaging.isSupported().then(supported => {
         if (supported) {
           messaging = firebase.messaging();
@@ -270,23 +278,49 @@
     console.error("Firebase Init Error:", e);
   }
 
-  // App State
-  let currentUser = JSON.parse(localStorage.getItem('rphs_user')) || null;
+  // Application State Variables
+  let currentUserProfile = null;
+  let registrationInProgress = false;
+  let isAuthModeLogin = true;
   let activeTab = 'announcements';
   let complaints = [];
   let notices = [];
   let polls = [];
   let notifications = [];
+  let pendingResidents = [];
 
   const appEl = document.getElementById('app');
 
+  // Observer
+  if (auth) {
+    auth.onAuthStateChanged(async (user) => {
+      if (registrationInProgress) return; 
+
+      if (user) {
+        try {
+          const userDoc = await db.collection('users').doc(user.uid).get();
+          if (userDoc.exists) {
+            currentUserProfile = { uid: user.uid, email: user.email, ...userDoc.data() };
+            saveDeviceToken();
+          } else {
+            currentUserProfile = null;
+            await auth.signOut();
+          }
+        } catch(e) {
+          console.error("Failed fetching user profile:", e);
+        }
+      } else {
+        currentUserProfile = null;
+      }
+      render();
+    });
+  }
+
   function initPushMessaging() {
     if (!messaging) return;
-
     if (Notification.permission === 'granted') {
       saveDeviceToken();
     }
-
     messaging.onMessage((payload) => {
       new Notification(payload.notification.title, {
         body: payload.notification.body,
@@ -297,26 +331,48 @@
   }
 
   function saveDeviceToken() {
-    if (!messaging || !currentUser) return;
+    if (!messaging || !currentUserProfile || !auth.currentUser) return;
     messaging.getToken().then((currentToken) => {
       if (currentToken && db) {
-        db.collection('fcm_tokens').doc(currentUser.name.toLowerCase().replace(/\s+/g, '_')).set({
+        db.collection('fcm_tokens').doc(auth.currentUser.uid).set({
           token: currentToken,
-          user: currentUser.name,
-          role: currentUser.role,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+          uid: auth.currentUser.uid,
+          name: currentUserProfile.name,
+          role: currentUserProfile.role,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(err => console.error("FCM Token Save Error:", err));
       }
     }).catch((err) => console.log('Push token registration error:', err));
   }
 
+  function isNotificationUnread(n) {
+    if (!auth.currentUser) return false;
+    const readByList = n.readBy || [];
+    return !readByList.includes(auth.currentUser.uid);
+  }
+
   function render() {
-    if (!currentUser) {
+    if (!auth || !auth.currentUser || !currentUserProfile) {
       renderOnboarding();
       return;
     }
 
-    const unreadCount = notifications.filter(n => !n.read && (n.target === currentUser.role || n.target === 'all' || n.target === currentUser.name)).length;
+    // EMAIL VERIFICATION GUARD
+    if (currentUserProfile.role === 'resident' && !auth.currentUser.emailVerified) {
+      renderEmailVerificationScreen();
+      return;
+    }
+
+    // HARDENED PENDING APPROVAL GUARD (EXPLICIT !== true)
+    if (currentUserProfile.role === 'resident' && currentUserProfile.approved !== true) {
+      renderPendingApprovalScreen();
+      return;
+    }
+
+    const unreadCount = notifications.filter(n => 
+      isNotificationUnread(n) && 
+      (n.target === currentUserProfile.role || n.target === 'all' || n.target === auth.currentUser.uid)
+    ).length;
 
     appEl.innerHTML = `
       <header class="topbar">
@@ -326,8 +382,8 @@
         <div class="brand-text">
           <div class="name">Roshan Housing Society</div>
           <div class="sub">
-            <span>${escapeHtml(currentUser.name)} ${currentUser.house ? '(' + escapeHtml(currentUser.house) + ')' : ''}</span>
-            <span class="role-pill">${escapeHtml(currentUser.role)}</span>
+            <span>${escapeHtml(currentUserProfile.name)} ${currentUserProfile.house ? '(' + escapeHtml(currentUserProfile.house) + ')' : ''}</span>
+            <span class="role-pill">${escapeHtml(currentUserProfile.role)}</span>
           </div>
         </div>
         <button class="notif-bell-btn" onclick="openNotificationsModal()" title="Notifications">
@@ -359,6 +415,11 @@
           <button class="tab-btn ${activeTab==='complaints'?'active':''}" data-tab="complaints">
             <span class="lbl">Complaints</span>
           </button>
+          ${currentUserProfile.role === 'admin' ? `
+            <button class="tab-btn ${activeTab==='approvals'?'active':''}" data-tab="approvals">
+              <span class="lbl">Approvals</span>
+            </button>
+          ` : ''}
         </div>
       </nav>
     `;
@@ -367,11 +428,65 @@
     loadData();
   }
 
+  function renderEmailVerificationScreen() {
+    appEl.innerHTML = `
+      <div class="onboard-wrap">
+        <div class="onboard-title">Verify Your Email</div>
+        <div class="onboard-sub">A verification link has been sent to <strong>${escapeHtml(auth.currentUser.email)}</strong>. Please verify your email to proceed to society approval.</div>
+        
+        <div class="card" style="text-align:center; padding:20px; cursor:default;">
+          <div style="font-size:36px; margin-bottom:10px;">📧</div>
+          <div style="font-size:13.5px; color:var(--text-muted);">Check your inbox and spam folder. Once verified, refresh this page or click below.</div>
+        </div>
+
+        <button class="btn primary block" id="check-verification-btn" style="margin-top:16px;">I Have Verified My Email</button>
+        <button class="btn secondary block" id="resend-verification-btn" style="margin-top:8px;">Resend Email Link</button>
+        <button class="btn danger block" id="logout-verification-btn" style="margin-top:8px;">Sign Out</button>
+      </div>
+    `;
+
+    document.getElementById('check-verification-btn').addEventListener('click', async () => {
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) {
+        render();
+      } else {
+        alert("Email is not verified yet. Please check your inbox.");
+      }
+    });
+
+    document.getElementById('resend-verification-btn').addEventListener('click', async () => {
+      try {
+        await auth.currentUser.sendEmailVerification();
+        alert("Verification email resent!");
+      } catch(err) {
+        alert("Error sending verification email: " + err.message);
+      }
+    });
+
+    document.getElementById('logout-verification-btn').addEventListener('click', () => auth.signOut());
+  }
+
+  function renderPendingApprovalScreen() {
+    appEl.innerHTML = `
+      <div class="onboard-wrap">
+        <div class="onboard-title">Account Pending Approval</div>
+        <div class="onboard-sub">Welcome, <strong>${escapeHtml(currentUserProfile.name)}</strong>. Your registration for <strong>${escapeHtml(currentUserProfile.house)}</strong> is currently under review by society administrators.</div>
+        
+        <div class="card" style="text-align:center; padding:20px; cursor:default;">
+          <div style="font-size:36px; margin-bottom:10px;">⏳</div>
+          <div style="font-size:14px; color:var(--text-muted);">Email verified! You will gain full access to community polls, notices, and complaint submissions once verified by management.</div>
+        </div>
+
+        <button class="btn primary block" id="logout-pending-btn" style="margin-top:20px;">Sign Out</button>
+      </div>
+    `;
+
+    document.getElementById('logout-pending-btn').addEventListener('click', () => auth.signOut());
+  }
+
   window.requestPushPermission = function() {
     Notification.requestPermission().then((permission) => {
-      if (permission === 'granted') {
-        saveDeviceToken();
-      }
+      if (permission === 'granted') saveDeviceToken();
       render();
     });
   };
@@ -379,95 +494,114 @@
   function renderOnboarding() {
     appEl.innerHTML = `
       <div class="onboard-wrap">
-        <div class="onboard-title">Roshan Pakistan Housing Society</div>
-        <div class="onboard-sub">Sign in or register your account to continue.</div>
+        <div class="onboard-title">Roshan Housing Society</div>
+        <div class="onboard-sub">${isAuthModeLogin ? 'Sign in to access your portal' : 'Register a resident account'}</div>
         
-        <form id="onboard-form">
-          <label>Full Name</label>
-          <input type="text" id="user-name" placeholder="e.g. Naveed Ahmed" required />
+        <form id="auth-form">
+          <label>Email Address</label>
+          <input type="email" id="auth-email" placeholder="e.g. resident@rphs.pk" required />
 
-          <label>Account Role</label>
-          <select id="user-role" required>
-            <option value="resident">Resident / Member</option>
-            <option value="admin">Admin</option>
-          </select>
+          <label>Password</label>
+          <input type="password" id="auth-password" placeholder="••••••••" required minlength="6" />
 
-          <div id="house-num-wrap">
-            <label>House / Plot Number</label>
-            <input type="text" id="user-house" placeholder="e.g. House 42, Block B" required />
-          </div>
+          ${!isAuthModeLogin ? `
+            <label>Full Name</label>
+            <input type="text" id="auth-name" placeholder="e.g. Naveed Ahmed" required />
 
-          <div id="pin-wrap" style="display:none;">
-            <label id="pin-label">Admin Security PIN</label>
-            <input type="password" id="admin-pin" placeholder="Enter 4-digit PIN" maxlength="4" />
-          </div>
+            <div id="house-num-wrap">
+              <label>House / Plot Number</label>
+              <input type="text" id="auth-house" placeholder="e.g. House 42, Block B" required />
+            </div>
 
-          <button type="submit" class="btn primary block" style="margin-top:20px;">Sign In</button>
+            <div id="phone-wrap">
+              <label>Phone Number</label>
+              <input type="text" id="auth-phone" placeholder="e.g. +92 300 1234567" required />
+            </div>
+          ` : ''}
+
+          <button type="submit" class="btn primary block" style="margin-top:20px;">
+            ${isAuthModeLogin ? 'Sign In' : 'Register Resident Account'}
+          </button>
         </form>
+
+        <div class="toggle-auth-mode" id="toggle-auth-btn">
+          ${isAuthModeLogin ? "Don't have an account? Register here" : 'Already registered? Sign In'}
+        </div>
       </div>
     `;
 
-    document.getElementById('user-role').addEventListener('change', (e) => {
-      const val = e.target.value;
-      const houseWrap = document.getElementById('user-house');
-      document.getElementById('house-num-wrap').style.display = (val === 'admin') ? 'none' : 'block';
-      document.getElementById('pin-wrap').style.display = (val === 'admin') ? 'block' : 'none';
-      if (val === 'admin') {
-        houseWrap.removeAttribute('required');
-      } else {
-        houseWrap.setAttribute('required', 'required');
-      }
-    });
+    const toggleBtn = document.getElementById('toggle-auth-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        isAuthModeLogin = !isAuthModeLogin;
+        renderOnboarding();
+      });
+    }
 
-    document.getElementById('onboard-form').addEventListener('submit', async (e) => {
+    // REGISTRATION FAILURE & VERIFICATION ISOLATION HANDLER
+    document.getElementById('auth-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const name = document.getElementById('user-name').value.trim();
-      const role = document.getElementById('user-role').value;
-      const adminId = name.toLowerCase().replace(/\s+/g, '_');
-      
-      // Strict Admin Authentication Verification
-      if (role === 'admin') {
-        const pinEntered = document.getElementById('admin-pin').value.trim();
-        if (!pinEntered || pinEntered.length !== 4) {
-          alert('Please enter a 4-digit PIN.');
-          return;
-        }
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value.trim();
 
-        if (db) {
+      if (isAuthModeLogin) {
+        try {
+          await auth.signInWithEmailAndPassword(email, password);
+        } catch(err) {
+          alert('Authentication Error: ' + err.message);
+        }
+      } else {
+        const name = document.getElementById('auth-name').value.trim();
+        const house = document.getElementById('auth-house').value.trim();
+        const phone = document.getElementById('auth-phone').value.trim();
+
+        registrationInProgress = true;
+
+        try {
+          const cred = await auth.createUserWithEmailAndPassword(email, password);
+
+          await db.collection('users').doc(cred.user.uid).set({
+            name,
+            email,
+            role: 'resident',
+            house,
+            phone,
+            approved: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+          currentUserProfile = {
+            uid: cred.user.uid,
+            email,
+            name,
+            house,
+            phone,
+            role: 'resident',
+            approved: false
+          };
+
+          registrationInProgress = false;
+
+          // Isolated Email Dispatch Handling
           try {
-            const adminDoc = await db.collection('admins').doc(adminId).get();
-            if (!adminDoc.exists) {
-              alert('Admin account not found. Please contact administration.');
-              return;
-            }
-            if (adminDoc.data().pin !== pinEntered) {
-              alert('Incorrect Admin PIN.');
-              return;
-            }
-          } catch(err) {
-            console.error("Authentication Error:", err);
-            alert("Error connecting to admin directory.");
-            return;
+            await cred.user.sendEmailVerification();
+          } catch (verificationError) {
+            console.error("Verification email dispatch failed:", verificationError);
+            alert("Account created! However, sending the verification email failed. Please use 'Resend Email Link' on the next screen.");
           }
-        } else {
-          alert("Database connection offline. Admin verification unavailable.");
-          return;
+
+          render();
+
+        } catch(err) {
+          registrationInProgress = false;
+          alert('Registration failed: ' + err.message);
         }
       }
-
-      currentUser = {
-        name: name,
-        role: role,
-        house: (role === 'admin') ? 'Admin Office' : document.getElementById('user-house').value.trim()
-      };
-
-      localStorage.setItem('rphs_user', JSON.stringify(currentUser));
-      render();
     });
   }
 
   function renderContent() {
-    const isAdmin = (currentUser.role === 'admin');
+    const isAdmin = (currentUserProfile.role === 'admin');
 
     if (activeTab === 'announcements') {
       return `
@@ -550,16 +684,20 @@
         <div id="complaints-list">Loading tickets...</div>
       `;
     }
+
+    if (activeTab === 'approvals' && isAdmin) {
+      return `
+        <div class="section-title">Resident Approvals</div>
+        <div class="section-sub">Authorize or reject pending resident registrations.</div>
+        <div id="approvals-list">Loading pending applications...</div>
+      `;
+    }
   }
 
   function bindGlobalEvents() {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => {
-        localStorage.removeItem('rphs_user');
-        currentUser = null;
-        render();
-      });
+      logoutBtn.addEventListener('click', () => auth.signOut());
     }
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -588,125 +726,138 @@
     if (activeTab === 'announcements') loadNotices();
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'complaints') loadComplaints();
+    if (activeTab === 'approvals' && currentUserProfile.role === 'admin') loadPendingResidents();
   }
 
-  function sendNotification(target, text) {
-    const item = { target, text, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), read: false, createdAt: new Date().toISOString() };
-    if (db) {
-      db.collection('notifications').add(item);
-    } else {
-      notifications.unshift(item);
-      localStorage.setItem('rphs_notifs', JSON.stringify(notifications));
-    }
-
-    if (Notification.permission === 'granted') {
-      new Notification("Roshan Housing Society", { body: text, icon: 'icon-192.png' });
-    }
+  function sendNotification(targetUIDOrRole, text) {
+    const item = { 
+      target: targetUIDOrRole, 
+      text, 
+      readBy: [], 
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if (db) db.collection('notifications').add(item).catch(err => console.error("Notification trigger failed:", err));
   }
 
   function loadNotifications() {
-    if (db) {
+    if (db && auth.currentUser) {
       db.collection('notifications').orderBy('createdAt', 'desc').get().then(snapshot => {
         notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }).catch(() => {
-        notifications = JSON.parse(localStorage.getItem('rphs_notifs')) || [];
-      });
-    } else {
-      notifications = JSON.parse(localStorage.getItem('rphs_notifs')) || [];
+        renderUnreadBadge();
+      }).catch(err => console.error("Notifs load error:", err));
     }
   }
 
-  window.openNotificationsModal = function() {
-    const userNotifs = notifications.filter(n => n.target === currentUser.role || n.target === 'all' || n.target === currentUser.name);
+  function renderUnreadBadge() {
+    const unreadCount = notifications.filter(n => 
+      isNotificationUnread(n) && 
+      (n.target === currentUserProfile.role || n.target === 'all' || n.target === auth.currentUser.uid)
+    ).length;
+
+    const bellBtn = document.querySelector('.notif-bell-btn');
+    if (bellBtn) {
+      const existingBadge = bellBtn.querySelector('.notif-badge');
+      if (existingBadge) existingBadge.remove();
+      if (unreadCount > 0) {
+        bellBtn.innerHTML += `<span class="notif-badge">${unreadCount}</span>`;
+      }
+    }
+  }
+
+  window.openNotificationsModal = async function() {
+    const userNotifs = notifications.filter(n => n.target === currentUserProfile.role || n.target === 'all' || n.target === auth.currentUser.uid);
 
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Notifications</div>
       ${userNotifs.length ? userNotifs.map(n => `
         <div style="background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px; border-radius:10px; margin-bottom:8px;">
           <div style="font-size:13px; color:var(--text); line-height:1.4;">${escapeHtml(n.text)}</div>
-          <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">${escapeHtml(n.time || 'Recently')}</div>
         </div>
       `).join('') : '<div style="color:var(--text-muted); text-align:center; padding:20px;">No notifications yet.</div>'}
     `;
     document.getElementById('modal-view').classList.add('active');
+
+    const unreadList = userNotifs.filter(n => isNotificationUnread(n) && n.id);
+    if (unreadList.length > 0 && auth.currentUser) {
+      const batch = db.batch();
+      unreadList.forEach(n => {
+        const ref = db.collection('notifications').doc(n.id);
+        batch.update(ref, { 
+          readBy: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid) 
+        });
+      });
+      await batch.commit().catch(err => console.error("Failed marking notifications read:", err));
+      loadNotifications();
+    }
   };
 
-  // Atomic Field Reactions using Firestore arrayUnion / arrayRemove
   window.reactNotice = function(e, key, type) {
     if(e) e.stopPropagation();
-    let n = notices.find((item, idx) => (item.id === key || idx == key));
-    if (!n) return;
+    let n = notices.find(item => item.id === key);
+    if (!n || !auth.currentUser) return;
 
-    const user = currentUser.name;
-    const hasLiked = (n.likes || []).includes(user);
-    const hasDisliked = (n.dislikes || []).includes(user);
+    const uid = auth.currentUser.uid;
+    const hasLiked = (n.likes || []).includes(uid);
+    const hasDisliked = (n.dislikes || []).includes(uid);
 
     if (db && n.id) {
       const docRef = db.collection('notices').doc(n.id);
+      let op = null;
       if (type === 'like') {
         if (hasLiked) {
-          docRef.update({ likes: firebase.firestore.FieldValue.arrayRemove(user) });
+          op = docRef.update({ likes: firebase.firestore.FieldValue.arrayRemove(uid) });
         } else {
-          docRef.update({ 
-            likes: firebase.firestore.FieldValue.arrayUnion(user),
-            dislikes: firebase.firestore.FieldValue.arrayRemove(user)
+          op = docRef.update({ 
+            likes: firebase.firestore.FieldValue.arrayUnion(uid),
+            dislikes: firebase.firestore.FieldValue.arrayRemove(uid)
           });
         }
       } else if (type === 'dislike') {
         if (hasDisliked) {
-          docRef.update({ dislikes: firebase.firestore.FieldValue.arrayRemove(user) });
+          op = docRef.update({ dislikes: firebase.firestore.FieldValue.arrayRemove(uid) });
         } else {
-          docRef.update({ 
-            dislikes: firebase.firestore.FieldValue.arrayUnion(user),
-            likes: firebase.firestore.FieldValue.arrayRemove(user)
+          op = docRef.update({ 
+            dislikes: firebase.firestore.FieldValue.arrayUnion(uid),
+            likes: firebase.firestore.FieldValue.arrayRemove(uid)
           });
         }
       }
-      setTimeout(loadNotices, 300);
-    } else {
-      if (!n.likes) n.likes = [];
-      if (!n.dislikes) n.dislikes = [];
-      if (type === 'like') {
-        if (hasLiked) { n.likes = n.likes.filter(u => u !== user); } 
-        else { n.likes.push(user); n.dislikes = n.dislikes.filter(u => u !== user); }
-      } else if (type === 'dislike') {
-        if (hasDisliked) { n.dislikes = n.dislikes.filter(u => u !== user); } 
-        else { n.dislikes.push(user); n.likes = n.likes.filter(u => u !== user); }
+      if (op) {
+        op.then(() => loadNotices()).catch(err => alert("Unable to save reaction: " + err.message));
       }
-      localStorage.setItem('rphs_notices', JSON.stringify(notices));
-      renderNoticesList();
     }
   };
 
   window.openNoticeModal = function(key) {
-    let item = notices.find((n, idx) => (n.id === key || idx == key));
-    if (!item) return;
+    let item = notices.find(n => n.id === key);
+    if (!item || !auth.currentUser) return;
 
+    const uid = auth.currentUser.uid;
     const likesCount = (item.likes || []).length;
     const dislikesCount = (item.dislikes || []).length;
-    const userLiked = (item.likes || []).includes(currentUser.name);
-    const userDisliked = (item.dislikes || []).includes(currentUser.name);
+    const userLiked = (item.likes || []).includes(uid);
+    const userDisliked = (item.dislikes || []).includes(uid);
 
     document.getElementById('modal-body').innerHTML = `
       <div style="margin-bottom:10px;"><span class="badge notice">Official Notice</span></div>
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:8px; line-height:1.3;">${escapeHtml(item.title)}</div>
-      <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Published: ${escapeHtml(item.date || 'Today')}</div>
       <div style="font-size:14.5px; color:#D6D9EC; line-height:1.6; white-space:pre-wrap;">${escapeHtml(item.desc)}</div>
       
       <div class="reactions-toolbar">
-        <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${item.id || key}', 'like')">👍 ${likesCount}</button>
-        <button class="rxn-btn ${userDisliked ? 'active-dislike' : ''}" onclick="reactNotice(event, '${item.id || key}', 'dislike')">👎 ${dislikesCount}</button>
+        <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${item.id}', 'like')">👍 ${likesCount}</button>
+        <button class="rxn-btn ${userDisliked ? 'active-dislike' : ''}" onclick="reactNotice(event, '${item.id}', 'dislike')">👎 ${dislikesCount}</button>
       </div>
     `;
     document.getElementById('modal-view').classList.add('active');
   };
 
   window.openPollModal = function(key) {
-    let p = polls.find((item, idx) => (item.id === key || idx == key));
-    if (!p) return;
+    let p = polls.find(item => item.id === key);
+    if (!p || !auth.currentUser) return;
 
+    const uid = auth.currentUser.uid;
     const totalVotes = p.options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
-    const hasVoted = p.voters && p.voters.includes(currentUser.name);
+    const hasVoted = p.voterIds && p.voterIds.includes(uid);
 
     document.getElementById('modal-body').innerHTML = `
       <div style="margin-bottom:10px;"><span class="badge pending">Community Poll</span></div>
@@ -714,7 +865,7 @@
       ${p.options.map((opt, oIndex) => {
         const pct = totalVotes > 0 ? Math.round(((opt.votes || 0) / totalVotes) * 100) : 0;
         return `
-          <button class="poll-opt-btn" onclick="votePoll('${p.id || key}', ${oIndex})">
+          <button class="poll-opt-btn" onclick="votePoll('${p.id}', ${oIndex})">
             <div class="poll-progress-bar" style="width:${pct}%;"></div>
             <span class="poll-opt-text">${escapeHtml(opt.text)}</span>
             <span class="poll-opt-count">${pct}% (${opt.votes || 0})</span>
@@ -737,23 +888,14 @@
     const desc = document.getElementById('notice-desc').value.trim();
     if (!title || !desc) return;
 
-    const item = { title, desc, date: new Date().toLocaleDateString(), likes: [], dislikes: [], createdAt: new Date().toISOString() };
+    const item = { title, desc, likes: [], dislikes: [], createdAt: firebase.firestore.FieldValue.serverTimestamp() };
 
     if (db) {
       db.collection('notices').add(item).then(() => {
         sendNotification('resident', `📢 New Announcement: "${title}"`);
         document.getElementById('notice-form').reset();
         loadNotices();
-      }).catch(err => {
-        console.error("Error posting notice:", err);
-        notices.unshift(item);
-        localStorage.setItem('rphs_notices', JSON.stringify(notices));
-        renderNoticesList();
-      });
-    } else {
-      notices.unshift(item);
-      localStorage.setItem('rphs_notices', JSON.stringify(notices));
-      renderNoticesList();
+      }).catch(err => alert("Failed to post notice: " + err.message));
     }
   }
 
@@ -763,13 +905,10 @@
         notices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderNoticesList();
       }).catch(err => {
-        console.warn("Firestore offline/error, falling back to local storage:", err);
-        notices = JSON.parse(localStorage.getItem('rphs_notices')) || [];
-        renderNoticesList();
+        console.error("Notices load error:", err);
+        const el = document.getElementById('notices-list');
+        if (el) el.innerHTML = '<div class="card" style="text-align:center; color:var(--danger); cursor:default;">Failed to load announcements.</div>';
       });
-    } else {
-      notices = JSON.parse(localStorage.getItem('rphs_notices')) || [];
-      renderNoticesList();
     }
   }
 
@@ -778,25 +917,25 @@
     if (!el) return;
     if (!notices.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No announcements posted yet.</div>'; return; }
 
-    el.innerHTML = notices.map((n, idx) => {
-      const itemKey = n.id ? n.id : idx;
+    const uid = auth.currentUser ? auth.currentUser.uid : null;
+
+    el.innerHTML = notices.map((n) => {
       const likesCount = (n.likes || []).length;
       const dislikesCount = (n.dislikes || []).length;
-      const userLiked = (n.likes || []).includes(currentUser.name);
-      const userDisliked = (n.dislikes || []).includes(currentUser.name);
+      const userLiked = (n.likes || []).includes(uid);
+      const userDisliked = (n.dislikes || []).includes(uid);
 
       return `
-        <div class="card" onclick="openNoticeModal('${itemKey}')">
+        <div class="card" onclick="openNoticeModal('${n.id}')">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <span class="badge notice">Official Notice</span>
-            <span style="font-size:11px; color:var(--text-muted);">${escapeHtml(n.date || 'Today')}</span>
           </div>
           <div style="font-weight:700; font-size:16px; margin-bottom:6px;">${escapeHtml(n.title)}</div>
           <div style="font-size:13.5px; color:#D6D9EC; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(n.desc)}</div>
           
           <div class="reactions-toolbar">
-            <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${itemKey}', 'like')">👍 ${likesCount}</button>
-            <button class="rxn-btn ${userDisliked ? 'active-dislike' : ''}" onclick="reactNotice(event, '${itemKey}', 'dislike')">👎 ${dislikesCount}</button>
+            <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${n.id}', 'like')">👍 ${likesCount}</button>
+            <button class="rxn-btn ${userDisliked ? 'active-dislike' : ''}" onclick="reactNotice(event, '${n.id}', 'dislike')">👎 ${dislikesCount}</button>
           </div>
         </div>
       `;
@@ -809,21 +948,13 @@
     const opt2 = document.getElementById('poll-opt2').value.trim();
     if (!title || !opt1 || !opt2) return;
 
-    const item = { title, options: [{text: opt1, votes: 0}, {text: opt2, votes: 0}], voters: [], createdAt: new Date().toISOString() };
+    const item = { title, options: [{text: opt1, votes: 0}, {text: opt2, votes: 0}], voterIds: [], createdAt: firebase.firestore.FieldValue.serverTimestamp() };
     if (db) {
       db.collection('polls').add(item).then(() => { 
         sendNotification('resident', `🗳️ New Poll: "${title}"`); 
         document.getElementById('poll-form').reset(); 
         loadPolls(); 
-      }).catch(err => {
-        polls.unshift(item);
-        localStorage.setItem('rphs_polls', JSON.stringify(polls));
-        renderPollsList();
-      });
-    } else {
-      polls.unshift(item);
-      localStorage.setItem('rphs_polls', JSON.stringify(polls));
-      renderPollsList();
+      }).catch(err => alert("Failed to post poll: " + err.message));
     }
   }
 
@@ -832,13 +963,11 @@
       db.collection('polls').orderBy('createdAt', 'desc').get().then(snapshot => { 
         polls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
         renderPollsList(); 
-      }).catch(() => {
-        polls = JSON.parse(localStorage.getItem('rphs_polls')) || [];
-        renderPollsList();
+      }).catch(err => {
+        console.error("Polls load error:", err);
+        const el = document.getElementById('polls-list');
+        if (el) el.innerHTML = '<div class="card" style="text-align:center; color:var(--danger); cursor:default;">Failed to load polls.</div>';
       });
-    } else {
-      polls = JSON.parse(localStorage.getItem('rphs_polls')) || [];
-      renderPollsList();
     }
   }
 
@@ -847,16 +976,15 @@
     if (!el) return;
     if (!polls.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No polls available yet.</div>'; return; }
 
-    el.innerHTML = polls.map((p, pIndex) => {
+    el.innerHTML = polls.map((p) => {
       const totalVotes = p.options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
-      const itemKey = p.id ? p.id : pIndex;
       return `
-        <div class="card" onclick="openPollModal('${itemKey}')">
+        <div class="card" onclick="openPollModal('${p.id}')">
           <div style="font-weight:700; font-size:15px; margin-bottom:10px;">${escapeHtml(p.title)}</div>
           ${p.options.map((opt, oIndex) => {
             const pct = totalVotes > 0 ? Math.round(((opt.votes || 0) / totalVotes) * 100) : 0;
             return `
-              <button class="poll-opt-btn" onclick="event.stopPropagation(); votePoll('${itemKey}', ${oIndex})">
+              <button class="poll-opt-btn" onclick="event.stopPropagation(); votePoll('${p.id}', ${oIndex})">
                 <div class="poll-progress-bar" style="width:${pct}%;"></div>
                 <span class="poll-opt-text">${escapeHtml(opt.text)}</span>
                 <span class="poll-opt-count">${pct}% (${opt.votes || 0})</span>
@@ -868,10 +996,15 @@
     }).join('');
   }
 
-  // Atomic Poll Vote Execution
-  window.votePoll = function(pollIdentifier, optIndex) {
-    let poll = polls.find((p, idx) => (p.id === pollIdentifier || idx == pollIdentifier));
-    if (!poll || (poll.voters && poll.voters.includes(currentUser.name))) return alert('You have already voted on this poll.');
+  window.votePoll = function(pollId, optIndex) {
+    if (!auth.currentUser) return;
+    const uid = auth.currentUser.uid;
+    let poll = polls.find(p => p.id === pollId);
+
+    if (!poll || (poll.voterIds && poll.voterIds.includes(uid))) {
+      alert('You have already voted on this poll.');
+      return;
+    }
 
     if (db && poll.id) {
       const pollRef = db.collection('polls').doc(poll.id);
@@ -879,98 +1012,78 @@
         return transaction.get(pollRef).then((doc) => {
           if (!doc.exists) return;
           const data = doc.data();
-          if (data.voters && data.voters.includes(currentUser.name)) {
+          if (data.voterIds && data.voterIds.includes(uid)) {
             throw "Already voted";
           }
           const updatedOptions = [...data.options];
           updatedOptions[optIndex].votes = (updatedOptions[optIndex].votes || 0) + 1;
           transaction.update(pollRef, {
             options: updatedOptions,
-            voters: firebase.firestore.FieldValue.arrayUnion(currentUser.name)
+            voterIds: firebase.firestore.FieldValue.arrayUnion(uid)
           });
         });
       }).then(() => {
-        sendNotification('admin', `📊 ${currentUser.name} voted on poll: "${poll.title}"`);
         loadPolls();
       }).catch(err => {
         if (err === "Already voted") alert("You have already voted.");
-        else console.error("Poll transaction error:", err);
+        else alert("Unable to submit vote: " + err.message);
       });
-    } else {
-      if (!poll.voters) poll.voters = [];
-      poll.voters.push(currentUser.name);
-      poll.options[optIndex].votes += 1;
-      localStorage.setItem('rphs_polls', JSON.stringify(polls));
-      renderPollsList();
     }
   };
 
   function submitComplaint() {
+    if (!navigator.onLine) {
+      alert("⚠️ No internet connection. Your complaint cannot be submitted while offline.");
+      return;
+    }
+
     const title = document.getElementById('c-title').value.trim();
     const category = document.getElementById('c-category').value;
     const desc = document.getElementById('c-desc').value.trim();
-    if (!title || !desc) return;
+    if (!title || !desc || !auth.currentUser) return;
+
+    const docRef = db.collection('complaints').doc();
+    const ticketNo = `RPHS-${new Date().getFullYear()}-${docRef.id.substring(0, 6).toUpperCase()}`;
 
     const newComplaint = {
+      ticketNo,
       title,
       category,
       desc,
-      resident: currentUser.name,
-      house: currentUser.house || 'N/A',
+      residentId: auth.currentUser.uid,
+      residentName: currentUserProfile.name,
+      house: currentUserProfile.house || 'N/A',
       status: 'Pending',
       assignedDept: 'Unassigned',
       adminNote: '',
-      createdAt: new Date().toISOString()
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    if (db) {
-      db.collection('complaints').add(newComplaint).then(() => { 
-        sendNotification('admin', `⚠️ New Issue from ${currentUser.name}: "${title}"`); 
-        alert('Ticket Submitted Successfully!'); 
-        document.getElementById('complaint-form').reset(); 
-        loadComplaints(); 
-      }).catch(err => {
-        complaints.unshift(newComplaint);
-        localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
-        alert('Ticket Saved Locally!');
-        renderComplaintsList();
-      });
-    } else {
-      complaints.unshift(newComplaint);
-      localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
-      alert('Ticket Saved Locally!');
-      renderComplaintsList();
-    }
+    docRef.set(newComplaint).then(() => { 
+      sendNotification('admin', `⚠️ New Ticket [${ticketNo}] from ${currentUserProfile.name}: "${title}"`); 
+      alert(`Ticket Submitted Successfully!\nReference No: ${ticketNo}`); 
+      document.getElementById('complaint-form').reset(); 
+      loadComplaints(); 
+    }).catch(err => {
+      alert("Failed to submit ticket: " + err.message);
+    });
   }
 
-  // Privacy Protection: Filter database queries based on role
   function loadComplaints() {
-    if (db) {
+    if (db && auth.currentUser) {
       let query = db.collection('complaints');
-      if (currentUser.role !== 'admin') {
-        // Strict Privacy Guard: Residents can only fetch their own complaints
-        query = query.where('resident', '==', currentUser.name);
+      if (currentUserProfile.role !== 'admin') {
+        query = query.where('residentId', '==', auth.currentUser.uid);
       }
       
       query.get().then(snapshot => { 
         complaints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
-        // Sort descending locally to avoid Firestore composite index requirement
-        complaints.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
         renderComplaintsList(); 
       }).catch(err => {
-        console.warn("Error fetching complaints:", err);
-        complaints = JSON.parse(localStorage.getItem('rphs_complaints')) || [];
-        if (currentUser.role !== 'admin') {
-          complaints = complaints.filter(c => c.resident === currentUser.name);
-        }
-        renderComplaintsList();
+        console.error("Complaints load error:", err);
+        const el = document.getElementById('complaints-list');
+        if (el) el.innerHTML = '<div class="card" style="text-align:center; color:var(--danger); cursor:default;">Failed to load tickets.</div>';
       });
-    } else {
-      complaints = JSON.parse(localStorage.getItem('rphs_complaints')) || [];
-      if (currentUser.role !== 'admin') {
-        complaints = complaints.filter(c => c.resident === currentUser.name);
-      }
-      renderComplaintsList();
     }
   }
 
@@ -979,9 +1092,10 @@
     if (!c) return;
 
     document.getElementById('modal-body').innerHTML = `
-      <div style="font-family:var(--font-display); font-size:18px; font-weight:600; margin-bottom:12px;">Manage Ticket Status</div>
+      <div style="font-family:var(--font-display); font-size:18px; font-weight:600; margin-bottom:8px;">Manage Ticket Status</div>
+      <div class="ticket-no" style="display:inline-block; margin-bottom:8px;">${escapeHtml(c.ticketNo || 'RPHS-TICKET')}</div>
       <div style="font-size:14px; font-weight:700; color:var(--accent-2);">${escapeHtml(c.title)}</div>
-      <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Resident: ${escapeHtml(c.resident)} (${escapeHtml(c.house)})</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Resident: ${escapeHtml(c.residentName)} (${escapeHtml(c.house)})</div>
 
       <label>Ticket Status</label>
       <select id="update-status">
@@ -993,7 +1107,7 @@
       </select>
 
       <label>Assigned Department</label>
-      <input type="text" id="update-dept" value="${escapeHtml(c.assignedDept || 'Unassigned')}" placeholder="e.g. Electrical Services" />
+      <input type="text" id="update-dept" value="${escapeHtml(c.assignedDept || 'Unassigned')}" placeholder="e.g. Electrical Maintenance" />
 
       <label>Admin Note / Resolution Response</label>
       <textarea id="update-note" placeholder="Provide details to the resident...">${escapeHtml(c.adminNote || '')}</textarea>
@@ -1003,7 +1117,11 @@
     document.getElementById('modal-view').classList.add('active');
   };
 
+  // AUDIT TRAIL LOGGING ADDED FOR TICKET UPDATES
   window.saveComplaintStatus = function(id) {
+    const c = complaints.find(item => item.id === id);
+    if (!c || !auth.currentUser) return;
+
     const newStatus = document.getElementById('update-status').value;
     const newDept = document.getElementById('update-dept').value.trim();
     const newNote = document.getElementById('update-note').value.trim();
@@ -1013,11 +1131,19 @@
         status: newStatus,
         assignedDept: newDept,
         adminNote: newNote,
-        updatedAt: new Date().toISOString()
+        lastUpdatedBy: auth.currentUser.uid,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }).then(() => {
+        sendNotification(
+          c.residentId, 
+          `🔔 Update on [${c.ticketNo || 'Ticket'}]: Status changed to "${newStatus}".`
+        );
+
         alert('Ticket Updated!');
         closeModal();
         loadComplaints();
+      }).catch(err => {
+        alert("Unable to update the ticket. Please try again: " + err.message);
       });
     }
   };
@@ -1030,40 +1156,91 @@
       return; 
     }
 
-    const isAdmin = (currentUser.role === 'admin');
+    const isAdmin = (currentUserProfile.role === 'admin');
 
     el.innerHTML = complaints.map((c) => {
       const badgeClass = c.status ? c.status.toLowerCase().replace(/\s+/g, '-') : 'pending';
+      const residentDetails = isAdmin 
+        ? `Resident: ${escapeHtml(c.residentName)} (${escapeHtml(c.house)})` 
+        : `Submitted by you`;
+
       return `
-        <div class="card" style="cursor:default;">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-            <div style="font-weight:700; font-size:15px; color:var(--text);">${escapeHtml(c.title)}</div>
-            <span class="badge ${badgeClass}">${escapeHtml(c.status || 'Pending')}</span>
+        <div class="card" ${isAdmin ? `onclick="openAdminComplaintModal('${c.id}')"` : 'style="cursor:default;"'}>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span class="ticket-no">${escapeHtml(c.ticketNo || 'RPHS-TICKET')}</span>
+            <span class="badge ${badgeClass}">${escapeHtml(c.status)}</span>
           </div>
-          <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
-            ${escapeHtml(c.category)} • ${isAdmin ? `By ${escapeHtml(c.resident)} (${escapeHtml(c.house)})` : `Submitted by you`}
-          </div>
-          <div style="font-size:13.5px; margin-top:8px; line-height:1.5; color:#D6D9EC;">${escapeHtml(c.desc)}</div>
-
-          ${(c.assignedDept && c.assignedDept !== 'Unassigned') || c.adminNote ? `
-            <div style="margin-top:10px; padding:10px; background:var(--bg-elevated-2); border-radius:8px; border:1px solid var(--border-soft);">
-              ${c.assignedDept ? `<div style="font-size:11.5px; color:var(--info); font-weight:700;">Department: ${escapeHtml(c.assignedDept)}</div>` : ''}
-              ${c.adminNote ? `<div style="font-size:12px; color:var(--text-muted); margin-top:4px;"><strong>Admin Note:</strong> ${escapeHtml(c.adminNote)}</div>` : ''}
+          <div style="font-weight:700; font-size:15px; margin-bottom:4px;">${escapeHtml(c.title)}</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">${escapeHtml(c.category)} • ${residentDetails}</div>
+          <div style="font-size:13px; color:#D6D9EC; line-height:1.4;">${escapeHtml(c.desc)}</div>
+          
+          ${c.adminNote ? `
+            <div style="margin-top:10px; padding:8px 10px; background:var(--bg-elevated-2); border-left:3px solid var(--accent); border-radius:4px; font-size:12px;">
+              <strong>Admin Note:</strong> ${escapeHtml(c.adminNote)}
             </div>
-          ` : ''}
-
-          ${isAdmin && c.id ? `
-            <button class="btn sm" style="margin-top:12px; background:var(--bg-elevated-3); color:var(--accent-2);" onclick="openAdminComplaintModal('${c.id}')">
-              ⚙️ Manage Status
-            </button>
           ` : ''}
         </div>
       `;
     }).join('');
   }
 
-  // Launch application
-  render();
+  function loadPendingResidents() {
+    if (db && currentUserProfile.role === 'admin') {
+      db.collection('users').where('approved', '==', false).get().then(snapshot => {
+        pendingResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderPendingResidentsList();
+      }).catch(err => console.error("Pending residents load error:", err));
+    }
+  }
+
+  function renderPendingResidentsList() {
+    const el = document.getElementById('approvals-list');
+    if (!el) return;
+    if (!pendingResidents.length) {
+      el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No accounts pending approval.</div>';
+      return;
+    }
+
+    el.innerHTML = pendingResidents.map(r => `
+      <div class="card" style="cursor:default;">
+        <div style="font-weight:700; font-size:15px; margin-bottom:4px;">${escapeHtml(r.name)}</div>
+        <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:2px;">House/Plot: <strong>${escapeHtml(r.house)}</strong></div>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:2px;">Phone: ${escapeHtml(r.phone || 'N/A')}</div>
+        <div style="font-size:12px; color:var(--text-faint); margin-bottom:12px;">Email: ${escapeHtml(r.email)}</div>
+
+        <div style="display:flex; gap:8px;">
+          <button class="btn primary sm" style="flex:1;" onclick="approveResident('${r.id}')">Approve Access</button>
+          <button class="btn danger sm" style="flex:1;" onclick="rejectResident('${r.id}')">Reject Account</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // AUDIT TRAIL LOGGING ADDED FOR USER APPROVAL
+  window.approveResident = function(uid) {
+    if (db && currentUserProfile.role === 'admin' && auth.currentUser) {
+      db.collection('users').doc(uid).update({ 
+        approved: true,
+        approvedBy: auth.currentUser.uid,
+        approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => {
+        alert("Resident approved successfully!");
+        loadPendingResidents();
+      }).catch(err => alert("Error approving user: " + err.message));
+    }
+  };
+
+  window.rejectResident = function(uid) {
+    if (confirm("Are you sure you want to reject and delete this registration request?")) {
+      if (db && currentUserProfile.role === 'admin') {
+        db.collection('users').doc(uid).delete().then(() => {
+          alert("Resident registration profile deleted.");
+          loadPendingResidents();
+        }).catch(err => alert("Error rejecting user: " + err.message));
+      }
+    }
+  };
+
 })();
 </script>
 </body>
