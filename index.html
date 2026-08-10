@@ -112,7 +112,6 @@
     font-size:10px; font-weight:800; border-radius:10px; padding:2px 5px; min-width:16px; text-align:center;
   }
 
-  /* Fixed CSS Syntax */
   .push-banner{
     background:var(--accent-soft); border:1px solid rgba(242,169,59,0.3);
     border-radius:12px; padding:12px 14px; margin-bottom:16px; display:flex;
@@ -345,12 +344,6 @@
     }).catch((err) => console.log('Push token registration error:', err));
   }
 
-  function isNotificationUnread(n) {
-    if (!auth.currentUser) return false;
-    const readByList = n.readBy || [];
-    return !readByList.includes(auth.currentUser.uid);
-  }
-
   function render() {
     if (!auth || !auth.currentUser || !currentUserProfile) {
       renderOnboarding();
@@ -363,16 +356,13 @@
       return;
     }
 
-    // HARDENED PENDING APPROVAL GUARD (EXPLICIT !== true)
+    // HARDENED PENDING APPROVAL GUARD
     if (currentUserProfile.role === 'resident' && currentUserProfile.approved !== true) {
       renderPendingApprovalScreen();
       return;
     }
 
-    const unreadCount = notifications.filter(n => 
-      isNotificationUnread(n) && 
-      (n.target === currentUserProfile.role || n.target === 'all' || n.target === auth.currentUser.uid)
-    ).length;
+    const unreadCount = notifications.filter(n => !n.read).length;
 
     appEl.innerHTML = `
       <header class="topbar">
@@ -538,7 +528,6 @@
       });
     }
 
-    // REGISTRATION FAILURE & VERIFICATION ISOLATION HANDLER
     document.getElementById('auth-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('auth-email').value.trim();
@@ -582,7 +571,6 @@
 
           registrationInProgress = false;
 
-          // Isolated Email Dispatch Handling
           try {
             await cred.user.sendEmailVerification();
           } catch (verificationError) {
@@ -729,31 +717,44 @@
     if (activeTab === 'approvals' && currentUserProfile.role === 'admin') loadPendingResidents();
   }
 
-  function sendNotification(targetUIDOrRole, text) {
-    const item = { 
-      target: targetUIDOrRole, 
-      text, 
-      readBy: [], 
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    if (db) db.collection('notifications').add(item).catch(err => console.error("Notification trigger failed:", err));
+  // --- SUBCOLLECTION NOTIFICATION SYSTEM ---
+  async function sendNotification(targetUid, title, body, type = 'info') {
+    if (!db || !targetUid) return;
+    try {
+      await db.collection('users')
+        .doc(targetUid)
+        .collection('notifications')
+        .add({
+          title: title,
+          body: body,
+          text: body,
+          type: type,
+          read: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (err) {
+      console.error("Targeted Notification failed:", err);
+    }
   }
 
   function loadNotifications() {
     if (db && auth.currentUser) {
-      db.collection('notifications').orderBy('createdAt', 'desc').get().then(snapshot => {
-        notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderUnreadBadge();
-      }).catch(err => console.error("Notifs load error:", err));
+      db.collection('users')
+        .doc(auth.currentUser.uid)
+        .collection('notifications')
+        .orderBy('createdAt', 'desc')
+        .limit(20)
+        .get()
+        .then(snapshot => {
+          notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          renderUnreadBadge();
+        })
+        .catch(err => console.error("Notifs load error:", err));
     }
   }
 
   function renderUnreadBadge() {
-    const unreadCount = notifications.filter(n => 
-      isNotificationUnread(n) && 
-      (n.target === currentUserProfile.role || n.target === 'all' || n.target === auth.currentUser.uid)
-    ).length;
-
+    const unreadCount = notifications.filter(n => !n.read).length;
     const bellBtn = document.querySelector('.notif-bell-btn');
     if (bellBtn) {
       const existingBadge = bellBtn.querySelector('.notif-badge');
@@ -765,418 +766,210 @@
   }
 
   window.openNotificationsModal = async function() {
-    const userNotifs = notifications.filter(n => n.target === currentUserProfile.role || n.target === 'all' || n.target === auth.currentUser.uid);
-
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Notifications</div>
-      ${userNotifs.length ? userNotifs.map(n => `
+      ${notifications.length ? notifications.map(n => `
         <div style="background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px; border-radius:10px; margin-bottom:8px;">
-          <div style="font-size:13px; color:var(--text); line-height:1.4;">${escapeHtml(n.text)}</div>
+          ${n.title ? `<div style="font-weight:700; font-size:13px; color:var(--accent-2);">${escapeHtml(n.title)}</div>` : ''}
+          <div style="font-size:13px; color:var(--text); line-height:1.4;">${escapeHtml(n.text || n.body)}</div>
         </div>
       `).join('') : '<div style="color:var(--text-muted); text-align:center; padding:20px;">No notifications yet.</div>'}
     `;
     document.getElementById('modal-view').classList.add('active');
 
-    const unreadList = userNotifs.filter(n => isNotificationUnread(n) && n.id);
-    if (unreadList.length > 0 && auth.currentUser) {
+    // Mark as read in batch
+    const unreadDocs = notifications.filter(n => !n.read);
+    if (unreadDocs.length && db && auth.currentUser) {
       const batch = db.batch();
-      unreadList.forEach(n => {
-        const ref = db.collection('notifications').doc(n.id);
-        batch.update(ref, { 
-          readBy: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid) 
-        });
+      unreadDocs.forEach(n => {
+        const ref = db.collection('users').doc(auth.currentUser.uid).collection('notifications').doc(n.id);
+        batch.update(ref, { read: true });
       });
-      await batch.commit().catch(err => console.error("Failed marking notifications read:", err));
+      await batch.commit().catch(e => console.error("Error marking notifs read:", e));
       loadNotifications();
     }
-  };
-
-  window.reactNotice = function(e, key, type) {
-    if(e) e.stopPropagation();
-    let n = notices.find(item => item.id === key);
-    if (!n || !auth.currentUser) return;
-
-    const uid = auth.currentUser.uid;
-    const hasLiked = (n.likes || []).includes(uid);
-    const hasDisliked = (n.dislikes || []).includes(uid);
-
-    if (db && n.id) {
-      const docRef = db.collection('notices').doc(n.id);
-      let op = null;
-      if (type === 'like') {
-        if (hasLiked) {
-          op = docRef.update({ likes: firebase.firestore.FieldValue.arrayRemove(uid) });
-        } else {
-          op = docRef.update({ 
-            likes: firebase.firestore.FieldValue.arrayUnion(uid),
-            dislikes: firebase.firestore.FieldValue.arrayRemove(uid)
-          });
-        }
-      } else if (type === 'dislike') {
-        if (hasDisliked) {
-          op = docRef.update({ dislikes: firebase.firestore.FieldValue.arrayRemove(uid) });
-        } else {
-          op = docRef.update({ 
-            dislikes: firebase.firestore.FieldValue.arrayUnion(uid),
-            likes: firebase.firestore.FieldValue.arrayRemove(uid)
-          });
-        }
-      }
-      if (op) {
-        op.then(() => loadNotices()).catch(err => alert("Unable to save reaction: " + err.message));
-      }
-    }
-  };
-
-  window.openNoticeModal = function(key) {
-    let item = notices.find(n => n.id === key);
-    if (!item || !auth.currentUser) return;
-
-    const uid = auth.currentUser.uid;
-    const likesCount = (item.likes || []).length;
-    const dislikesCount = (item.dislikes || []).length;
-    const userLiked = (item.likes || []).includes(uid);
-    const userDisliked = (item.dislikes || []).includes(uid);
-
-    document.getElementById('modal-body').innerHTML = `
-      <div style="margin-bottom:10px;"><span class="badge notice">Official Notice</span></div>
-      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:8px; line-height:1.3;">${escapeHtml(item.title)}</div>
-      <div style="font-size:14.5px; color:#D6D9EC; line-height:1.6; white-space:pre-wrap;">${escapeHtml(item.desc)}</div>
-      
-      <div class="reactions-toolbar">
-        <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${item.id}', 'like')">👍 ${likesCount}</button>
-        <button class="rxn-btn ${userDisliked ? 'active-dislike' : ''}" onclick="reactNotice(event, '${item.id}', 'dislike')">👎 ${dislikesCount}</button>
-      </div>
-    `;
-    document.getElementById('modal-view').classList.add('active');
-  };
-
-  window.openPollModal = function(key) {
-    let p = polls.find(item => item.id === key);
-    if (!p || !auth.currentUser) return;
-
-    const uid = auth.currentUser.uid;
-    const totalVotes = p.options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
-    const hasVoted = p.voterIds && p.voterIds.includes(uid);
-
-    document.getElementById('modal-body').innerHTML = `
-      <div style="margin-bottom:10px;"><span class="badge pending">Community Poll</span></div>
-      <div style="font-family:var(--font-display); font-size:19px; font-weight:600; margin-bottom:16px; line-height:1.3;">${escapeHtml(p.title)}</div>
-      ${p.options.map((opt, oIndex) => {
-        const pct = totalVotes > 0 ? Math.round(((opt.votes || 0) / totalVotes) * 100) : 0;
-        return `
-          <button class="poll-opt-btn" onclick="votePoll('${p.id}', ${oIndex})">
-            <div class="poll-progress-bar" style="width:${pct}%;"></div>
-            <span class="poll-opt-text">${escapeHtml(opt.text)}</span>
-            <span class="poll-opt-count">${pct}% (${opt.votes || 0})</span>
-          </button>
-        `;
-      }).join('')}
-      <div style="font-size:12px; color:var(--text-muted); margin-top:14px;">
-        Total Votes Cast: ${totalVotes} ${hasVoted ? '• (You have voted)' : ''}
-      </div>
-    `;
-    document.getElementById('modal-view').classList.add('active');
   };
 
   window.closeModal = function() {
     document.getElementById('modal-view').classList.remove('active');
   };
 
-  function postNotice() {
-    const title = document.getElementById('notice-title').value.trim();
-    const desc = document.getElementById('notice-desc').value.trim();
-    if (!title || !desc) return;
-
-    const item = { title, desc, likes: [], dislikes: [], createdAt: firebase.firestore.FieldValue.serverTimestamp() };
-
-    if (db) {
-      db.collection('notices').add(item).then(() => {
-        sendNotification('resident', `📢 New Announcement: "${title}"`);
-        document.getElementById('notice-form').reset();
-        loadNotices();
-      }).catch(err => alert("Failed to post notice: " + err.message));
-    }
-  }
-
+  // --- ANNOUNCEMENTS ---
   function loadNotices() {
-    if (db) {
-      db.collection('notices').orderBy('createdAt', 'desc').get().then(snapshot => {
-        notices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderNoticesList();
-      }).catch(err => {
-        console.error("Notices load error:", err);
-        const el = document.getElementById('notices-list');
-        if (el) el.innerHTML = '<div class="card" style="text-align:center; color:var(--danger); cursor:default;">Failed to load announcements.</div>';
-      });
-    }
+    if (!db) return;
+    db.collection('notices').orderBy('createdAt', 'desc').limit(15).get().then(snapshot => {
+      notices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderNoticesList();
+    }).catch(e => console.error("Error loading notices:", e));
   }
 
   function renderNoticesList() {
-    const el = document.getElementById('notices-list');
-    if (!el) return;
-    if (!notices.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No announcements posted yet.</div>'; return; }
-
-    const uid = auth.currentUser ? auth.currentUser.uid : null;
-
-    el.innerHTML = notices.map((n) => {
-      const likesCount = (n.likes || []).length;
-      const dislikesCount = (n.dislikes || []).length;
-      const userLiked = (n.likes || []).includes(uid);
-      const userDisliked = (n.dislikes || []).includes(uid);
-
-      return `
-        <div class="card" onclick="openNoticeModal('${n.id}')">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <span class="badge notice">Official Notice</span>
-          </div>
-          <div style="font-weight:700; font-size:16px; margin-bottom:6px;">${escapeHtml(n.title)}</div>
-          <div style="font-size:13.5px; color:#D6D9EC; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(n.desc)}</div>
-          
-          <div class="reactions-toolbar">
-            <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${n.id}', 'like')">👍 ${likesCount}</button>
-            <button class="rxn-btn ${userDisliked ? 'active-dislike' : ''}" onclick="reactNotice(event, '${n.id}', 'dislike')">👎 ${dislikesCount}</button>
-          </div>
+    const listEl = document.getElementById('notices-list');
+    if (!listEl) return;
+    if (!notices.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No notices posted yet.</div>';
+      return;
+    }
+    listEl.innerHTML = notices.map(n => `
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span class="badge notice">Announcement</span>
         </div>
-      `;
-    }).join('');
+        <div style="font-weight:700; font-size:15px; margin-bottom:4px;">${escapeHtml(n.title)}</div>
+        <div style="font-size:13.5px; color:var(--text-muted); line-height:1.4;">${escapeHtml(n.description)}</div>
+      </div>
+    `).join('');
   }
 
-  function postPoll() {
-    const title = document.getElementById('poll-title').value.trim();
-    const opt1 = document.getElementById('poll-opt1').value.trim();
-    const opt2 = document.getElementById('poll-opt2').value.trim();
-    if (!title || !opt1 || !opt2) return;
+  async function postNotice() {
+    const title = document.getElementById('notice-title').value.trim();
+    const description = document.getElementById('notice-desc').value.trim();
+    if (!title || !description) return;
 
-    const item = { title, options: [{text: opt1, votes: 0}, {text: opt2, votes: 0}], voterIds: [], createdAt: firebase.firestore.FieldValue.serverTimestamp() };
-    if (db) {
-      db.collection('polls').add(item).then(() => { 
-        sendNotification('resident', `🗳️ New Poll: "${title}"`); 
-        document.getElementById('poll-form').reset(); 
-        loadPolls(); 
-      }).catch(err => alert("Failed to post poll: " + err.message));
-    }
-  }
-
-  function loadPolls() {
-    if (db) {
-      db.collection('polls').orderBy('createdAt', 'desc').get().then(snapshot => { 
-        polls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
-        renderPollsList(); 
-      }).catch(err => {
-        console.error("Polls load error:", err);
-        const el = document.getElementById('polls-list');
-        if (el) el.innerHTML = '<div class="card" style="text-align:center; color:var(--danger); cursor:default;">Failed to load polls.</div>';
+    try {
+      await db.collection('notices').add({
+        title,
+        description,
+        createdBy: auth.currentUser.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
-    }
+      document.getElementById('notice-form').reset();
+      loadNotices();
+    } catch(e) { alert("Failed to post notice: " + e.message); }
+  }
+
+  // --- POLLS ---
+  function loadPolls() {
+    if (!db) return;
+    db.collection('polls').orderBy('createdAt', 'desc').limit(10).get().then(snapshot => {
+      polls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderPollsList();
+    }).catch(e => console.error("Error loading polls:", e));
   }
 
   function renderPollsList() {
-    const el = document.getElementById('polls-list');
-    if (!el) return;
-    if (!polls.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No polls available yet.</div>'; return; }
+    const listEl = document.getElementById('polls-list');
+    if (!listEl) return;
+    if (!polls.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No active polls.</div>';
+      return;
+    }
 
-    el.innerHTML = polls.map((p) => {
-      const totalVotes = p.options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
+    listEl.innerHTML = polls.map(p => {
+      const votes = p.votes || {};
+      const totalVotes = Object.keys(votes).length;
+      const userVote = votes[auth.currentUser.uid];
+
       return `
-        <div class="card" onclick="openPollModal('${p.id}')">
-          <div style="font-weight:700; font-size:15px; margin-bottom:10px;">${escapeHtml(p.title)}</div>
-          ${p.options.map((opt, oIndex) => {
-            const pct = totalVotes > 0 ? Math.round(((opt.votes || 0) / totalVotes) * 100) : 0;
+        <div class="card" style="cursor:default;">
+          <div style="font-weight:700; font-size:15px; margin-bottom:10px;">${escapeHtml(p.question)}</div>
+          ${p.options.map((opt, idx) => {
+            const count = Object.values(votes).filter(v => v === idx).length;
+            const pct = totalVotes ? Math.round((count / totalVotes) * 100) : 0;
             return `
-              <button class="poll-opt-btn" onclick="event.stopPropagation(); votePoll('${p.id}', ${oIndex})">
+              <button class="poll-opt-btn" onclick="castVote('${p.id}', ${idx})">
                 <div class="poll-progress-bar" style="width:${pct}%;"></div>
-                <span class="poll-opt-text">${escapeHtml(opt.text)}</span>
-                <span class="poll-opt-count">${pct}% (${opt.votes || 0})</span>
+                <span class="poll-opt-text">${userVote === idx ? '✓ ' : ''}${escapeHtml(opt)}</span>
+                <span class="poll-opt-count">${pct}% (${count})</span>
               </button>
             `;
           }).join('')}
+          <div style="font-size:11.5px; color:var(--text-faint); margin-top:8px;">Total votes: ${totalVotes}</div>
         </div>
       `;
     }).join('');
   }
 
-  window.votePoll = function(pollId, optIndex) {
-    if (!auth.currentUser) return;
-    const uid = auth.currentUser.uid;
-    let poll = polls.find(p => p.id === pollId);
-
-    if (!poll || (poll.voterIds && poll.voterIds.includes(uid))) {
-      alert('You have already voted on this poll.');
-      return;
-    }
-
-    if (db && poll.id) {
-      const pollRef = db.collection('polls').doc(poll.id);
-      db.runTransaction((transaction) => {
-        return transaction.get(pollRef).then((doc) => {
-          if (!doc.exists) return;
-          const data = doc.data();
-          if (data.voterIds && data.voterIds.includes(uid)) {
-            throw "Already voted";
-          }
-          const updatedOptions = [...data.options];
-          updatedOptions[optIndex].votes = (updatedOptions[optIndex].votes || 0) + 1;
-          transaction.update(pollRef, {
-            options: updatedOptions,
-            voterIds: firebase.firestore.FieldValue.arrayUnion(uid)
-          });
-        });
-      }).then(() => {
-        loadPolls();
-      }).catch(err => {
-        if (err === "Already voted") alert("You have already voted.");
-        else alert("Unable to submit vote: " + err.message);
+  window.castVote = async function(pollId, optionIndex) {
+    try {
+      const pollRef = db.collection('polls').doc(pollId);
+      await pollRef.update({
+        [`votes.${auth.currentUser.uid}`]: optionIndex
       });
-    }
+      loadPolls();
+    } catch(e) { alert("Error voting: " + e.message); }
   };
 
-  function submitComplaint() {
-    if (!navigator.onLine) {
-      alert("⚠️ No internet connection. Your complaint cannot be submitted while offline.");
-      return;
-    }
+  async function postPoll() {
+    const question = document.getElementById('poll-title').value.trim();
+    const opt1 = document.getElementById('poll-opt1').value.trim();
+    const opt2 = document.getElementById('poll-opt2').value.trim();
+    if (!question || !opt1 || !opt2) return;
 
-    const title = document.getElementById('c-title').value.trim();
-    const category = document.getElementById('c-category').value;
-    const desc = document.getElementById('c-desc').value.trim();
-    if (!title || !desc || !auth.currentUser) return;
-
-    const docRef = db.collection('complaints').doc();
-    const ticketNo = `RPHS-${new Date().getFullYear()}-${docRef.id.substring(0, 6).toUpperCase()}`;
-
-    const newComplaint = {
-      ticketNo,
-      title,
-      category,
-      desc,
-      residentId: auth.currentUser.uid,
-      residentName: currentUserProfile.name,
-      house: currentUserProfile.house || 'N/A',
-      status: 'Pending',
-      assignedDept: 'Unassigned',
-      adminNote: '',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-
-    docRef.set(newComplaint).then(() => { 
-      sendNotification('admin', `⚠️ New Ticket [${ticketNo}] from ${currentUserProfile.name}: "${title}"`); 
-      alert(`Ticket Submitted Successfully!\nReference No: ${ticketNo}`); 
-      document.getElementById('complaint-form').reset(); 
-      loadComplaints(); 
-    }).catch(err => {
-      alert("Failed to submit ticket: " + err.message);
-    });
+    try {
+      await db.collection('polls').add({
+        question,
+        options: [opt1, opt2],
+        votes: {},
+        createdBy: auth.currentUser.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      document.getElementById('poll-form').reset();
+      loadPolls();
+    } catch(e) { alert("Failed to create poll: " + e.message); }
   }
 
+  // --- COMPLAINTS ---
   function loadComplaints() {
-    if (db && auth.currentUser) {
-      let query = db.collection('complaints');
-      if (currentUserProfile.role !== 'admin') {
-        query = query.where('residentId', '==', auth.currentUser.uid);
-      }
-      
-      query.get().then(snapshot => { 
-        complaints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
-        renderComplaintsList(); 
-      }).catch(err => {
-        console.error("Complaints load error:", err);
-        const el = document.getElementById('complaints-list');
-        if (el) el.innerHTML = '<div class="card" style="text-align:center; color:var(--danger); cursor:default;">Failed to load tickets.</div>';
-      });
+    if (!db) return;
+    let query = db.collection('complaints');
+    if (currentUserProfile.role !== 'admin') {
+      query = query.where('createdBy', '==', auth.currentUser.uid);
     }
+
+    query.get().then(snapshot => {
+      complaints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderComplaintsList();
+    }).catch(e => console.error("Error loading complaints:", e));
   }
-
-  window.openAdminComplaintModal = function(id) {
-    const c = complaints.find(item => item.id === id);
-    if (!c) return;
-
-    document.getElementById('modal-body').innerHTML = `
-      <div style="font-family:var(--font-display); font-size:18px; font-weight:600; margin-bottom:8px;">Manage Ticket Status</div>
-      <div class="ticket-no" style="display:inline-block; margin-bottom:8px;">${escapeHtml(c.ticketNo || 'RPHS-TICKET')}</div>
-      <div style="font-size:14px; font-weight:700; color:var(--accent-2);">${escapeHtml(c.title)}</div>
-      <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Resident: ${escapeHtml(c.residentName)} (${escapeHtml(c.house)})</div>
-
-      <label>Ticket Status</label>
-      <select id="update-status">
-        <option value="Pending" ${c.status==='Pending'?'selected':''}>Pending</option>
-        <option value="Assigned" ${c.status==='Assigned'?'selected':''}>Assigned</option>
-        <option value="In Progress" ${c.status==='In Progress'?'selected':''}>In Progress</option>
-        <option value="Resolved" ${c.status==='Resolved'?'selected':''}>Resolved</option>
-        <option value="Closed" ${c.status==='Closed'?'selected':''}>Closed</option>
-      </select>
-
-      <label>Assigned Department</label>
-      <input type="text" id="update-dept" value="${escapeHtml(c.assignedDept || 'Unassigned')}" placeholder="e.g. Electrical Maintenance" />
-
-      <label>Admin Note / Resolution Response</label>
-      <textarea id="update-note" placeholder="Provide details to the resident...">${escapeHtml(c.adminNote || '')}</textarea>
-
-      <button class="btn primary block" style="margin-top:16px;" onclick="saveComplaintStatus('${c.id}')">Update Ticket</button>
-    `;
-    document.getElementById('modal-view').classList.add('active');
-  };
-
-  // AUDIT TRAIL LOGGING ADDED FOR TICKET UPDATES
-  window.saveComplaintStatus = function(id) {
-    const c = complaints.find(item => item.id === id);
-    if (!c || !auth.currentUser) return;
-
-    const newStatus = document.getElementById('update-status').value;
-    const newDept = document.getElementById('update-dept').value.trim();
-    const newNote = document.getElementById('update-note').value.trim();
-
-    if (db) {
-      db.collection('complaints').doc(id).update({
-        status: newStatus,
-        assignedDept: newDept,
-        adminNote: newNote,
-        lastUpdatedBy: auth.currentUser.uid,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(() => {
-        sendNotification(
-          c.residentId, 
-          `🔔 Update on [${c.ticketNo || 'Ticket'}]: Status changed to "${newStatus}".`
-        );
-
-        alert('Ticket Updated!');
-        closeModal();
-        loadComplaints();
-      }).catch(err => {
-        alert("Unable to update the ticket. Please try again: " + err.message);
-      });
-    }
-  };
 
   function renderComplaintsList() {
-    const el = document.getElementById('complaints-list');
-    if (!el) return;
-    if (!complaints.length) { 
-      el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No tickets found.</div>'; 
-      return; 
+    const listEl = document.getElementById('complaints-list');
+    if (!listEl) return;
+    if (!complaints.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No complaints or feedback found.</div>';
+      return;
     }
 
-    const isAdmin = (currentUserProfile.role === 'admin');
+    const isAdmin = currentUserProfile.role === 'admin';
 
-    el.innerHTML = complaints.map((c) => {
-      const badgeClass = c.status ? c.status.toLowerCase().replace(/\s+/g, '-') : 'pending';
-      const residentDetails = isAdmin 
-        ? `Resident: ${escapeHtml(c.residentName)} (${escapeHtml(c.house)})` 
-        : `Submitted by you`;
+    listEl.innerHTML = complaints.map(c => {
+      const status = c.status || 'Pending';
+      const statusClass = status.toLowerCase().replace(/\s+/g, '-');
 
       return `
-        <div class="card" ${isAdmin ? `onclick="openAdminComplaintModal('${c.id}')"` : 'style="cursor:default;"'}>
+        <div class="card" style="cursor:default;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <span class="ticket-no">${escapeHtml(c.ticketNo || 'RPHS-TICKET')}</span>
-            <span class="badge ${badgeClass}">${escapeHtml(c.status)}</span>
+            <span class="ticket-no">#${escapeHtml(c.ticketId || c.id.substring(0,6))}</span>
+            <span class="badge ${statusClass}">${escapeHtml(status)}</span>
           </div>
+
           <div style="font-weight:700; font-size:15px; margin-bottom:4px;">${escapeHtml(c.title)}</div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">${escapeHtml(c.category)} • ${residentDetails}</div>
-          <div style="font-size:13px; color:#D6D9EC; line-height:1.4;">${escapeHtml(c.desc)}</div>
-          
+          <div style="font-size:12px; color:var(--accent-2); margin-bottom:6px;">Category: ${escapeHtml(c.category)}</div>
+          <div style="font-size:13.5px; color:var(--text-muted); line-height:1.4;">${escapeHtml(c.description)}</div>
+
+          <!-- ASSIGNED DEPARTMENT DISPLAY -->
+          ${c.assignedDept && c.assignedDept !== 'Unassigned' ? `
+            <div style="font-size: 12px; font-weight: 600; color: var(--info); margin-top: 8px; display: flex; align-items: center; gap: 4px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="8.5" cy="7" r="4"></circle>
+                <polyline points="17 11 19 13 23 9"></polyline>
+              </svg>
+              Assigned to: ${escapeHtml(c.assignedDept)}
+            </div>
+          ` : ''}
+
           ${c.adminNote ? `
-            <div style="margin-top:10px; padding:8px 10px; background:var(--bg-elevated-2); border-left:3px solid var(--accent); border-radius:4px; font-size:12px;">
-              <strong>Admin Note:</strong> ${escapeHtml(c.adminNote)}
+            <div style="margin-top: 10px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-left: 3px solid var(--accent); border-radius: 4px;">
+              <div style="font-size: 11px; opacity: 0.7;">Admin Note:</div>
+              <div style="font-size: 13px;">${escapeHtml(c.adminNote)}</div>
+            </div>
+          ` : ''}
+
+          ${isAdmin ? `
+            <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border-soft); display:flex; gap:8px;">
+              <button class="btn sm secondary" onclick="promptUpdateComplaint('${c.id}', '${c.createdBy}')">Update Status</button>
             </div>
           ` : ''}
         </div>
@@ -1184,61 +977,97 @@
     }).join('');
   }
 
-  function loadPendingResidents() {
-    if (db && currentUserProfile.role === 'admin') {
-      db.collection('users').where('approved', '==', false).get().then(snapshot => {
-        pendingResidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderPendingResidentsList();
-      }).catch(err => console.error("Pending residents load error:", err));
-    }
+  async function submitComplaint() {
+    const title = document.getElementById('c-title').value.trim();
+    const category = document.getElementById('c-category').value;
+    const description = document.getElementById('c-desc').value.trim();
+
+    if (!title || !description) return;
+
+    try {
+      const ticketId = 'T-' + Math.floor(1000 + Math.random() * 9000);
+      await db.collection('complaints').add({
+        ticketId,
+        title,
+        category,
+        description,
+        status: 'Pending',
+        assignedDept: 'Unassigned',
+        createdBy: auth.currentUser.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      document.getElementById('complaint-form').reset();
+      loadComplaints();
+    } catch(e) { alert("Failed to submit ticket: " + e.message); }
   }
 
-  function renderPendingResidentsList() {
-    const el = document.getElementById('approvals-list');
-    if (!el) return;
+  window.promptUpdateComplaint = async function(id, targetUid) {
+    const status = prompt("Set status (Pending, In Progress, Resolved, Closed):");
+    if (!status) return;
+    const assignedDept = prompt("Assign Department (e.g. Electrical, Plumbing, Maintenance):");
+    const adminNote = prompt("Add Admin Note (optional):");
+
+    try {
+      const updateData = { status };
+      if (assignedDept) updateData.assignedDept = assignedDept;
+      if (adminNote) updateData.adminNote = adminNote;
+
+      await db.collection('complaints').doc(id).update(updateData);
+      
+      // Dispatch notification directly to user's subcollection
+      await sendNotification(targetUid, "Complaint Updated", `Your complaint ticket #${id.substring(0,6)} status changed to: ${status}`, "info");
+
+      loadComplaints();
+    } catch(e) { alert("Failed updating complaint: " + e.message); }
+  };
+
+  // --- APPROVALS ---
+  function loadPendingResidents() {
+    if (!db) return;
+    db.collection('users').where('approved', '==', false).get().then(snapshot => {
+      pendingResidents = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      renderApprovalsList();
+    }).catch(e => console.error("Error loading approvals:", e));
+  }
+
+  function renderApprovalsList() {
+    const listEl = document.getElementById('approvals-list');
+    if (!listEl) return;
     if (!pendingResidents.length) {
-      el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No accounts pending approval.</div>';
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No pending registration requests.</div>';
       return;
     }
 
-    el.innerHTML = pendingResidents.map(r => `
+    listEl.innerHTML = pendingResidents.map(r => `
       <div class="card" style="cursor:default;">
-        <div style="font-weight:700; font-size:15px; margin-bottom:4px;">${escapeHtml(r.name)}</div>
-        <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:2px;">House/Plot: <strong>${escapeHtml(r.house)}</strong></div>
-        <div style="font-size:12px; color:var(--text-muted); margin-bottom:2px;">Phone: ${escapeHtml(r.phone || 'N/A')}</div>
-        <div style="font-size:12px; color:var(--text-faint); margin-bottom:12px;">Email: ${escapeHtml(r.email)}</div>
+        <div style="font-weight:700; font-size:15px;">${escapeHtml(r.name)}</div>
+        <div style="font-size:12.5px; color:var(--text-muted);">House: ${escapeHtml(r.house)}</div>
+        <div style="font-size:12.5px; color:var(--text-muted);">Phone: ${escapeHtml(r.phone)}</div>
+        <div style="font-size:12.5px; color:var(--text-muted);">Email: ${escapeHtml(r.email)}</div>
 
-        <div style="display:flex; gap:8px;">
-          <button class="btn primary sm" style="flex:1;" onclick="approveResident('${r.id}')">Approve Access</button>
-          <button class="btn danger sm" style="flex:1;" onclick="rejectResident('${r.id}')">Reject Account</button>
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <button class="btn sm primary block" onclick="approveUser('${r.uid}')">Approve</button>
+          <button class="btn sm danger block" onclick="rejectUser('${r.uid}')">Reject</button>
         </div>
       </div>
     `).join('');
   }
 
-  // AUDIT TRAIL LOGGING ADDED FOR USER APPROVAL
-  window.approveResident = function(uid) {
-    if (db && currentUserProfile.role === 'admin' && auth.currentUser) {
-      db.collection('users').doc(uid).update({ 
-        approved: true,
-        approvedBy: auth.currentUser.uid,
-        approvedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(() => {
-        alert("Resident approved successfully!");
-        loadPendingResidents();
-      }).catch(err => alert("Error approving user: " + err.message));
-    }
+  window.approveUser = async function(uid) {
+    try {
+      await db.collection('users').doc(uid).update({ approved: true });
+      await sendNotification(uid, "Account Approved", "Your account has been approved! You can now access all features.", "success");
+      loadPendingResidents();
+    } catch(e) { alert("Error approving user: " + e.message); }
   };
 
-  window.rejectResident = function(uid) {
-    if (confirm("Are you sure you want to reject and delete this registration request?")) {
-      if (db && currentUserProfile.role === 'admin') {
-        db.collection('users').doc(uid).delete().then(() => {
-          alert("Resident registration profile deleted.");
-          loadPendingResidents();
-        }).catch(err => alert("Error rejecting user: " + err.message));
-      }
-    }
+  window.rejectUser = async function(uid) {
+    if (!confirm("Are you sure you want to delete this registration request?")) return;
+    try {
+      await db.collection('users').doc(uid).delete();
+      loadPendingResidents();
+    } catch(e) { alert("Error deleting user: " + e.message); }
   };
 
 })();
