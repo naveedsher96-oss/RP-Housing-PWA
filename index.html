@@ -2,405 +2,472 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Roshan Housing Society (RPHS)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Roshan Pakistan Housing Society</title>
   
-  <!-- PWA Manifest & Theme Color -->
   <link rel="manifest" href="./manifest.json" />
-  <meta name="theme-color" content="#10142A" />
+  <meta name="theme-color" content="#0B0F19" />
 
-  <!-- Bootstrap 5 CSS -->
+  <!-- Bootstrap 5 CSS & FontAwesome Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
-  <!-- jsPDF Library for PDF Export -->
+  <!-- jsPDF Library for Admin PDF Export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Firebase SDKs (Compat Version) -->
+  <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
   <style>
+    :root {
+      --bg-dark: #0B0F19;
+      --card-bg: #131B2E;
+      --card-border: #1E293B;
+      --accent-gold: #F5B041;
+      --text-main: #F1F5F9;
+      --text-muted: #94A3B8;
+    }
+
     body {
-      background-color: #10142A;
-      color: #E2E8F0;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      padding-bottom: 75px;
     }
-    .text-gold {
-      color: #D4AF37 !important;
+
+    .card-custom {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      color: var(--text-main);
     }
-    .card {
-      background-color: #192040;
-      border: 1px solid #2A345B;
-      color: #E2E8F0;
-    }
+
     .form-control, .form-select {
-      background-color: #10142A;
-      border: 1px solid #2A345B;
-      color: #E2E8F0;
+      background-color: #0A0E1A;
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      border-radius: 10px;
     }
+
     .form-control:focus, .form-select:focus {
-      background-color: #10142A;
+      background-color: #0A0E1A;
       color: #FFFFFF;
-      border-color: #D4AF37;
-      box-shadow: 0 0 0 0.25rem rgba(212, 175, 55, 0.25);
+      border-color: var(--accent-gold);
+      box-shadow: 0 0 0 0.2rem rgba(245, 176, 65, 0.2);
     }
+
     .btn-gold {
-      background-color: #D4AF37;
-      color: #10142A;
-      font-weight: 600;
+      background: linear-gradient(180deg, #F5B041 0%, #E59866 100%);
+      color: #0B0F19;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(245, 176, 65, 0.3);
     }
+
     .btn-gold:hover {
-      background-color: #B5932A;
-      color: #10142A;
+      background: #E59866;
+      color: #0B0F19;
     }
-    .nav-pills .nav-link {
-      color: #A0AEC0;
+
+    .badge-role {
+      background-color: rgba(245, 176, 65, 0.15);
+      color: var(--accent-gold);
+      border: 1px solid var(--accent-gold);
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
     }
-    .nav-pills .nav-link.active {
-      background-color: #D4AF37;
-      color: #10142A;
+
+    /* Bottom Navigation Bar */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background-color: #0B0F19;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 0;
+      z-index: 1000;
+    }
+
+    .nav-item-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 0.7rem;
+      gap: 2px;
+    }
+
+    .nav-item-btn i {
+      font-size: 1.25rem;
+    }
+
+    .nav-item-btn.active {
+      color: var(--accent-gold);
       font-weight: 600;
     }
+
     .hidden {
       display: none !important;
-    }
-    @media print {
-      body {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-      }
-      .no-print {
-        display: none !important;
-      }
     }
   </style>
 </head>
 <body>
 
-  <div class="container py-4">
+  <div class="container py-3 max-width-md">
 
-    <!-- Header Navigation -->
-    <header class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom border-secondary no-print">
-      <h2 class="h4 mb-0 text-gold fw-bold">Roshan Housing Society</h2>
-      <div id="userInfo" class="hidden">
-        <span id="userDisplayName" class="me-2 text-light fw-semibold"></span>
-        <button onclick="handleSignOut()" class="btn btn-sm btn-outline-danger">Sign Out</button>
-      </div>
-    </header>
-
-    <!-- 1. Authentication View -->
-    <div id="authView" class="row justify-content-center">
-      <div class="col-md-6">
-        <div class="card p-4 shadow-lg">
-          <h3 id="authTitle" class="text-center mb-3 text-gold">Sign In</h3>
-          
-          <form id="authForm" onsubmit="handleAuthSubmit(event)">
-            <div class="mb-3">
-              <label class="form-label">Email Address</label>
-              <input type="email" id="authEmail" class="form-control" required />
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Password</label>
-              <input type="password" id="authPassword" class="form-control" required />
-            </div>
-
-            <!-- Additional Registration Fields -->
-            <div id="regFields" class="hidden">
-              <div class="mb-3">
-                <label class="form-label">Full Name</label>
-                <input type="text" id="regName" class="form-control" />
-              </div>
-              <div class="mb-3">
-                <label class="form-label">House / Plot Number</label>
-                <input type="text" id="regHouse" class="form-control" placeholder="e.g. C#237, St#56" />
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Phone Number</label>
-                <input type="tel" id="regPhone" class="form-control" placeholder="+923001234567" />
-              </div>
-            </div>
-
-            <button type="submit" id="authSubmitBtn" class="btn btn-gold w-100 py-2 mb-3">Sign In</button>
-          </form>
-
-          <div class="text-center">
-            <a href="#" id="authToggleLink" onclick="toggleAuthMode(event)" class="text-gold text-decoration-none">
-              Need an account? Register Resident Account
-            </a>
-          </div>
+    <!-- HEADER BAR -->
+    <div id="appHeader" class="d-flex justify-content-between align-items-center mb-4 hidden">
+      <div class="d-flex align-items-center gap-2">
+        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+          <i class="bi bi-house-door-fill text-dark fs-5"></i>
+        </div>
+        <div>
+          <h6 class="mb-0 fw-bold">Roshan Pakistan Housing Society</h6>
+          <span id="headerUserName" class="text-muted small me-2"></span>
+          <span id="headerRoleBadge" class="badge-role">RESIDENT</span>
         </div>
       </div>
+      <button onclick="handleSignOut()" class="btn btn-sm btn-outline-secondary rounded-circle">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
     </div>
 
-    <!-- 2. Pending Approval View -->
-    <div id="pendingView" class="text-center my-5 p-5 card hidden">
-      <h2 class="mb-3 text-gold">Account Pending Approval</h2>
-      <p class="lead">Welcome, <span id="pendingName"></span>. Your account registration for house <strong id="pendingHouse"></strong> is under review by society administrators.</p>
-      <div class="alert alert-warning d-inline-block my-3">
-        ⏳ You will gain access to society complaints, polls, and notices once approved.
+    <!-- VIEW 0: WELCOME SCREEN -->
+    <div id="welcomeView" class="text-center py-5">
+      <div class="my-5">
+        <div class="rounded-4 bg-white d-inline-flex p-3 mb-4 shadow">
+          <i class="bi bi-house-heart-fill text-dark display-4"></i>
+        </div>
+        <h2 class="fw-bold mb-2">Roshan Pakistan<br>Housing Society</h2>
+        <p class="text-muted fs-6 px-3">
+          Notices, complaints, maintenance bills, facility bookings, polls & visitor logs — all in one place for our community.
+        </p>
+      </div>
+      <button onclick="showAuthView()" class="btn btn-gold w-100 py-3 mt-4 fs-5">Get Started <i class="bi bi-chevron-right ms-1"></i></button>
+    </div>
+
+    <!-- VIEW 1: AUTHENTICATION / PROFILE SETUP -->
+    <div id="authView" class="py-4 hidden">
+      <div class="text-center mb-4">
+        <h3 id="authTitle" class="fw-bold">Set up your profile</h3>
+        <p class="text-muted small">This is stored on your device and used to tag your activity.</p>
+      </div>
+
+      <form id="authForm" onsubmit="handleAuthSubmit(event)" class="card-custom p-4">
+        <div class="mb-3">
+          <label class="form-label small text-muted fw-bold">YOUR EMAIL</label>
+          <input type="email" id="authEmail" class="form-control" required placeholder="name@domain.com" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted fw-bold">PASSWORD</label>
+          <input type="password" id="authPassword" class="form-control" required />
+        </div>
+
+        <div id="regFields" class="hidden">
+          <div class="mb-3">
+            <label class="form-label small text-muted fw-bold">YOUR NAME</label>
+            <input type="text" id="regName" class="form-control" placeholder="e.g. Ahmed Khan" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted fw-bold">HOUSE / FLAT NUMBER</label>
+            <input type="text" id="regHouse" class="form-control" placeholder="e.g. Block B, House 24" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted fw-bold">YOU ARE JOINING AS</label>
+            <div class="row g-2">
+              <div class="col-6">
+                <input type="radio" class="btn-check" name="joiningRole" id="roleResident" value="resident" checked>
+                <label class="btn btn-outline-warning w-100 py-2" for="roleResident">Resident</label>
+              </div>
+              <div class="col-6">
+                <input type="radio" class="btn-check" name="joiningRole" id="roleAdmin" value="admin">
+                <label class="btn btn-outline-warning w-100 py-2" for="roleAdmin">Committee / Admin</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="button" onclick="hideAuthView()" class="btn btn-outline-secondary px-4 py-2">Back</button>
+          <button type="submit" id="authSubmitBtn" class="btn btn-gold flex-grow-1 py-2">Continue <i class="bi bi-chevron-right"></i></button>
+        </div>
+      </form>
+
+      <div class="text-center mt-3">
+        <a href="#" id="authToggleLink" onclick="toggleAuthMode(event)" class="text-warning small text-decoration-none">
+          Need an account? Register Profile
+        </a>
       </div>
     </div>
 
-    <!-- 3. Main Dashboard View -->
+    <!-- VIEW 2: PENDING APPROVAL -->
+    <div id="pendingView" class="text-center py-5 hidden">
+      <div class="card-custom p-4 my-4">
+        <i class="bi bi-hourglass-split text-warning display-3 mb-3"></i>
+        <h4 class="fw-bold">Approval Pending</h4>
+        <p class="text-muted small">Welcome, <span id="pendingName"></span>. Your registration for <strong id="pendingHouse"></strong> is waiting for committee approval.</p>
+      </div>
+    </div>
+
+    <!-- VIEW 3: MAIN DASHBOARD TAB VIEWS -->
     <div id="dashboardView" class="hidden">
 
-      <!-- Navigation Tabs -->
-      <ul class="nav nav-pills mb-4 no-print" id="pills-tab" role="tablist">
-        <li class="nav-item">
-          <button class="nav-link active" id="tab-announcements" data-bs-toggle="pill" data-bs-target="#view-announcements" type="button">Announcements</button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" id="tab-polls" data-bs-toggle="pill" data-bs-target="#view-polls" type="button">Polls</button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" id="tab-profile" data-bs-toggle="pill" data-bs-target="#view-profile" type="button">My Profile</button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" id="tab-biodata" data-bs-toggle="pill" data-bs-target="#view-biodata" type="button">Fill Biodata Form</button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" id="tab-complaints" data-bs-toggle="pill" data-bs-target="#view-complaints" type="button">Complaints</button>
-        </li>
-        <li class="nav-item hidden" id="adminTabNav">
-          <button class="nav-link text-warning" id="tab-admin" data-bs-toggle="pill" data-bs-target="#view-admin" type="button">Admin Control Panel</button>
-        </li>
-      </ul>
+      <!-- TAB A: HOME DASHBOARD -->
+      <div id="tab-content-home" class="tab-page">
+        <h3 class="fw-bold mb-1">Hi, <span id="homeWelcomeName">User</span> 👋</h3>
+        <p class="text-muted small mb-4">Here's what's happening in your society.</p>
 
-      <div class="tab-content" id="pills-tabContent">
-
-        <!-- TAB A: ANNOUNCEMENTS & NOTICES -->
-        <div class="tab-pane fade show active" id="view-announcements">
-          <div class="card p-4">
-            <h3 class="mb-3 border-bottom pb-2 text-gold">Society Announcements & Notices</h3>
-            <div id="announcementsList">
-              <p class="text-muted">Loading announcements...</p>
+        <!-- Stats Grid -->
+        <div class="row g-3 mb-4">
+          <div class="col-6">
+            <div class="card-custom p-3">
+              <h3 class="fw-bold text-warning mb-0" id="statComplaints">0</h3>
+              <span class="text-muted small">Your open complaints</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="card-custom p-3">
+              <h3 class="fw-bold text-warning mb-0">Rs 0</h3>
+              <span class="text-muted small">Your dues</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="card-custom p-3">
+              <h3 class="fw-bold text-warning mb-0">0</h3>
+              <span class="text-muted small">Your bookings</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="card-custom p-3">
+              <h3 class="fw-bold text-warning mb-0" id="statPolls">0</h3>
+              <span class="text-muted small">Active polls</span>
             </div>
           </div>
         </div>
 
-        <!-- TAB B: POLLS -->
-        <div class="tab-pane fade" id="view-polls">
-          <div class="card p-4">
-            <h3 class="mb-3 border-bottom pb-2 text-gold">Resident Polls & Voting</h3>
-            <div id="pollsList">
-              <p class="text-muted">Loading active polls...</p>
+        <!-- Quick Action Tiles -->
+        <div class="row g-3 mb-4">
+          <div class="col-6" onclick="switchTab('complaints')">
+            <div class="card-custom p-3 h-100">
+              <i class="bi bi-wrench text-warning fs-4 mb-2"></i>
+              <h6 class="fw-bold mb-1">Raise a complaint</h6>
+              <span class="text-muted extra-small">Report a maintenance issue</span>
+            </div>
+          </div>
+          <div class="col-6" onclick="switchTab('biodata')">
+            <div class="card-custom p-3 h-100">
+              <i class="bi bi-person-vcard text-warning fs-4 mb-2"></i>
+              <h6 class="fw-bold mb-1">Fill Biodata</h6>
+              <span class="text-muted extra-small">Complete mandatory details</span>
             </div>
           </div>
         </div>
 
-        <!-- TAB C: USER PROFILE (VIEW BIODATA) -->
-        <div class="tab-pane fade" id="view-profile">
-          <div class="card p-4">
-            <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-              <h3 class="text-gold mb-0">Resident Profile Details</h3>
-              <button onclick="downloadMyPDF()" class="btn btn-sm btn-gold">📥 Export PDF</button>
-            </div>
-            <div id="profileDetailsContainer">
-              <p class="text-muted">No biodata submitted yet. Please fill out the <strong>Fill Biodata Form</strong> tab.</p>
-            </div>
-          </div>
+        <!-- Latest Notices Section -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="fw-bold mb-0">Latest notices</h5>
+          <a href="#" onclick="switchTab('notices')" class="text-warning small text-decoration-none">See all</a>
         </div>
-
-        <!-- TAB D: BIODATA FORM (MANDATORY FIELDS) -->
-        <div class="tab-pane fade" id="view-biodata">
-          <div class="card p-4">
-            <h3 class="mb-3 border-bottom pb-2 text-gold">Resident Profile & Biodata Form</h3>
-            <p class="text-warning small">* All fields are mandatory to complete your profile record.</p>
-            <form id="biodataForm" onsubmit="saveBiodataAndDownloadPDF(event)">
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label">First Name <span class="text-danger">*</span></label>
-                  <input type="text" id="bioFirstName" class="form-control" required />
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Last Name <span class="text-danger">*</span></label>
-                  <input type="text" id="bioLastName" class="form-control" required />
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">CNIC Number <span class="text-danger">*</span></label>
-                  <input type="text" id="bioCNIC" class="form-control" placeholder="xxxxx-xxxxxxx-x" required />
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Cell Number <span class="text-danger">*</span></label>
-                  <input type="tel" id="bioCell" class="form-control" placeholder="+923001234567" required />
-                </div>
-                <div class="col-md-8">
-                  <label class="form-label">Address / House No. <span class="text-danger">*</span></label>
-                  <input type="text" id="bioAddress" class="form-control" required />
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Blood Group <span class="text-danger">*</span></label>
-                  <select id="bioBloodGroup" class="form-select" required>
-                    <option value="">Select...</option>
-                    <option value="A+">A+</option>
-                    <option value="A-">A-</option>
-                    <option value="B+">B+</option>
-                    <option value="B-">B-</option>
-                    <option value="O+">O+</option>
-                    <option value="O-">O-</option>
-                    <option value="AB+">AB+</option>
-                    <option value="AB-">AB-</option>
-                  </select>
-                </div>
-
-                <!-- Occupancy Status -->
-                <div class="col-12">
-                  <label class="form-label d-block">Occupancy Status <span class="text-danger">*</span></label>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="occupancyType" id="typeOwner" value="Owner" checked required />
-                    <label class="form-check-label" for="typeOwner">Owner</label>
-                  </div>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="occupancyType" id="typeRent" value="Tenant/Rent" required />
-                    <label class="form-check-label" for="typeRent">Rent</label>
-                  </div>
-                </div>
-
-                <!-- Family Categories Checkboxes -->
-                <div class="col-12">
-                  <label class="form-label d-block">Family Members Residing in House</label>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input fam-check" type="checkbox" value="Father" id="famFather" />
-                    <label class="form-check-label" for="famFather">Father</label>
-                  </div>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input fam-check" type="checkbox" value="Mother" id="famMother" />
-                    <label class="form-check-label" for="famMother">Mother</label>
-                  </div>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input fam-check" type="checkbox" value="Son" id="famSon" />
-                    <label class="form-check-label" for="famSon">Son</label>
-                  </div>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input fam-check" type="checkbox" value="Daughter" id="famDaughter" />
-                    <label class="form-check-label" for="famDaughter">Daughter</label>
-                  </div>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input fam-check" type="checkbox" value="Other" id="famOther" />
-                    <label class="form-check-label" for="famOther">Other</label>
-                  </div>
-                </div>
-
-                <div class="col-12">
-                  <label class="form-label">Additional Family Details / Names <span class="text-danger">*</span></label>
-                  <textarea id="bioFamilyText" class="form-control" rows="3" placeholder="List full names, ages, or extra details regarding resident family..." required></textarea>
-                </div>
-
-                <div class="col-12 pt-2">
-                  <button type="submit" class="btn btn-gold px-4 py-2">
-                    💾 Save Biodata & Export PDF
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
+        <div id="homeNoticesList" class="card-custom p-4 text-center">
+          <i class="bi bi-bell text-muted fs-2 mb-2"></i>
+          <h6 class="fw-bold mb-1">No notices yet</h6>
+          <p class="text-muted small mb-0">Announcements from your committee will show up here.</p>
         </div>
-
-        <!-- TAB E: COMPLAINTS & PRINTING -->
-        <div class="tab-pane fade" id="view-complaints">
-          <div class="row">
-            <div class="col-md-5 mb-4 no-print">
-              <div class="card p-4">
-                <h4 class="text-gold">Submit New Complaint</h4>
-                <form id="complaintForm" onsubmit="submitComplaint(event)">
-                  <div class="mb-3">
-                    <label class="form-label">Title / Subject</label>
-                    <input type="text" id="compTitle" class="form-control" required />
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Complaint Details</label>
-                    <textarea id="compDesc" class="form-control" rows="4" required></textarea>
-                  </div>
-                  <button type="submit" class="btn btn-gold w-100">Submit Complaint</button>
-                </form>
-              </div>
-            </div>
-
-            <div class="col-md-7">
-              <div class="card p-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h4 class="text-gold">Complaint Records</h4>
-                  <button onclick="window.print()" class="btn btn-sm btn-outline-light no-print">🖨️ Print Page</button>
-                </div>
-                <div id="complaintsList">
-                  <p class="text-muted">Loading complaints...</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB F: ADMIN CONTROL PANEL -->
-        <div class="tab-pane fade" id="view-admin">
-          <div class="row g-4">
-            <!-- User Approvals -->
-            <div class="col-12">
-              <div class="card p-4">
-                <h4 class="text-gold">Pending Resident Approvals</h4>
-                <div id="adminPendingList" class="my-2">
-                  <p class="text-muted">Loading pending requests...</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- All Approved Residents Directory & Biodata (ADMIN ACCESS) -->
-            <div class="col-12">
-              <div class="card p-4">
-                <h4 class="text-gold mb-3">Resident Profiles & Biodata Directory</h4>
-                <div id="adminResidentsList">
-                  <p class="text-muted">Loading resident profiles...</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Create Announcement -->
-            <div class="col-md-6">
-              <div class="card p-4">
-                <h4 class="text-gold">Create Announcement</h4>
-                <form onsubmit="createAnnouncement(event)">
-                  <div class="mb-3">
-                    <label class="form-label">Title</label>
-                    <input type="text" id="annTitle" class="form-control" required />
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Content</label>
-                    <textarea id="annContent" class="form-control" rows="3" required></textarea>
-                  </div>
-                  <button type="submit" class="btn btn-gold w-100">Post Announcement</button>
-                </form>
-              </div>
-            </div>
-
-            <!-- Create Poll -->
-            <div class="col-md-6">
-              <div class="card p-4">
-                <h4 class="text-gold">Create Poll</h4>
-                <form onsubmit="createPoll(event)">
-                  <div class="mb-3">
-                    <label class="form-label">Question</label>
-                    <input type="text" id="pollQuestion" class="form-control" required />
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Options (Comma Separated)</label>
-                    <input type="text" id="pollOptions" class="form-control" placeholder="Option A, Option B, Option C" required />
-                  </div>
-                  <button type="submit" class="btn btn-gold w-100">Create Poll</button>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
+
+      <!-- TAB B: NOTICES -->
+      <div id="tab-content-notices" class="tab-page hidden">
+        <h4 class="fw-bold mb-3">Society Notices</h4>
+        <div id="fullNoticesList"></div>
+      </div>
+
+      <!-- TAB C: COMPLAINTS -->
+      <div id="tab-content-complaints" class="tab-page hidden">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <h4 class="fw-bold mb-0">Complaints</h4>
+            <p class="text-muted small">Track issues you've reported for your flat.</p>
+          </div>
+          <button class="btn btn-outline-warning btn-sm rounded-circle" onclick="toggleComplaintForm()">
+            <i class="bi bi-plus-lg"></i>
+          </button>
+        </div>
+
+        <!-- Complaint Submission Form -->
+        <div id="complaintFormCard" class="card-custom p-3 mb-3 hidden">
+          <h6 class="fw-bold text-warning mb-2">New Complaint</h6>
+          <form onsubmit="submitComplaint(event)">
+            <div class="mb-2">
+              <input type="text" id="compTitle" class="form-control" placeholder="Subject / Title" required />
+            </div>
+            <div class="mb-2">
+              <textarea id="compDesc" class="form-control" rows="3" placeholder="Describe the issue..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-gold w-100 py-2">Submit Complaint</button>
+          </form>
+        </div>
+
+        <div id="complaintsListContainer"></div>
+      </div>
+
+      <!-- TAB D: POLLS -->
+      <div id="tab-content-polls" class="tab-page hidden">
+        <h4 class="fw-bold mb-3">Resident Polls</h4>
+        <div id="pollsListContainer"></div>
+      </div>
+
+      <!-- TAB E: PROFILE -->
+      <div id="tab-content-profile" class="tab-page hidden">
+        <h4 class="fw-bold mb-3">My Profile Details</h4>
+        <div class="card-custom p-4" id="profileDetailsContainer">
+          <p class="text-muted small">No biodata submitted yet. Please fill out the <strong>Biodata Form</strong> tab.</p>
+        </div>
+      </div>
+
+      <!-- TAB F: BIODATA FORM (MANDATORY FIELDS) -->
+      <div id="tab-content-biodata" class="tab-page hidden">
+        <h4 class="fw-bold mb-1">Biodata Form</h4>
+        <p class="text-warning small mb-3">* All text fields are mandatory to save your record.</p>
+
+        <form id="biodataForm" onsubmit="saveBiodataProfile(event)" class="card-custom p-3">
+          <div class="mb-2">
+            <label class="form-label extra-small text-muted mb-1">FIRST NAME *</label>
+            <input type="text" id="bioFirstName" class="form-control" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label extra-small text-muted mb-1">LAST NAME *</label>
+            <input type="text" id="bioLastName" class="form-control" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label extra-small text-muted mb-1">CNIC NUMBER *</label>
+            <input type="text" id="bioCNIC" class="form-control" placeholder="xxxxx-xxxxxxx-x" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label extra-small text-muted mb-1">CELL NUMBER *</label>
+            <input type="tel" id="bioCell" class="form-control" placeholder="+923001234567" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label extra-small text-muted mb-1">ADDRESS / HOUSE NO. *</label>
+            <input type="text" id="bioAddress" class="form-control" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label extra-small text-muted mb-1">BLOOD GROUP *</label>
+            <select id="bioBloodGroup" class="form-select" required>
+              <option value="">Select...</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label extra-small text-muted mb-1 d-block">OCCUPANCY STATUS *</label>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="occupancyType" id="typeOwner" value="Owner" checked required />
+              <label class="form-check-label small" for="typeOwner">Owner</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="occupancyType" id="typeRent" value="Tenant/Rent" required />
+              <label class="form-check-label small" for="typeRent">Rent</label>
+            </div>
+          </div>
+          
+          <!-- ONLY FAMILY DETAILS TEXTAREA -->
+          <div class="mb-2">
+            <label class="form-label extra-small text-muted mb-1">FAMILY DETAILS / NAMES *</label>
+            <textarea id="bioFamilyText" class="form-control" rows="3" placeholder="List resident family details..." required></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-gold w-100 py-2 mt-3">
+            Save Profile
+          </button>
+        </form>
+      </div>
+
+      <!-- TAB G: ADMIN CONTROL PANEL (ONLY ADMIN) -->
+      <div id="tab-content-admin" class="tab-page hidden">
+        <h4 class="fw-bold text-warning mb-3">Committee Admin Panel</h4>
+
+        <!-- Approvals -->
+        <div class="card-custom p-3 mb-3">
+          <h6 class="fw-bold text-warning">Pending Approvals</h6>
+          <div id="adminPendingList"></div>
+        </div>
+
+        <!-- All Resident Profiles & Biodata Printing -->
+        <div class="card-custom p-3 mb-3">
+          <h6 class="fw-bold text-warning">Resident Profiles & Biodata</h6>
+          <div id="adminResidentsList"></div>
+        </div>
+
+        <!-- Post Notice -->
+        <div class="card-custom p-3 mb-3">
+          <h6 class="fw-bold text-warning">Post Notice</h6>
+          <form onsubmit="createNotice(event)">
+            <input type="text" id="annTitle" class="form-control mb-2" placeholder="Notice Title" required />
+            <textarea id="annContent" class="form-control mb-2" rows="2" placeholder="Content" required></textarea>
+            <button type="submit" class="btn btn-gold w-100 py-2">Post Notice</button>
+          </form>
+        </div>
+
+        <!-- Create Poll -->
+        <div class="card-custom p-3">
+          <h6 class="fw-bold text-warning">Create Poll</h6>
+          <form onsubmit="createPoll(event)">
+            <input type="text" id="pollQuestion" class="form-control mb-2" placeholder="Question" required />
+            <input type="text" id="pollOptions" class="form-control mb-2" placeholder="Option 1, Option 2" required />
+            <button type="submit" class="btn btn-gold w-100 py-2">Create Poll</button>
+          </form>
+        </div>
+      </div>
+
     </div>
 
   </div>
 
-  <!-- Bootstrap 5 Bundle JS -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- BOTTOM NAVIGATION BAR -->
+  <nav id="bottomNav" class="bottom-nav hidden">
+    <button class="nav-item-btn active" onclick="switchTab('home')">
+      <i class="bi bi-house-door"></i>
+      <span>Home</span>
+    </button>
+    <button class="nav-item-btn" onclick="switchTab('notices')">
+      <i class="bi bi-bell"></i>
+      <span>Notices</span>
+    </button>
+    <button class="nav-item-btn" onclick="switchTab('complaints')">
+      <i class="bi bi-wrench"></i>
+      <span>Complaints</span>
+    </button>
+    <button class="nav-item-btn" onclick="switchTab('polls')">
+      <i class="bi bi-bar-chart"></i>
+      <span>Polls</span>
+    </button>
+    <button class="nav-item-btn" onclick="switchTab('profile')">
+      <i class="bi bi-person"></i>
+      <span>Profile</span>
+    </button>
+    <button id="adminNavBtn" class="nav-item-btn text-warning hidden" onclick="switchTab('admin')">
+      <i class="bi bi-shield-lock"></i>
+      <span>Admin</span>
+    </button>
+  </nav>
 
-  <!-- Application Logic -->
   <script>
     // Firebase Configuration
     const firebaseConfig = {
@@ -420,37 +487,23 @@
     let isRegisterMode = false;
     let currentUserData = null;
 
-    // Service Worker Registration
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('Service Worker Active:', reg.scope))
-        .catch(err => console.error('SW Registration Failed:', err));
+    function showAuthView() {
+      document.getElementById('welcomeView').classList.add('hidden');
+      document.getElementById('authView').classList.remove('hidden');
     }
 
-    // Toggle Registration Mode
+    function hideAuthView() {
+      document.getElementById('authView').classList.add('hidden');
+      document.getElementById('welcomeView').classList.remove('hidden');
+    }
+
     function toggleAuthMode(e) {
       if (e) e.preventDefault();
       isRegisterMode = !isRegisterMode;
-      
-      const title = document.getElementById('authTitle');
-      const submitBtn = document.getElementById('authSubmitBtn');
-      const toggleLink = document.getElementById('authToggleLink');
-      const regFields = document.getElementById('regFields');
-
-      if (isRegisterMode) {
-        title.innerText = "Register Resident Account";
-        submitBtn.innerText = "Register Account";
-        toggleLink.innerText = "Already registered? Sign In";
-        regFields.classList.remove('hidden');
-      } else {
-        title.innerText = "Sign In";
-        submitBtn.innerText = "Sign In";
-        toggleLink.innerText = "Need an account? Register Resident Account";
-        regFields.classList.add('hidden');
-      }
+      document.getElementById('authTitle').innerText = isRegisterMode ? "Register Profile" : "Set up your profile";
+      document.getElementById('regFields').classList.toggle('hidden', !isRegisterMode);
     }
 
-    // Authentication Form Handler
     async function handleAuthSubmit(e) {
       e.preventDefault();
       const email = document.getElementById('authEmail').value.trim();
@@ -460,56 +513,60 @@
         if (isRegisterMode) {
           const name = document.getElementById('regName').value.trim();
           const house = document.getElementById('regHouse').value.trim();
-          const phone = document.getElementById('regPhone').value.trim();
+          const role = document.querySelector('input[name="joiningRole"]:checked').value;
 
           const cred = await auth.createUserWithEmailAndPassword(email, password);
-          
           await db.collection('users').doc(cred.user.uid).set({
             name: name,
             house: house,
-            phone: phone,
             email: email,
-            role: 'resident',
-            approved: false,
+            role: role,
+            approved: role === 'admin' ? true : false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
-
         } else {
           await auth.signInWithEmailAndPassword(email, password);
         }
       } catch (err) {
-        alert("Authentication Error: " + err.message);
+        alert(err.message);
       }
     }
 
-    // Sign Out
     function handleSignOut() {
       auth.signOut();
     }
 
-    // Auth State Observer
     auth.onAuthStateChanged(async (user) => {
+      const welcomeView = document.getElementById('welcomeView');
       const authView = document.getElementById('authView');
       const pendingView = document.getElementById('pendingView');
       const dashboardView = document.getElementById('dashboardView');
-      const userInfo = document.getElementById('userInfo');
+      const appHeader = document.getElementById('appHeader');
+      const bottomNav = document.getElementById('bottomNav');
 
       if (user) {
-        const userDoc = await db.collection('users').doc(user.uid).get();
-        currentUserData = userDoc.data() || {};
-
-        document.getElementById('userDisplayName').innerText = currentUserData.name || user.email;
-        userInfo.classList.remove('hidden');
+        welcomeView.classList.add('hidden');
         authView.classList.add('hidden');
+
+        const doc = await db.collection('users').doc(user.uid).get();
+        currentUserData = doc.data() || {};
+
+        document.getElementById('headerUserName').innerText = currentUserData.name || user.email;
+        document.getElementById('homeWelcomeName').innerText = currentUserData.name || 'Resident';
+        document.getElementById('headerRoleBadge').innerText = (currentUserData.role || 'resident').toUpperCase();
+        
+        appHeader.classList.remove('hidden');
 
         if (!currentUserData.approved) {
           document.getElementById('pendingName').innerText = currentUserData.name || user.email;
           document.getElementById('pendingHouse').innerText = currentUserData.house || 'N/A';
           pendingView.classList.remove('hidden');
           dashboardView.classList.add('hidden');
+          bottomNav.classList.add('hidden');
         } else {
           pendingView.classList.add('hidden');
           dashboardView.classList.remove('hidden');
+          bottomNav.classList.remove('hidden');
 
           if (currentUserData.biodata) {
             populateBiodataForm(currentUserData.biodata);
@@ -517,248 +574,41 @@
           }
 
           if (currentUserData.role === 'admin') {
-            document.getElementById('adminTabNav').classList.remove('hidden');
+            document.getElementById('adminNavBtn').classList.remove('hidden');
             loadAdminPendingUsers();
             loadAdminAllResidents();
           }
 
-          loadAnnouncements();
-          loadPolls();
+          loadNotices();
           loadComplaints();
+          loadPolls();
         }
-
       } else {
-        authView.classList.remove('hidden');
+        welcomeView.classList.remove('hidden');
+        authView.classList.add('hidden');
         pendingView.classList.add('hidden');
         dashboardView.classList.add('hidden');
-        userInfo.classList.add('hidden');
+        appHeader.classList.add('hidden');
+        bottomNav.classList.add('hidden');
       }
     });
 
-    // RENDER USER PROFILE CARD
-    function renderProfileCard(b) {
-      const container = document.getElementById('profileDetailsContainer');
-      if (!b) {
-        container.innerHTML = '<p class="text-muted">No biodata submitted yet. Please fill out the <strong>Fill Biodata Form</strong> tab.</p>';
-        return;
-      }
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-page').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-item-btn').forEach(btn => btn.classList.remove('active'));
 
-      container.innerHTML = `
-        <div class="row g-3">
-          <div class="col-md-6"><strong>Full Name:</strong> ${b.firstName || ''} ${b.lastName || ''}</div>
-          <div class="col-md-6"><strong>CNIC:</strong> ${b.cnic || 'N/A'}</div>
-          <div class="col-md-6"><strong>Cell Number:</strong> ${b.cell || 'N/A'}</div>
-          <div class="col-md-6"><strong>Blood Group:</strong> ${b.bloodGroup || 'N/A'}</div>
-          <div class="col-md-6"><strong>Address:</strong> ${b.address || 'N/A'}</div>
-          <div class="col-md-6"><strong>Occupancy Status:</strong> ${b.occupancy || 'N/A'}</div>
-          <div class="col-12"><strong>Family Categories:</strong> ${(b.familyTypes || []).join(', ') || 'None'}</div>
-          <div class="col-12 border-top border-secondary pt-2">
-            <strong>Additional Family Details:</strong>
-            <p class="mt-1 text-light bg-dark p-3 rounded">${b.familyText || 'None provided'}</p>
-          </div>
-        </div>
-      `;
+      const target = document.getElementById(`tab-content-${tabName}`);
+      if (target) target.classList.remove('hidden');
+
+      const activeBtn = Array.from(document.querySelectorAll('.nav-item-btn')).find(b => b.innerText.toLowerCase().includes(tabName));
+      if (activeBtn) activeBtn.classList.add('active');
     }
 
-    // Download Profile PDF helper
-    function downloadMyPDF() {
-      if (!currentUserData || !currentUserData.biodata) {
-        alert("Please complete and save your biodata form first!");
-        return;
-      }
-      generatePDF(currentUserData.biodata);
+    function toggleComplaintForm() {
+      document.getElementById('complaintFormCard').classList.toggle('hidden');
     }
 
-    // PDF Generator Utility
-    function generatePDF(b) {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-
-      doc.setFontSize(18);
-      doc.text("Roshan Housing Society - Resident Biodata", 14, 20);
-      doc.setFontSize(10);
-      doc.text(`Exported Date: ${new Date().toLocaleDateString()}`, 14, 27);
-      doc.line(14, 30, 196, 30);
-
-      doc.setFontSize(12);
-      let y = 40;
-      doc.text(`Full Name: ${b.firstName || ''} ${b.lastName || ''}`, 14, y); y += 9;
-      doc.text(`CNIC: ${b.cnic || ''}`, 14, y); y += 9;
-      doc.text(`Cell Number: ${b.cell || ''}`, 14, y); y += 9;
-      doc.text(`Address / House: ${b.address || ''}`, 14, y); y += 9;
-      doc.text(`Status: ${b.occupancy || ''}`, 14, y); y += 9;
-      doc.text(`Blood Group: ${b.bloodGroup || ''}`, 14, y); y += 9;
-      doc.text(`Family Categories: ${(b.familyTypes || []).join(', ') || 'None'}`, 14, y); y += 12;
-
-      if (b.familyText) {
-        doc.text("Additional Family Details:", 14, y); y += 7;
-        const splitText = doc.splitTextToSize(b.familyText, 180);
-        doc.text(splitText, 14, y);
-      }
-
-      doc.save(`Biodata_${b.firstName}_${b.lastName}.pdf`);
-    }
-
-    // ANNOUNCEMENTS MODULE
-    function loadAnnouncements() {
-      const container = document.getElementById('announcementsList');
-      db.collection('announcements').orderBy('createdAt', 'desc').onSnapshot(snap => {
-        if (snap.empty) {
-          container.innerHTML = '<p class="text-muted">No announcements posted yet.</p>';
-          return;
-        }
-
-        let html = '';
-        const uid = auth.currentUser.uid;
-
-        snap.docs.forEach(doc => {
-          const ann = doc.data();
-          const likes = ann.likes || [];
-          const dislikes = ann.dislikes || [];
-
-          const isLiked = likes.includes(uid);
-          const isDisliked = dislikes.includes(uid);
-
-          html += `
-            <div class="card mb-3 p-3">
-              <h5 class="text-gold mb-1">${ann.title}</h5>
-              <p class="mb-2">${ann.content}</p>
-              <div class="d-flex align-items-center gap-2 pt-2 border-top border-secondary">
-                <button onclick="reactAnnouncement('${doc.id}', 'like')" class="btn btn-sm ${isLiked ? 'btn-success' : 'btn-outline-success'}">
-                  👍 Like (${likes.length})
-                </button>
-                <button onclick="reactAnnouncement('${doc.id}', 'dislike')" class="btn btn-sm ${isDisliked ? 'btn-danger' : 'btn-outline-danger'}">
-                  👎 Dislike (${dislikes.length})
-                </button>
-              </div>
-            </div>
-          `;
-        });
-        container.innerHTML = html;
-      });
-    }
-
-    async function reactAnnouncement(docId, type) {
-      const uid = auth.currentUser.uid;
-      const ref = db.collection('announcements').doc(docId);
-
-      if (type === 'like') {
-        await ref.update({
-          likes: firebase.firestore.FieldValue.arrayUnion(uid),
-          dislikes: firebase.firestore.FieldValue.arrayRemove(uid)
-        });
-      } else {
-        await ref.update({
-          dislikes: firebase.firestore.FieldValue.arrayUnion(uid),
-          likes: firebase.firestore.FieldValue.arrayRemove(uid)
-        });
-      }
-    }
-
-    async function createAnnouncement(e) {
-      e.preventDefault();
-      const title = document.getElementById('annTitle').value.trim();
-      const content = document.getElementById('annContent').value.trim();
-
-      try {
-        await db.collection('announcements').add({
-          title: title,
-          content: content,
-          likes: [],
-          dislikes: [],
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        document.getElementById('annTitle').value = '';
-        document.getElementById('annContent').value = '';
-        alert("Announcement posted!");
-      } catch (err) {
-        alert("Error posting announcement: " + err.message);
-      }
-    }
-
-    // POLLS MODULE
-    function loadPolls() {
-      const container = document.getElementById('pollsList');
-      db.collection('polls').orderBy('createdAt', 'desc').onSnapshot(snap => {
-        if (snap.empty) {
-          container.innerHTML = '<p class="text-muted">No active polls found.</p>';
-          return;
-        }
-
-        let html = '';
-        const uid = auth.currentUser.uid;
-
-        snap.docs.forEach(doc => {
-          const poll = doc.data();
-          const votes = poll.votes || {};
-          const totalVotes = Object.keys(votes).length;
-          const userVotedOption = votes[uid];
-
-          html += `<div class="card mb-3 p-3">
-            <h5 class="text-gold mb-3">${poll.question}</h5>`;
-
-          poll.options.forEach((opt, idx) => {
-            let count = 0;
-            Object.values(votes).forEach(val => { if (val === idx) count++; });
-            const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-
-            html += `
-              <div class="mb-2">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                  <span>${opt} ${userVotedOption === idx ? '<span class="badge bg-gold text-dark ms-1">Your Vote</span>' : ''}</span>
-                  <button onclick="votePoll('${doc.id}', ${idx})" class="btn btn-sm btn-outline-warning">Vote</button>
-                </div>
-                <div class="progress" style="height: 18px; background-color: #10142A;">
-                  <div class="progress-bar bg-warning text-dark fw-bold" role="progressbar" style="width: ${pct}%">${pct}% (${count})</div>
-                </div>
-              </div>
-            `;
-          });
-
-          html += `<small class="text-muted d-block mt-2">Total Votes: ${totalVotes}</small></div>`;
-        });
-        container.innerHTML = html;
-      });
-    }
-
-    async function votePoll(pollId, optionIndex) {
-      const uid = auth.currentUser.uid;
-      try {
-        await db.collection('polls').doc(pollId).update({
-          [`votes.${uid}`]: optionIndex
-        });
-      } catch (err) {
-        alert("Error submitting vote: " + err.message);
-      }
-    }
-
-    async function createPoll(e) {
-      e.preventDefault();
-      const question = document.getElementById('pollQuestion').value.trim();
-      const optionsRaw = document.getElementById('pollOptions').value.trim();
-      const options = optionsRaw.split(',').map(o => o.trim()).filter(o => o.length > 0);
-
-      if (options.length < 2) {
-        alert("Please enter at least 2 options for the poll.");
-        return;
-      }
-
-      try {
-        await db.collection('polls').add({
-          question: question,
-          options: options,
-          votes: {},
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        document.getElementById('pollQuestion').value = '';
-        document.getElementById('pollOptions').value = '';
-        alert("Poll created!");
-      } catch (err) {
-        alert("Error creating poll: " + err.message);
-      }
-    }
-
-    // BIODATA MODULE
+    // PROFILE & BIODATA LOGIC
     function populateBiodataForm(b) {
       document.getElementById('bioFirstName').value = b.firstName || '';
       document.getElementById('bioLastName').value = b.lastName || '';
@@ -766,260 +616,226 @@
       document.getElementById('bioCell').value = b.cell || '';
       document.getElementById('bioAddress').value = b.address || '';
       document.getElementById('bioBloodGroup').value = b.bloodGroup || '';
-      
-      if (b.occupancy === 'Tenant/Rent') {
-        document.getElementById('typeRent').checked = true;
-      } else {
-        document.getElementById('typeOwner').checked = true;
-      }
-
-      if (Array.isArray(b.familyTypes)) {
-        document.querySelectorAll('.fam-check').forEach(cb => {
-          cb.checked = b.familyTypes.includes(cb.value);
-        });
-      }
-
+      if (b.occupancy === 'Tenant/Rent') document.getElementById('typeRent').checked = true;
       document.getElementById('bioFamilyText').value = b.familyText || '';
     }
 
-    async function saveBiodataAndDownloadPDF(e) {
+    function renderProfileCard(b) {
+      const container = document.getElementById('profileDetailsContainer');
+      container.innerHTML = `
+        <div class="row g-2">
+          <div class="col-6"><small class="text-muted">Name:</small><br><strong>${b.firstName} ${b.lastName}</strong></div>
+          <div class="col-6"><small class="text-muted">CNIC:</small><br><strong>${b.cnic}</strong></div>
+          <div class="col-6"><small class="text-muted">Cell:</small><br><strong>${b.cell}</strong></div>
+          <div class="col-6"><small class="text-muted">Blood Group:</small><br><strong>${b.bloodGroup}</strong></div>
+          <div class="col-12"><small class="text-muted">Address:</small><br><strong>${b.address} (${b.occupancy})</strong></div>
+          <div class="col-12 mt-2"><small class="text-muted">Family Details:</small><br><p class="small text-light bg-dark p-2 rounded mb-0">${b.familyText}</p></div>
+        </div>
+      `;
+    }
+
+    async function saveBiodataProfile(e) {
       e.preventDefault();
       const uid = auth.currentUser.uid;
 
-      const firstName = document.getElementById('bioFirstName').value.trim();
-      const lastName = document.getElementById('bioLastName').value.trim();
-      const cnic = document.getElementById('bioCNIC').value.trim();
-      const cell = document.getElementById('bioCell').value.trim();
-      const address = document.getElementById('bioAddress').value.trim();
-      const bloodGroup = document.getElementById('bioBloodGroup').value;
-      const occupancy = document.querySelector('input[name="occupancyType"]:checked').value;
-      const familyText = document.getElementById('bioFamilyText').value.trim();
-
-      const familyTypes = [];
-      document.querySelectorAll('.fam-check:checked').forEach(cb => familyTypes.push(cb.value));
-
       const bioData = {
-        firstName,
-        lastName,
-        cnic,
-        cell,
-        address,
-        bloodGroup,
-        occupancy,
-        familyTypes,
-        familyText,
+        firstName: document.getElementById('bioFirstName').value.trim(),
+        lastName: document.getElementById('bioLastName').value.trim(),
+        cnic: document.getElementById('bioCNIC').value.trim(),
+        cell: document.getElementById('bioCell').value.trim(),
+        address: document.getElementById('bioAddress').value.trim(),
+        bloodGroup: document.getElementById('bioBloodGroup').value,
+        occupancy: document.querySelector('input[name="occupancyType"]:checked').value,
+        familyText: document.getElementById('bioFamilyText').value.trim(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
 
       try {
         await db.collection('users').doc(uid).set({ biodata: bioData }, { merge: true });
-        
-        // Update Local State & Profile Tab View
         if (currentUserData) currentUserData.biodata = bioData;
         renderProfileCard(bioData);
-
-        alert("Biodata saved successfully! Switching to Profile...");
-
-        // Automatically view profile tab
-        const profileTabBtn = document.getElementById('tab-profile');
-        const tabInstance = new bootstrap.Tab(profileTabBtn);
-        tabInstance.show();
-
-        // Export PDF
-        generatePDF(bioData);
-
+        alert("Profile saved successfully!");
+        switchTab('profile');
       } catch (err) {
-        alert("Failed to save or export PDF: " + err.message);
+        alert("Save failed: " + err.message);
       }
     }
 
-    // COMPLAINTS MODULE
+    // COMPLAINTS
     async function submitComplaint(e) {
       e.preventDefault();
-      const title = document.getElementById('compTitle').value.trim();
-      const desc = document.getElementById('compDesc').value.trim();
-
       try {
         await db.collection('complaints').add({
-          title: title,
-          description: desc,
+          title: document.getElementById('compTitle').value.trim(),
+          description: document.getElementById('compDesc').value.trim(),
           userId: auth.currentUser.uid,
           userName: currentUserData.name || 'Resident',
           house: currentUserData.house || 'N/A',
           status: 'Open',
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-
-        document.getElementById('complaintForm').reset();
-        alert("Complaint submitted successfully.");
+        document.getElementById('compTitle').value = '';
+        document.getElementById('compDesc').value = '';
+        toggleComplaintForm();
       } catch (err) {
-        alert("Submission failed: " + err.message);
+        alert(err.message);
       }
     }
 
     function loadComplaints() {
-      const container = document.getElementById('complaintsList');
-
+      const container = document.getElementById('complaintsListContainer');
       let query = db.collection('complaints');
       if (currentUserData.role !== 'admin') {
         query = query.where('userId', '==', auth.currentUser.uid);
       }
 
       query.onSnapshot(snap => {
+        document.getElementById('statComplaints').innerText = snap.size;
         if (snap.empty) {
-          container.innerHTML = '<p class="text-muted">No complaints found.</p>';
+          container.innerHTML = `
+            <div class="card-custom p-4 text-center my-4">
+              <i class="bi bi-wrench text-muted fs-2 mb-2"></i>
+              <h6 class="fw-bold mb-1">No complaints</h6>
+              <p class="text-muted small mb-0">Raise a complaint using the + button above.</p>
+            </div>`;
           return;
         }
 
         let html = '';
         snap.docs.forEach(doc => {
-          const d = doc.data();
-          const titleEscaped = d.title.replace(/'/g, "\\'");
-          const descEscaped = d.description.replace(/'/g, "\\'").replace(/\n/g, "<br>");
-
+          const c = doc.data();
           html += `
-            <div class="card mb-3 p-3" id="complaint-${doc.id}">
-              <div class="d-flex justify-content-between align-items-start">
-                <h5 class="mb-1 text-gold">${d.title}</h5>
-                <span class="badge ${d.status === 'Open' ? 'bg-danger' : 'bg-success'}">${d.status}</span>
+            <div class="card-custom p-3 mb-2">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <h6 class="fw-bold text-warning mb-0">${c.title}</h6>
+                <span class="badge ${c.status === 'Open' ? 'bg-danger' : 'bg-success'}">${c.status}</span>
               </div>
-              <p class="mb-2 text-light">${d.description}</p>
-              <div class="text-muted small mb-2">
-                Submitted by: ${d.userName} (${d.house})
-              </div>
-              <div class="no-print">
-                <button onclick="printSingleComplaint('${titleEscaped}', '${descEscaped}', '${d.userName}', '${d.house}', '${d.status}')" class="btn btn-sm btn-outline-info">
-                  🖨️ Print Complaint
-                </button>
-              </div>
-            </div>
-          `;
+              <p class="small text-muted mb-1">${c.description}</p>
+              ${currentUserData.role === 'admin' ? `
+                <button onclick="printComplaintAdmin('${c.title}', '${c.description}', '${c.userName}')" class="btn btn-sm btn-outline-warning mt-2">🖨️ Print Record</button>
+              ` : ''}
+            </div>`;
         });
         container.innerHTML = html;
-      }, err => {
-        container.innerHTML = `<p class="text-danger">Error loading complaints: ${err.message}</p>`;
       });
     }
 
-    function printSingleComplaint(title, desc, userName, house, status) {
-      const printWin = window.open('', '', 'width=800,height=600');
-      
-      printWin.document.write('<html><head><title>Complaint Report</title>');
-      printWin.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">');
-      printWin.document.write('</head><body class="p-4">');
-      printWin.document.write('<h2>Roshan Housing Society - Official Complaint Report</h2><hr>');
-      printWin.document.write(`
-        <h4>Title: ${title}</h4>
-        <p><strong>Status:</strong> ${status}</p>
-        <p><strong>Submitted By:</strong> ${userName} (${house})</p>
-        <p><strong>Details:</strong></p>
-        <p class="p-3 border rounded">${desc}</p>
-      `);
-      printWin.document.write('</body></html>');
-      
+    // ADMIN ONLY: Print Complaint
+    function printComplaintAdmin(title, desc, userName) {
+      const printWin = window.open('', '', 'width=600,height=400');
+      printWin.document.write(`<h4>Complaint: ${title}</h4><p>By: ${userName}</p><p>${desc}</p>`);
       printWin.document.close();
-      printWin.focus();
-
-      setTimeout(() => {
-        printWin.print();
-        printWin.close();
-      }, 500);
+      printWin.print();
     }
 
-    // ADMIN MODULE: Load Pending Approval Users
-    function loadAdminPendingUsers() {
-      const container = document.getElementById('adminPendingList');
-      db.collection('users').where('approved', '==', false).onSnapshot(snap => {
-        if (snap.empty) {
-          container.innerHTML = '<p class="text-success">No pending approval requests.</p>';
-          return;
-        }
+    // NOTICES
+    function loadNotices() {
+      db.collection('announcements').orderBy('createdAt', 'desc').onSnapshot(snap => {
+        const homeList = document.getElementById('homeNoticesList');
+        const fullList = document.getElementById('fullNoticesList');
+
+        if (snap.empty) return;
 
         let html = '';
         snap.docs.forEach(doc => {
-          const u = doc.data();
-          html += `
-            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-2">
-              <div>
-                <strong>${u.name}</strong> (${u.email})<br>
-                <small class="text-muted">House: ${u.house} | Phone: ${u.phone}</small>
-              </div>
-              <button onclick="approveUser('${doc.id}')" class="btn btn-sm btn-success">Approve</button>
-            </div>
-          `;
+          const a = doc.data();
+          html += `<div class="card-custom p-3 mb-2 text-start">
+            <h6 class="fw-bold text-warning mb-1">${a.title}</h6>
+            <p class="small text-muted mb-0">${a.content}</p>
+          </div>`;
         });
-        container.innerHTML = html;
+
+        homeList.innerHTML = html;
+        fullList.innerHTML = html;
       });
     }
 
-    // ADMIN MODULE: Load All Approved Residents & Biodata Access
-    let allResidentsCache = {};
-
-    function loadAdminAllResidents() {
-      const container = document.getElementById('adminResidentsList');
-      db.collection('users').where('approved', '==', true).onSnapshot(snap => {
+    // POLLS
+    function loadPolls() {
+      db.collection('polls').onSnapshot(snap => {
+        document.getElementById('statPolls').innerText = snap.size;
+        const container = document.getElementById('pollsListContainer');
         if (snap.empty) {
-          container.innerHTML = '<p class="text-muted">No approved residents registered yet.</p>';
+          container.innerHTML = `<div class="card-custom p-4 text-center"><p class="text-muted small mb-0">No active polls.</p></div>`;
           return;
         }
-
-        let html = '<div class="accordion" id="residentsAccordion">';
-        allResidentsCache = {};
-
-        snap.docs.forEach((doc, idx) => {
-          const u = doc.data();
-          const b = u.biodata || null;
-          allResidentsCache[doc.id] = b;
-
-          html += `
-            <div class="accordion-item bg-dark text-light border-secondary">
-              <h2 class="accordion-header" id="heading-${idx}">
-                <button class="accordion-button collapsed bg-dark text-gold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${idx}">
-                  🏠 House: ${u.house || 'N/A'} - ${u.name} (${u.email})
-                </button>
-              </h2>
-              <div id="collapse-${idx}" class="accordion-collapse collapse" data-bs-parent="#residentsAccordion">
-                <div class="accordion-body border-top border-secondary">
-                  ${b ? `
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                      <h6 class="text-gold mb-0">Biodata Information</h6>
-                      <button onclick="exportResidentPDF('${doc.id}')" class="btn btn-sm btn-gold">📥 Export Resident PDF</button>
-                    </div>
-                    <p class="mb-1"><strong>CNIC:</strong> ${b.cnic || 'N/A'} | <strong>Cell:</strong> ${b.cell || 'N/A'}</p>
-                    <p class="mb-1"><strong>Blood Group:</strong> ${b.bloodGroup || 'N/A'} | <strong>Status:</strong> ${b.occupancy || 'N/A'}</p>
-                    <p class="mb-1"><strong>Family Categories:</strong> ${(b.familyTypes || []).join(', ') || 'None'}</p>
-                    <p class="mb-0"><strong>Family Details:</strong> ${b.familyText || 'None'}</p>
-                  ` : `
-                    <p class="text-warning mb-0">⚠️ This resident has not filled out their biodata form yet.</p>
-                  `}
-                </div>
-              </div>
-            </div>
-          `;
+        let html = '';
+        snap.docs.forEach(doc => {
+          const p = doc.data();
+          html += `<div class="card-custom p-3 mb-2"><h6 class="fw-bold text-warning">${p.question}</h6></div>`;
         });
-
-        html += '</div>';
         container.innerHTML = html;
       });
     }
 
-    // Export PDF for Specific Resident by Admin
-    function exportResidentPDF(userId) {
-      const bioData = allResidentsCache[userId];
-      if (!bioData) {
-        alert("No biodata available to export for this resident.");
-        return;
-      }
-      generatePDF(bioData);
+    // ADMIN DATA & PDF EXPORT
+    let adminCache = {};
+    function loadAdminAllResidents() {
+      db.collection('users').where('approved', '==', true).onSnapshot(snap => {
+        const container = document.getElementById('adminResidentsList');
+        let html = '';
+        snap.docs.forEach(doc => {
+          const u = doc.data();
+          adminCache[doc.id] = u.biodata;
+          html += `
+            <div class="border-bottom border-secondary py-2">
+              <div class="d-flex justify-content-between align-items-center">
+                <span><strong>${u.name}</strong> (${u.house})</span>
+                ${u.biodata ? `<button onclick="exportBiodataPDF('${doc.id}')" class="btn btn-sm btn-gold">PDF</button>` : `<small class="text-muted">No Biodata</small>`}
+              </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+      });
+    }
+
+    function exportBiodataPDF(uid) {
+      const b = adminCache[uid];
+      if (!b) return;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.text(`Resident Biodata: ${b.firstName} ${b.lastName}`, 10, 10);
+      doc.text(`CNIC: ${b.cnic}`, 10, 20);
+      doc.text(`Cell: ${b.cell}`, 10, 30);
+      doc.text(`Address: ${b.address}`, 10, 40);
+      doc.save(`Biodata_${b.firstName}.pdf`);
+    }
+
+    function loadAdminPendingUsers() {
+      db.collection('users').where('approved', '==', false).onSnapshot(snap => {
+        const container = document.getElementById('adminPendingList');
+        if (snap.empty) { container.innerHTML = `<p class="text-muted small">No pending requests.</p>`; return; }
+        let html = '';
+        snap.docs.forEach(doc => {
+          const u = doc.data();
+          html += `<div class="d-flex justify-content-between py-1"><span>${u.name}</span><button onclick="approveUser('${doc.id}')" class="btn btn-sm btn-success py-0">Approve</button></div>`;
+        });
+        container.innerHTML = html;
+      });
     }
 
     async function approveUser(uid) {
-      try {
-        await db.collection('users').doc(uid).update({ approved: true });
-        alert("User account approved!");
-      } catch (err) {
-        alert("Approval failed: " + err.message);
-      }
+      await db.collection('users').doc(uid).update({ approved: true });
+    }
+
+    async function createNotice(e) {
+      e.preventDefault();
+      await db.collection('announcements').add({
+        title: document.getElementById('annTitle').value,
+        content: document.getElementById('annContent').value,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      document.getElementById('annTitle').value = '';
+      document.getElementById('annContent').value = '';
+    }
+
+    async function createPoll(e) {
+      e.preventDefault();
+      await db.collection('polls').add({
+        question: document.getElementById('pollQuestion').value,
+        options: document.getElementById('pollOptions').value.split(','),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
     }
   </script>
 </body>
