@@ -263,10 +263,13 @@
   let currentUserProfile = null;
   let registrationInProgress = false;
   let isAuthModeLogin = true;
-  let activeTab = 'biodata';
+  let activeTab = 'notices';
   let notifications = [];
   let pendingResidents = [];
   let allResidents = [];
+  let noticesList = [];
+  let pollsList = [];
+  let ticketsList = [];
 
   const appEl = document.getElementById('app');
 
@@ -383,8 +386,17 @@
 
       <nav class="tabbar">
         <div class="tabbar-inner">
+          <button class="tab-btn ${activeTab==='notices'?'active':''}" data-tab="notices">
+            <span class="lbl">Announcements</span>
+          </button>
+          <button class="tab-btn ${activeTab==='polls'?'active':''}" data-tab="polls">
+            <span class="lbl">Polls</span>
+          </button>
+          <button class="tab-btn ${activeTab==='tickets'?'active':''}" data-tab="tickets">
+            <span class="lbl">Complaints</span>
+          </button>
           <button class="tab-btn ${activeTab==='biodata'?'active':''}" data-tab="biodata">
-            <span class="lbl">${isAdmin ? 'Residents Directory' : 'My Biodata'}</span>
+            <span class="lbl">${isAdmin ? 'Residents' : 'Profile'}</span>
           </button>
           ${isAdmin ? `
             <button class="tab-btn ${activeTab==='approvals'?'active':''}" data-tab="approvals">
@@ -664,6 +676,39 @@
   function renderContent() {
     const isAdmin = (currentUserProfile.role === 'admin');
 
+    if (activeTab === 'notices') {
+      return `
+        <div class="section-title">
+          Announcements
+          ${isAdmin ? '<button class="btn sm primary" onclick="openPostNoticeModal()">+ New Notice</button>' : ''}
+        </div>
+        <div class="section-sub">Official community news and circulars.</div>
+        <div id="notices-list">Loading announcements...</div>
+      `;
+    }
+
+    if (activeTab === 'polls') {
+      return `
+        <div class="section-title">
+          Community Polls
+          ${isAdmin ? '<button class="btn sm primary" onclick="openCreatePollModal()">+ New Poll</button>' : ''}
+        </div>
+        <div class="section-sub">Vote on society decisions and proposals.</div>
+        <div id="polls-list">Loading polls...</div>
+      `;
+    }
+
+    if (activeTab === 'tickets') {
+      return `
+        <div class="section-title">
+          Complaints & Suggestions
+          <button class="btn sm primary" onclick="openNewTicketModal()">+ Lodge Ticket</button>
+        </div>
+        <div class="section-sub">Report maintenance issues or submit feedback.</div>
+        <div id="tickets-list">Loading complaints directory...</div>
+      `;
+    }
+
     if (activeTab === 'biodata') {
       if (isAdmin) {
         return `
@@ -720,6 +765,9 @@
   function loadData() {
     loadNotifications();
     const isAdmin = currentUserProfile.role === 'admin';
+    if (activeTab === 'notices') loadNotices();
+    if (activeTab === 'polls') loadPolls();
+    if (activeTab === 'tickets') loadTickets();
     if (activeTab === 'biodata' && isAdmin) loadAllResidents();
     if (activeTab === 'approvals' && isAdmin) loadPendingResidents();
   }
@@ -741,6 +789,17 @@
         });
     } catch (err) {
       console.error("Targeted Notification failed:", err);
+    }
+  }
+
+  async function broadcastNotification(title, body) {
+    if (!db) return;
+    try {
+      const snap = await db.collection('users').where('approved', '==', true).get();
+      const batchPromises = snap.docs.map(userDoc => sendNotification(userDoc.id, title, body, 'notice'));
+      await Promise.all(batchPromises);
+    } catch (e) {
+      console.error("Broadcast failed:", e);
     }
   }
 
@@ -799,6 +858,327 @@
 
   window.closeModal = function() {
     document.getElementById('modal-view').classList.remove('active');
+  };
+
+  // --- ANNOUNCEMENTS ---
+  function loadNotices() {
+    if (!db) return;
+    db.collection('announcements').orderBy('createdAt', 'desc').get().then(snapshot => {
+      noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderNoticesList();
+    }).catch(e => console.error("Error loading notices:", e));
+  }
+
+  function renderNoticesList() {
+    const listEl = document.getElementById('notices-list');
+    if (!listEl) return;
+    if (!noticesList.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No announcements posted yet.</div>';
+      return;
+    }
+
+    listEl.innerHTML = noticesList.map(n => `
+      <div class="card" style="cursor:default;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+          <div style="font-weight:700; font-size:16px; color:var(--accent-2);">${escapeHtml(n.title)}</div>
+          <span class="badge notice">Notice</span>
+        </div>
+        <div style="font-size:13.5px; color:var(--text); line-height:1.5; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
+        <div style="font-size:11px; color:var(--text-faint; margin-top:10px;">Posted by Management</div>
+      </div>
+    `).join('');
+  }
+
+  window.openPostNoticeModal = function() {
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">New Announcement</div>
+      <form id="notice-form">
+        <label>Title</label>
+        <input type="text" id="notice-title" placeholder="Notice Title" required />
+        <label>Content / Circular</label>
+        <textarea id="notice-content" placeholder="Write announcement details..." required></textarea>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Publish & Broadcast</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('notice-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('notice-title').value.trim();
+      const content = document.getElementById('notice-content').value.trim();
+
+      try {
+        await db.collection('announcements').add({
+          title,
+          content,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await broadcastNotification("New Announcement: " + title, content);
+        closeModal();
+        loadNotices();
+      } catch(err) {
+        alert("Error publishing notice: " + err.message);
+      }
+    });
+  };
+
+  // --- POLLS ---
+  function loadPolls() {
+    if (!db) return;
+    db.collection('polls').orderBy('createdAt', 'desc').get().then(snapshot => {
+      pollsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderPollsList();
+    }).catch(e => console.error("Error loading polls:", e));
+  }
+
+  function renderPollsList() {
+    const listEl = document.getElementById('polls-list');
+    if (!listEl) return;
+    if (!pollsList.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No active polls available.</div>';
+      return;
+    }
+
+    const userId = auth.currentUser.uid;
+
+    listEl.innerHTML = pollsList.map(poll => {
+      const votes = poll.votes || {};
+      const hasVoted = userId in votes;
+      const userVote = votes[userId];
+      const options = poll.options || [];
+      
+      const totalVotes = Object.keys(votes).length;
+
+      // Tally counts
+      const counts = options.map((opt, idx) => {
+        let count = 0;
+        Object.values(votes).forEach(v => { if (v === idx) count++; });
+        return count;
+      });
+
+      return `
+        <div class="card" style="cursor:default;">
+          <div style="font-weight:700; font-size:16px; color:var(--accent-2); margin-bottom:6px;">${escapeHtml(poll.question)}</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Total Votes: ${totalVotes}</div>
+
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${options.map((opt, idx) => {
+              const count = counts[idx];
+              const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+              const isSelected = userVote === idx;
+
+              return `
+                <div style="background:var(--bg-elevated-2); border:1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}; border-radius:10px; padding:10px 12px; position:relative; overflow:hidden;">
+                  <div style="position:absolute; top:0; left:0; bottom:0; width:${pct}%; background:var(--accent-soft); z-index:0;"></div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; position:relative; z-index:1;">
+                    <span style="font-size:13.5px; font-weight:${isSelected?'700':'500'};">${escapeHtml(opt)}</span>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <span style="font-size:12px; color:var(--text-muted);">${pct}% (${count})</span>
+                      ${!hasVoted ? `<button class="btn sm primary" onclick="votePoll('${poll.id}', ${idx})">Vote</button>` : ''}
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.openCreatePollModal = function() {
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Create New Poll</div>
+      <form id="poll-form">
+        <label>Question</label>
+        <input type="text" id="poll-question" placeholder="Ask society residents..." required />
+        <label>Option 1</label>
+        <input type="text" id="poll-opt-0" placeholder="Option A" required />
+        <label>Option 2</label>
+        <input type="text" id="poll-opt-1" placeholder="Option B" required />
+        <label>Option 3 (Optional)</label>
+        <input type="text" id="poll-opt-2" placeholder="Option C" />
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Publish Poll</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('poll-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const question = document.getElementById('poll-question').value.trim();
+      const opt0 = document.getElementById('poll-opt-0').value.trim();
+      const opt1 = document.getElementById('poll-opt-1').value.trim();
+      const opt2 = document.getElementById('poll-opt-2').value.trim();
+
+      const options = [opt0, opt1];
+      if (opt2) options.push(opt2);
+
+      try {
+        await db.collection('polls').add({
+          question,
+          options,
+          votes: {},
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await broadcastNotification("New Poll Available", question);
+        closeModal();
+        loadPolls();
+      } catch(err) {
+        alert("Error creating poll: " + err.message);
+      }
+    });
+  };
+
+  window.votePoll = async function(pollId, optionIndex) {
+    if (!db || !auth.currentUser) return;
+    try {
+      const ref = db.collection('polls').doc(pollId);
+      await db.runTransaction(async (transaction) => {
+        const doc = await transaction.get(ref);
+        if (!doc.exists) throw "Poll does not exist!";
+        const data = doc.data();
+        const votes = data.votes || {};
+        votes[auth.currentUser.uid] = optionIndex;
+        transaction.update(ref, { votes: votes });
+      });
+      loadPolls();
+    } catch(err) {
+      alert("Error casting vote: " + err);
+    }
+  };
+
+  // --- TICKETS / COMPLAINTS DIRECTORY ---
+  function loadTickets() {
+    if (!db) return;
+    let query = db.collection('tickets').orderBy('createdAt', 'desc');
+    if (currentUserProfile.role !== 'admin') {
+      query = query.where('uid', '==', auth.currentUser.uid);
+    }
+    query.get().then(snapshot => {
+      ticketsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderTicketsList();
+    }).catch(e => console.error("Error loading tickets:", e));
+  }
+
+  function renderTicketsList() {
+    const listEl = document.getElementById('tickets-list');
+    if (!listEl) return;
+    if (!ticketsList.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No complaints or tickets lodged yet.</div>';
+      return;
+    }
+
+    const isAdmin = currentUserProfile.role === 'admin';
+
+    listEl.innerHTML = ticketsList.map(t => `
+      <div class="card" style="cursor:default;" onclick="openTicketDetailModal('${t.id}')">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+          <div>
+            <span class="ticket-no">${escapeHtml(t.ticketNo || 'TICKET')}</span>
+            <span style="font-weight:700; font-size:15px; color:var(--accent-2); margin-left:6px;">${escapeHtml(t.category)}</span>
+          </div>
+          <span class="badge ${t.status || 'pending'}">${escapeHtml(t.status || 'Pending')}</span>
+        </div>
+        <div style="font-size:13px; color:var(--text); line-height:1.4; margin-bottom:8px;">${escapeHtml(t.description)}</div>
+        <div style="font-size:11.5px; color:var(--text-muted);">House: ${escapeHtml(t.house || 'N/A')} | Resident: ${escapeHtml(t.name || 'N/A')}</div>
+        ${t.department ? `<div style="font-size:11.5px; color:var(--info); margin-top:4px;">Assigned Dept: ${escapeHtml(t.department)}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  window.openNewTicketModal = function() {
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Lodge Complaint / Ticket</div>
+      <form id="ticket-form">
+        <label>Category</label>
+        <select id="ticket-category" required>
+          <option value="Water Supply">Water Supply</option>
+          <option value="Electricity & Streetlights">Electricity & Streetlights</option>
+          <option value="Security & Gate">Security & Gate</option>
+          <option value="Maintenance & Sanitation">Maintenance & Sanitation</option>
+          <option value="Other">Other</option>
+        </select>
+        <label>Description</label>
+        <textarea id="ticket-desc" placeholder="Describe your complaint or request..." required></textarea>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Submit Ticket</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('ticket-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const category = document.getElementById('ticket-category').value;
+      const description = document.getElementById('ticket-desc').value.trim();
+      const ticketNo = 'RPHS-' + Math.floor(100000 + Math.random() * 900000);
+
+      try {
+        await db.collection('tickets').add({
+          ticketNo,
+          category,
+          description,
+          status: 'pending',
+          uid: auth.currentUser.uid,
+          name: currentUserProfile.name,
+          house: currentUserProfile.house,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        closeModal();
+        loadTickets();
+      } catch(err) {
+        alert("Error submitting ticket: " + err.message);
+      }
+    });
+  };
+
+  window.openTicketDetailModal = function(ticketId) {
+    const t = ticketsList.find(item => item.id === ticketId);
+    if (!t) return;
+    const isAdmin = currentUserProfile.role === 'admin';
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span class="ticket-no">${escapeHtml(t.ticketNo)}</span>
+        <span class="badge ${t.status || 'pending'}">${escapeHtml(t.status || 'Pending')}</span>
+      </div>
+      <div style="font-family:var(--font-display); font-size:18px; font-weight:600; color:var(--accent-2); margin-bottom:6px;">${escapeHtml(t.category)}</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Lodged by: ${escapeHtml(t.name)} (${escapeHtml(t.house)})</div>
+      <div style="background:var(--bg-elevated-2); padding:12px; border-radius:10px; font-size:13.5px; line-height:1.5; margin-bottom:16px;">${escapeHtml(t.description)}</div>
+
+      ${isAdmin ? `
+        <form id="admin-ticket-form">
+          <label>Update Status</label>
+          <select id="admin-ticket-status">
+            <option value="pending" ${t.status==='pending'?'selected':''}>Pending</option>
+            <option value="in-progress" ${t.status==='in-progress'?'selected':''}>In Progress</option>
+            <option value="resolved" ${t.status==='resolved'?'selected':''}>Resolved</option>
+            <option value="closed" ${t.status==='closed'?'selected':''}>Closed</option>
+          </select>
+
+          <label>Assign Department / Note</label>
+          <input type="text" id="admin-ticket-dept" value="${escapeHtml(t.department || '')}" placeholder="e.g. Maintenance Crew" />
+
+          <button type="submit" class="btn primary block" style="margin-top:16px;">Save Ticket Update</button>
+        </form>
+      ` : ''}
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    if (isAdmin) {
+      document.getElementById('admin-ticket-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const status = document.getElementById('admin-ticket-status').value;
+        const department = document.getElementById('admin-ticket-dept').value.trim();
+
+        try {
+          await db.collection('tickets').doc(ticketId).update({ status, department });
+          await sendNotification(t.uid, `Ticket Updated (${t.ticketNo})`, `Your complaint status is now: ${status.toUpperCase()}`, 'info');
+          closeModal();
+          loadTickets();
+        } catch(err) {
+          alert("Error updating ticket: " + err.message);
+        }
+      });
+    }
   };
 
   window.openEditBiodataModal = function() {
