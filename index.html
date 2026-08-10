@@ -134,6 +134,10 @@
     text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap;
   }
   .badge.pending{background:var(--warning-soft); color:var(--accent-2);}
+  .badge.assigned{background:var(--info-soft); color:var(--info);}
+  .badge.in-progress{background:var(--info-soft); color:var(--info);}
+  .badge.resolved{background:var(--success-soft); color:var(--success);}
+  .badge.closed{background:rgba(255,255,255,0.1); color:var(--text-muted);}
   .badge.notice{background:var(--accent-soft); color:var(--accent-2);}
 
   .btn{
@@ -223,6 +227,17 @@
 (function(){
   "use strict";
 
+  // HTML Sanitization Utility to prevent XSS
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   const firebaseConfig = {
     apiKey: "AIzaSyA5jR_KvDtN52sIUQiYffXL_1pcoN5vNpk",
     authDomain: "rp-housing-society.firebaseapp.com",
@@ -244,7 +259,6 @@
       }
       db = firebase.firestore();
       
-      // Async messaging check to avoid thread blocking
       firebase.messaging.isSupported().then(supported => {
         if (supported) {
           messaging = firebase.messaging();
@@ -312,8 +326,8 @@
         <div class="brand-text">
           <div class="name">Roshan Housing Society</div>
           <div class="sub">
-            <span>${currentUser.name} ${currentUser.house ? '(' + currentUser.house + ')' : ''}</span>
-            <span class="role-pill">${currentUser.role}</span>
+            <span>${escapeHtml(currentUser.name)} ${currentUser.house ? '(' + escapeHtml(currentUser.house) + ')' : ''}</span>
+            <span class="role-pill">${escapeHtml(currentUser.role)}</span>
           </div>
         </div>
         <button class="notif-bell-btn" onclick="openNotificationsModal()" title="Notifications">
@@ -366,7 +380,7 @@
     appEl.innerHTML = `
       <div class="onboard-wrap">
         <div class="onboard-title">Roshan Pakistan Housing Society</div>
-        <div class="onboard-sub">Create or access your resident account.</div>
+        <div class="onboard-sub">Sign in or register your account to continue.</div>
         
         <form id="onboard-form">
           <label>Full Name</label>
@@ -380,7 +394,7 @@
 
           <div id="house-num-wrap">
             <label>House / Plot Number</label>
-            <input type="text" id="user-house" placeholder="e.g. House 42, Block B" />
+            <input type="text" id="user-house" placeholder="e.g. House 42, Block B" required />
           </div>
 
           <div id="pin-wrap" style="display:none;">
@@ -388,15 +402,21 @@
             <input type="password" id="admin-pin" placeholder="Enter 4-digit PIN" maxlength="4" />
           </div>
 
-          <button type="submit" class="btn primary block" style="margin-top:20px;">Login & Stay Signed In</button>
+          <button type="submit" class="btn primary block" style="margin-top:20px;">Sign In</button>
         </form>
       </div>
     `;
 
     document.getElementById('user-role').addEventListener('change', (e) => {
       const val = e.target.value;
+      const houseWrap = document.getElementById('user-house');
       document.getElementById('house-num-wrap').style.display = (val === 'admin') ? 'none' : 'block';
       document.getElementById('pin-wrap').style.display = (val === 'admin') ? 'block' : 'none';
+      if (val === 'admin') {
+        houseWrap.removeAttribute('required');
+      } else {
+        houseWrap.setAttribute('required', 'required');
+      }
     });
 
     document.getElementById('onboard-form').addEventListener('submit', async (e) => {
@@ -405,6 +425,7 @@
       const role = document.getElementById('user-role').value;
       const adminId = name.toLowerCase().replace(/\s+/g, '_');
       
+      // Strict Admin Authentication Verification
       if (role === 'admin') {
         const pinEntered = document.getElementById('admin-pin').value.trim();
         if (!pinEntered || pinEntered.length !== 4) {
@@ -412,21 +433,25 @@
           return;
         }
 
-        let adminPinStore = JSON.parse(localStorage.getItem('rphs_admin_pins')) || {};
-
         if (db) {
           try {
             const adminDoc = await db.collection('admins').doc(adminId).get();
-            if (adminDoc.exists) {
-              if (adminDoc.data().pin !== pinEntered) { alert('Incorrect PIN.'); return; }
-            } else {
-              await db.collection('admins').doc(adminId).set({ pin: pinEntered, name: name });
+            if (!adminDoc.exists) {
+              alert('Admin account not found. Please contact administration.');
+              return;
+            }
+            if (adminDoc.data().pin !== pinEntered) {
+              alert('Incorrect Admin PIN.');
+              return;
             }
           } catch(err) {
-            if (adminPinStore[adminId] && adminPinStore[adminId] !== pinEntered) { alert('Incorrect PIN.'); return; }
-            adminPinStore[adminId] = pinEntered;
-            localStorage.setItem('rphs_admin_pins', JSON.stringify(adminPinStore));
+            console.error("Authentication Error:", err);
+            alert("Error connecting to admin directory.");
+            return;
           }
+        } else {
+          alert("Database connection offline. Admin verification unavailable.");
+          return;
         }
       }
 
@@ -487,32 +512,42 @@
 
     if (activeTab === 'complaints') {
       return `
-        <div class="section-title">${isAdmin ? 'Complaints Management' : 'File a Complaint'}</div>
-        <div class="section-sub">${isAdmin ? 'Review and update status of resident requests.' : 'Submit issues directly to society admin.'}</div>
+        <div class="section-title">${isAdmin ? 'Complaints & Suggestions Directory' : 'My Complaints & Suggestions'}</div>
+        <div class="section-sub">${isAdmin ? 'Review and manage status of resident requests.' : 'Track your submitted issues and feedback.'}</div>
 
         ${!isAdmin ? `
           <div class="card" style="cursor:default;">
+            <div style="font-weight:700; margin-bottom:10px;">Submit New Issue / Suggestion</div>
             <form id="complaint-form">
               <label>Issue Title</label>
-              <input type="text" id="c-title" placeholder="e.g. Street Light Outage" required />
+              <input type="text" id="c-title" placeholder="e.g. Water Supply Interruption" required />
 
               <label>Category</label>
-              <select id="c-category">
-                <option value="Maintenance">Maintenance & Plumbing</option>
-                <option value="Electricity">Electricity / Generator</option>
-                <option value="Security">Security & Access</option>
-                <option value="Sanitation">Sanitation & Garbage</option>
+              <select id="c-category" required>
+                <option value="Electricity / Street Lights">Electricity / Street Lights</option>
+                <option value="Water Supply">Water Supply</option>
+                <option value="Sewerage / Drainage">Sewerage / Drainage</option>
+                <option value="Roads / Footpaths">Roads / Footpaths</option>
+                <option value="Garbage / Sanitation">Garbage / Sanitation</option>
+                <option value="Security">Security</option>
+                <option value="Parks / Landscaping">Parks / Landscaping</option>
+                <option value="Maintenance">Maintenance & Repair</option>
+                <option value="Encroachment">Encroachment</option>
+                <option value="Billing / Dues">Billing / Dues</option>
+                <option value="Administration">Administration</option>
+                <option value="Suggestion / Feedback">Suggestion / Feedback</option>
+                <option value="Other">Other</option>
               </select>
 
               <label>Details</label>
-              <textarea id="c-desc" placeholder="Describe the problem..." required></textarea>
+              <textarea id="c-desc" placeholder="Provide full details here..." required></textarea>
 
-              <button type="submit" class="btn primary block" style="margin-top:14px;">Submit Complaint</button>
+              <button type="submit" class="btn primary block" style="margin-top:14px;">Submit Ticket</button>
             </form>
           </div>
         ` : ''}
 
-        <div id="complaints-list">Loading complaints...</div>
+        <div id="complaints-list">Loading tickets...</div>
       `;
     }
   }
@@ -588,43 +623,58 @@
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Notifications</div>
       ${userNotifs.length ? userNotifs.map(n => `
         <div style="background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px; border-radius:10px; margin-bottom:8px;">
-          <div style="font-size:13px; color:var(--text); line-height:1.4;">${n.text}</div>
-          <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">${n.time || 'Recently'}</div>
+          <div style="font-size:13px; color:var(--text); line-height:1.4;">${escapeHtml(n.text)}</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">${escapeHtml(n.time || 'Recently')}</div>
         </div>
       `).join('') : '<div style="color:var(--text-muted); text-align:center; padding:20px;">No notifications yet.</div>'}
     `;
     document.getElementById('modal-view').classList.add('active');
   };
 
+  // Atomic Field Reactions using Firestore arrayUnion / arrayRemove
   window.reactNotice = function(e, key, type) {
     if(e) e.stopPropagation();
     let n = notices.find((item, idx) => (item.id === key || idx == key));
     if (!n) return;
 
-    if (!n.likes) n.likes = [];
-    if (!n.dislikes) n.dislikes = [];
-
     const user = currentUser.name;
-    const hasLiked = n.likes.includes(user);
-    const hasDisliked = n.dislikes.includes(user);
-
-    if (type === 'like') {
-      if (hasLiked) { n.likes = n.likes.filter(u => u !== user); } 
-      else { n.likes.push(user); n.dislikes = n.dislikes.filter(u => u !== user); }
-    } else if (type === 'dislike') {
-      if (hasDisliked) { n.dislikes = n.dislikes.filter(u => u !== user); } 
-      else { n.dislikes.push(user); n.likes = n.likes.filter(u => u !== user); }
-    }
+    const hasLiked = (n.likes || []).includes(user);
+    const hasDisliked = (n.dislikes || []).includes(user);
 
     if (db && n.id) {
-      db.collection('notices').doc(n.id).update({ likes: n.likes, dislikes: n.dislikes }).then(() => {
-        loadNotices();
-        if (document.getElementById('modal-view').classList.contains('active')) openNoticeModal(key);
-      });
+      const docRef = db.collection('notices').doc(n.id);
+      if (type === 'like') {
+        if (hasLiked) {
+          docRef.update({ likes: firebase.firestore.FieldValue.arrayRemove(user) });
+        } else {
+          docRef.update({ 
+            likes: firebase.firestore.FieldValue.arrayUnion(user),
+            dislikes: firebase.firestore.FieldValue.arrayRemove(user)
+          });
+        }
+      } else if (type === 'dislike') {
+        if (hasDisliked) {
+          docRef.update({ dislikes: firebase.firestore.FieldValue.arrayRemove(user) });
+        } else {
+          docRef.update({ 
+            dislikes: firebase.firestore.FieldValue.arrayUnion(user),
+            likes: firebase.firestore.FieldValue.arrayRemove(user)
+          });
+        }
+      }
+      setTimeout(loadNotices, 300);
     } else {
+      if (!n.likes) n.likes = [];
+      if (!n.dislikes) n.dislikes = [];
+      if (type === 'like') {
+        if (hasLiked) { n.likes = n.likes.filter(u => u !== user); } 
+        else { n.likes.push(user); n.dislikes = n.dislikes.filter(u => u !== user); }
+      } else if (type === 'dislike') {
+        if (hasDisliked) { n.dislikes = n.dislikes.filter(u => u !== user); } 
+        else { n.dislikes.push(user); n.likes = n.likes.filter(u => u !== user); }
+      }
       localStorage.setItem('rphs_notices', JSON.stringify(notices));
       renderNoticesList();
-      if (document.getElementById('modal-view').classList.contains('active')) openNoticeModal(key);
     }
   };
 
@@ -639,9 +689,9 @@
 
     document.getElementById('modal-body').innerHTML = `
       <div style="margin-bottom:10px;"><span class="badge notice">Official Notice</span></div>
-      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:8px; line-height:1.3;">${item.title}</div>
-      <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Published: ${item.date || 'Today'}</div>
-      <div style="font-size:14.5px; color:#D6D9EC; line-height:1.6; white-space:pre-wrap;">${item.desc}</div>
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:8px; line-height:1.3;">${escapeHtml(item.title)}</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Published: ${escapeHtml(item.date || 'Today')}</div>
+      <div style="font-size:14.5px; color:#D6D9EC; line-height:1.6; white-space:pre-wrap;">${escapeHtml(item.desc)}</div>
       
       <div class="reactions-toolbar">
         <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${item.id || key}', 'like')">👍 ${likesCount}</button>
@@ -655,19 +705,19 @@
     let p = polls.find((item, idx) => (item.id === key || idx == key));
     if (!p) return;
 
-    const totalVotes = p.options.reduce((sum, opt) => sum + opt.votes, 0);
+    const totalVotes = p.options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
     const hasVoted = p.voters && p.voters.includes(currentUser.name);
 
     document.getElementById('modal-body').innerHTML = `
       <div style="margin-bottom:10px;"><span class="badge pending">Community Poll</span></div>
-      <div style="font-family:var(--font-display); font-size:19px; font-weight:600; margin-bottom:16px; line-height:1.3;">${p.title}</div>
+      <div style="font-family:var(--font-display); font-size:19px; font-weight:600; margin-bottom:16px; line-height:1.3;">${escapeHtml(p.title)}</div>
       ${p.options.map((opt, oIndex) => {
-        const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+        const pct = totalVotes > 0 ? Math.round(((opt.votes || 0) / totalVotes) * 100) : 0;
         return `
           <button class="poll-opt-btn" onclick="votePoll('${p.id || key}', ${oIndex})">
             <div class="poll-progress-bar" style="width:${pct}%;"></div>
-            <span class="poll-opt-text">${opt.text}</span>
-            <span class="poll-opt-count">${pct}% (${opt.votes})</span>
+            <span class="poll-opt-text">${escapeHtml(opt.text)}</span>
+            <span class="poll-opt-count">${pct}% (${opt.votes || 0})</span>
           </button>
         `;
       }).join('')}
@@ -739,10 +789,10 @@
         <div class="card" onclick="openNoticeModal('${itemKey}')">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <span class="badge notice">Official Notice</span>
-            <span style="font-size:11px; color:var(--text-muted);">${n.date || 'Today'}</span>
+            <span style="font-size:11px; color:var(--text-muted);">${escapeHtml(n.date || 'Today')}</span>
           </div>
-          <div style="font-weight:700; font-size:16px; margin-bottom:6px;">${n.title}</div>
-          <div style="font-size:13.5px; color:#D6D9EC; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${n.desc}</div>
+          <div style="font-weight:700; font-size:16px; margin-bottom:6px;">${escapeHtml(n.title)}</div>
+          <div style="font-size:13.5px; color:#D6D9EC; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(n.desc)}</div>
           
           <div class="reactions-toolbar">
             <button class="rxn-btn ${userLiked ? 'active-like' : ''}" onclick="reactNotice(event, '${itemKey}', 'like')">👍 ${likesCount}</button>
@@ -798,18 +848,18 @@
     if (!polls.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No polls available yet.</div>'; return; }
 
     el.innerHTML = polls.map((p, pIndex) => {
-      const totalVotes = p.options.reduce((sum, opt) => sum + opt.votes, 0);
+      const totalVotes = p.options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
       const itemKey = p.id ? p.id : pIndex;
       return `
         <div class="card" onclick="openPollModal('${itemKey}')">
-          <div style="font-weight:700; font-size:15px; margin-bottom:10px;">${p.title}</div>
+          <div style="font-weight:700; font-size:15px; margin-bottom:10px;">${escapeHtml(p.title)}</div>
           ${p.options.map((opt, oIndex) => {
-            const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+            const pct = totalVotes > 0 ? Math.round(((opt.votes || 0) / totalVotes) * 100) : 0;
             return `
               <button class="poll-opt-btn" onclick="event.stopPropagation(); votePoll('${itemKey}', ${oIndex})">
                 <div class="poll-progress-bar" style="width:${pct}%;"></div>
-                <span class="poll-opt-text">${opt.text}</span>
-                <span class="poll-opt-count">${pct}% (${opt.votes})</span>
+                <span class="poll-opt-text">${escapeHtml(opt.text)}</span>
+                <span class="poll-opt-count">${pct}% (${opt.votes || 0})</span>
               </button>
             `;
           }).join('')}
@@ -818,18 +868,38 @@
     }).join('');
   }
 
+  // Atomic Poll Vote Execution
   window.votePoll = function(pollIdentifier, optIndex) {
     let poll = polls.find((p, idx) => (p.id === pollIdentifier || idx == pollIdentifier));
-    if (!poll || (poll.voters && poll.voters.includes(currentUser.name))) return alert('Already voted.');
+    if (!poll || (poll.voters && poll.voters.includes(currentUser.name))) return alert('You have already voted on this poll.');
 
-    if (!poll.voters) poll.voters = [];
-    poll.voters.push(currentUser.name);
-    poll.options[optIndex].votes += 1;
-
-    sendNotification('admin', `📊 ${currentUser.name} voted on poll: "${poll.title}"`);
     if (db && poll.id) {
-      db.collection('polls').doc(poll.id).update({ options: poll.options, voters: poll.voters }).then(() => loadPolls());
+      const pollRef = db.collection('polls').doc(poll.id);
+      db.runTransaction((transaction) => {
+        return transaction.get(pollRef).then((doc) => {
+          if (!doc.exists) return;
+          const data = doc.data();
+          if (data.voters && data.voters.includes(currentUser.name)) {
+            throw "Already voted";
+          }
+          const updatedOptions = [...data.options];
+          updatedOptions[optIndex].votes = (updatedOptions[optIndex].votes || 0) + 1;
+          transaction.update(pollRef, {
+            options: updatedOptions,
+            voters: firebase.firestore.FieldValue.arrayUnion(currentUser.name)
+          });
+        });
+      }).then(() => {
+        sendNotification('admin', `📊 ${currentUser.name} voted on poll: "${poll.title}"`);
+        loadPolls();
+      }).catch(err => {
+        if (err === "Already voted") alert("You have already voted.");
+        else console.error("Poll transaction error:", err);
+      });
     } else {
+      if (!poll.voters) poll.voters = [];
+      poll.voters.push(currentUser.name);
+      poll.options[optIndex].votes += 1;
       localStorage.setItem('rphs_polls', JSON.stringify(polls));
       renderPollsList();
     }
@@ -841,57 +911,158 @@
     const desc = document.getElementById('c-desc').value.trim();
     if (!title || !desc) return;
 
-    const newComplaint = { title, category, desc, resident: currentUser.name, house: currentUser.house || 'N/A', status: 'Pending', createdAt: new Date().toISOString() };
+    const newComplaint = {
+      title,
+      category,
+      desc,
+      resident: currentUser.name,
+      house: currentUser.house || 'N/A',
+      status: 'Pending',
+      assignedDept: 'Unassigned',
+      adminNote: '',
+      createdAt: new Date().toISOString()
+    };
+
     if (db) {
       db.collection('complaints').add(newComplaint).then(() => { 
-        sendNotification('admin', `⚠️ New Complaint from ${currentUser.name}: "${title}"`); 
-        alert('Submitted!'); 
+        sendNotification('admin', `⚠️ New Issue from ${currentUser.name}: "${title}"`); 
+        alert('Ticket Submitted Successfully!'); 
         document.getElementById('complaint-form').reset(); 
         loadComplaints(); 
       }).catch(err => {
         complaints.unshift(newComplaint);
         localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
-        alert('Submitted!');
+        alert('Ticket Saved Locally!');
         renderComplaintsList();
       });
     } else {
       complaints.unshift(newComplaint);
       localStorage.setItem('rphs_complaints', JSON.stringify(complaints));
-      alert('Submitted!');
+      alert('Ticket Saved Locally!');
       renderComplaintsList();
     }
   }
 
+  // Privacy Protection: Filter database queries based on role
   function loadComplaints() {
     if (db) {
-      db.collection('complaints').orderBy('createdAt', 'desc').get().then(snapshot => { 
+      let query = db.collection('complaints');
+      if (currentUser.role !== 'admin') {
+        // Strict Privacy Guard: Residents can only fetch their own complaints
+        query = query.where('resident', '==', currentUser.name);
+      }
+      
+      query.get().then(snapshot => { 
         complaints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
+        // Sort descending locally to avoid Firestore composite index requirement
+        complaints.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
         renderComplaintsList(); 
-      }).catch(() => {
+      }).catch(err => {
+        console.warn("Error fetching complaints:", err);
         complaints = JSON.parse(localStorage.getItem('rphs_complaints')) || [];
+        if (currentUser.role !== 'admin') {
+          complaints = complaints.filter(c => c.resident === currentUser.name);
+        }
         renderComplaintsList();
       });
     } else {
       complaints = JSON.parse(localStorage.getItem('rphs_complaints')) || [];
+      if (currentUser.role !== 'admin') {
+        complaints = complaints.filter(c => c.resident === currentUser.name);
+      }
       renderComplaintsList();
     }
   }
 
+  window.openAdminComplaintModal = function(id) {
+    const c = complaints.find(item => item.id === id);
+    if (!c) return;
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:18px; font-weight:600; margin-bottom:12px;">Manage Ticket Status</div>
+      <div style="font-size:14px; font-weight:700; color:var(--accent-2);">${escapeHtml(c.title)}</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Resident: ${escapeHtml(c.resident)} (${escapeHtml(c.house)})</div>
+
+      <label>Ticket Status</label>
+      <select id="update-status">
+        <option value="Pending" ${c.status==='Pending'?'selected':''}>Pending</option>
+        <option value="Assigned" ${c.status==='Assigned'?'selected':''}>Assigned</option>
+        <option value="In Progress" ${c.status==='In Progress'?'selected':''}>In Progress</option>
+        <option value="Resolved" ${c.status==='Resolved'?'selected':''}>Resolved</option>
+        <option value="Closed" ${c.status==='Closed'?'selected':''}>Closed</option>
+      </select>
+
+      <label>Assigned Department</label>
+      <input type="text" id="update-dept" value="${escapeHtml(c.assignedDept || 'Unassigned')}" placeholder="e.g. Electrical Services" />
+
+      <label>Admin Note / Resolution Response</label>
+      <textarea id="update-note" placeholder="Provide details to the resident...">${escapeHtml(c.adminNote || '')}</textarea>
+
+      <button class="btn primary block" style="margin-top:16px;" onclick="saveComplaintStatus('${c.id}')">Update Ticket</button>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+  };
+
+  window.saveComplaintStatus = function(id) {
+    const newStatus = document.getElementById('update-status').value;
+    const newDept = document.getElementById('update-dept').value.trim();
+    const newNote = document.getElementById('update-note').value.trim();
+
+    if (db) {
+      db.collection('complaints').doc(id).update({
+        status: newStatus,
+        assignedDept: newDept,
+        adminNote: newNote,
+        updatedAt: new Date().toISOString()
+      }).then(() => {
+        alert('Ticket Updated!');
+        closeModal();
+        loadComplaints();
+      });
+    }
+  };
+
   function renderComplaintsList() {
     const el = document.getElementById('complaints-list');
     if (!el) return;
-    if (!complaints.length) { el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No complaints filed yet.</div>'; return; }
+    if (!complaints.length) { 
+      el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No tickets found.</div>'; 
+      return; 
+    }
 
-    el.innerHTML = complaints.map((c) => `
-      <div class="card" style="cursor:default;">
-        <div style="display:flex; justify-content:space-between;"><div style="font-weight:700;">${c.title}</div><span class="badge pending">${c.status}</span></div>
-        <div style="font-size:12px; color:var(--text-muted);">${c.category} • By ${c.resident}</div>
-        <div style="font-size:13.5px; margin-top:6px;">${c.desc}</div>
-      </div>
-    `).join('');
+    const isAdmin = (currentUser.role === 'admin');
+
+    el.innerHTML = complaints.map((c) => {
+      const badgeClass = c.status ? c.status.toLowerCase().replace(/\s+/g, '-') : 'pending';
+      return `
+        <div class="card" style="cursor:default;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div style="font-weight:700; font-size:15px; color:var(--text);">${escapeHtml(c.title)}</div>
+            <span class="badge ${badgeClass}">${escapeHtml(c.status || 'Pending')}</span>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
+            ${escapeHtml(c.category)} • ${isAdmin ? `By ${escapeHtml(c.resident)} (${escapeHtml(c.house)})` : `Submitted by you`}
+          </div>
+          <div style="font-size:13.5px; margin-top:8px; line-height:1.5; color:#D6D9EC;">${escapeHtml(c.desc)}</div>
+
+          ${(c.assignedDept && c.assignedDept !== 'Unassigned') || c.adminNote ? `
+            <div style="margin-top:10px; padding:10px; background:var(--bg-elevated-2); border-radius:8px; border:1px solid var(--border-soft);">
+              ${c.assignedDept ? `<div style="font-size:11.5px; color:var(--info); font-weight:700;">Department: ${escapeHtml(c.assignedDept)}</div>` : ''}
+              ${c.adminNote ? `<div style="font-size:12px; color:var(--text-muted); margin-top:4px;"><strong>Admin Note:</strong> ${escapeHtml(c.adminNote)}</div>` : ''}
+            </div>
+          ` : ''}
+
+          ${isAdmin && c.id ? `
+            <button class="btn sm" style="margin-top:12px; background:var(--bg-elevated-3); color:var(--accent-2);" onclick="openAdminComplaintModal('${c.id}')">
+              ⚙️ Manage Status
+            </button>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
   }
 
-  // Launch app
+  // Launch application
   render();
 })();
 </script>
