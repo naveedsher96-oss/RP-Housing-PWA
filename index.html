@@ -148,6 +148,24 @@
   .badge.resolved{background:var(--success-soft); color:var(--success);}
   .badge.closed{background:rgba(255,255,255,0.1); color:var(--text-muted);}
   .badge.notice{background:var(--accent-soft); color:var(--accent-2);}
+  .badge.unpaid{background:var(--warning-soft); color:var(--accent-2);}
+  .badge.paid{background:var(--success-soft); color:var(--success);}
+  .badge.overdue{background:var(--danger-soft); color:var(--danger);}
+  .badge.cancelled{background:rgba(255,255,255,0.1); color:var(--text-muted);}
+
+  .stat-strip{display:flex; gap:8px; margin-bottom:14px;}
+  .stat-box{flex:1; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;}
+  .stat-box .k{font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700;}
+  .stat-box .v{font-family:var(--font-mono); font-size:15px; font-weight:600; margin-top:4px;}
+
+  .chip-row{display:flex; gap:8px; margin-bottom:14px; overflow-x:auto;}
+  .chip{font-size:12px; font-weight:700; padding:6px 12px; border-radius:20px; border:1px solid var(--border); background:var(--bg-elevated-2); color:var(--text-muted); cursor:pointer; white-space:nowrap;}
+  .chip.active{background:var(--accent-soft); color:var(--accent-2); border-color:rgba(242,169,59,0.35);}
+
+  .amount{font-family:var(--font-mono); font-size:19px; font-weight:600; color:var(--text);}
+  .due-card{background:linear-gradient(180deg, var(--bg-elevated-2), var(--bg-elevated)); border:1px solid rgba(242,169,59,0.28); border-radius:var(--radius); padding:16px; margin-bottom:14px;}
+  .filter-bar{background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:14px;}
+  .filter-bar label{margin-top:0;}
 
   .btn{
     font-family:inherit; font-weight:700; font-size:13.5px; border:none; border-radius:12px;
@@ -270,6 +288,10 @@
   let noticesList = [];
   let pollsList = [];
   let ticketsList = [];
+  let billsList = [];
+  let billFilterStatus = 'all';
+  let ticketFilterMonth = 'all';
+  let ticketFilterStatus = 'all';
 
   const appEl = document.getElementById('app');
 
@@ -394,6 +416,9 @@
           </button>
           <button class="tab-btn ${activeTab==='tickets'?'active':''}" data-tab="tickets">
             <span class="lbl">Complaints</span>
+          </button>
+          <button class="tab-btn ${activeTab==='bills'?'active':''}" data-tab="bills">
+            <span class="lbl">Bills</span>
           </button>
           <button class="tab-btn ${activeTab==='biodata'?'active':''}" data-tab="biodata">
             <span class="lbl">${isAdmin ? 'Residents' : 'Profile'}</span>
@@ -705,7 +730,25 @@
           <button class="btn sm primary" onclick="openNewTicketModal()">+ Lodge Ticket</button>
         </div>
         <div class="section-sub">Report maintenance issues or submit feedback.</div>
+        ${isAdmin ? renderTicketFilterBar() : ''}
         <div id="tickets-list">Loading complaints directory...</div>
+      `;
+    }
+
+    if (activeTab === 'bills') {
+      return `
+        <div class="section-title">
+          ${isAdmin ? 'Maintenance Bills' : 'My Bills'}
+          ${isAdmin ? '<button class="btn sm primary" onclick="openIssueBillModal()">+ Issue Bill</button>' : ''}
+        </div>
+        <div class="section-sub">${isAdmin ? 'Issue and track maintenance billing per house.' : 'Maintenance charges issued to your house by management.'}</div>
+        <div id="bills-summary"></div>
+        <div class="chip-row">
+          ${['all','unpaid','overdue','paid'].map(f => `
+            <button class="chip ${billFilterStatus===f?'active':''}" onclick="setBillFilter('${f}')">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)}</button>
+          `).join('')}
+        </div>
+        <div id="bills-list">Loading bills...</div>
       `;
     }
 
@@ -768,6 +811,7 @@
     if (activeTab === 'notices') loadNotices();
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'tickets') loadTickets();
+    if (activeTab === 'bills') loadBills();
     if (activeTab === 'biodata' && isAdmin) loadAllResidents();
     if (activeTab === 'approvals' && isAdmin) loadPendingResidents();
   }
@@ -1060,17 +1104,197 @@
     }).catch(e => console.error("Error loading tickets:", e));
   }
 
-  function renderTicketsList() {
-    const listEl = document.getElementById('tickets-list');
-    if (!listEl) return;
-    if (!ticketsList.length) {
-      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No complaints or tickets lodged yet.</div>';
+  function monthKey(date) {
+    if (!date) return '';
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+  }
+
+  function monthLabel(key) {
+    const [y, m] = key.split('-');
+    const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return names[Number(m) - 1] + ' ' + y;
+  }
+
+  function toDate(value) {
+    if (!value) return null;
+    if (typeof value.toDate === 'function') return value.toDate();
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function formatDate(value) {
+    const d = toDate(value);
+    return d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+  }
+
+  function lastTwelveMonths() {
+    const keys = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      keys.push(monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)));
+    }
+    return keys;
+  }
+
+  function renderTicketFilterBar() {
+    return `
+      <div class="filter-bar">
+        <label>Filter Complaints (Admin)</label>
+        <div style="display:flex; gap:8px;">
+          <select id="ticket-filter-month" onchange="setTicketFilters()" style="flex:1;">
+            <option value="all" ${ticketFilterMonth==='all'?'selected':''}>All months</option>
+            ${lastTwelveMonths().map(k => `<option value="${k}" ${ticketFilterMonth===k?'selected':''}>${monthLabel(k)}</option>`).join('')}
+          </select>
+          <select id="ticket-filter-status" onchange="setTicketFilters()" style="flex:1;">
+            <option value="all" ${ticketFilterStatus==='all'?'selected':''}>All statuses</option>
+            <option value="pending" ${ticketFilterStatus==='pending'?'selected':''}>Pending</option>
+            <option value="in-progress" ${ticketFilterStatus==='in-progress'?'selected':''}>In Progress</option>
+            <option value="resolved" ${ticketFilterStatus==='resolved'?'selected':''}>Resolved</option>
+            <option value="closed" ${ticketFilterStatus==='closed'?'selected':''}>Closed</option>
+          </select>
+        </div>
+        <div id="ticket-filter-summary" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
+        <button class="btn sm secondary block" style="margin-top:10px;" onclick="downloadTicketsReportPDF()">Print / Export Filtered Report</button>
+      </div>
+    `;
+  }
+
+  function filteredTickets() {
+    return ticketsList.filter(t => {
+      if (ticketFilterStatus !== 'all' && (t.status || 'pending') !== ticketFilterStatus) return false;
+      if (ticketFilterMonth !== 'all') {
+        const d = toDate(t.createdAt);
+        if (!d || monthKey(d) !== ticketFilterMonth) return false;
+      }
+      return true;
+    });
+  }
+
+  window.setTicketFilters = function() {
+    const monthEl = document.getElementById('ticket-filter-month');
+    const statusEl = document.getElementById('ticket-filter-status');
+    if (monthEl) ticketFilterMonth = monthEl.value;
+    if (statusEl) ticketFilterStatus = statusEl.value;
+    renderTicketsList();
+  };
+
+  window.downloadTicketsReportPDF = function() {
+    const list = filteredTickets();
+    if (!list.length) {
+      alert("No complaints match the current filter.");
       return;
     }
 
-    const isAdmin = currentUserProfile.role === 'admin';
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
 
-    listEl.innerHTML = ticketsList.map(t => `
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Roshan Pakistan Housing Society", 105, 18, { align: "center" });
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text("Complaints Report", 105, 26, { align: "center" });
+      doc.setFontSize(10);
+      doc.text(`Period: ${ticketFilterMonth === 'all' ? 'All months' : monthLabel(ticketFilterMonth)}   |   Status: ${ticketFilterStatus === 'all' ? 'All' : ticketFilterStatus}`, 105, 33, { align: "center" });
+      doc.text(`Generated: ${new Date().toLocaleString('en-GB')}   |   Total: ${list.length}`, 105, 39, { align: "center" });
+      doc.line(15, 44, 195, 44);
+
+      let y = 52;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Ticket", 15, y);
+      doc.text("Date", 45, y);
+      doc.text("House", 72, y);
+      doc.text("Category", 112, y);
+      doc.text("Status", 168, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
+
+      list.forEach(t => {
+        if (y > 275) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(String(t.ticketNo || '-'), 15, y);
+        doc.text(formatDate(t.createdAt), 45, y);
+        doc.text(doc.splitTextToSize(String(t.house || 'N/A'), 38), 72, y);
+        doc.text(doc.splitTextToSize(String(t.category || '-'), 54), 112, y);
+        doc.text(String(t.status || 'pending'), 168, y);
+        y += 8;
+      });
+
+      doc.save(`Complaints_Report_${ticketFilterMonth === 'all' ? 'All' : ticketFilterMonth}.pdf`);
+    } catch(err) {
+      alert("Error generating report: " + err.message);
+    }
+  };
+
+  window.downloadTicketPDF = function(ticketId) {
+    const t = ticketsList.find(item => item.id === ticketId);
+    if (!t) return;
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Roshan Pakistan Housing Society", 105, 20, { align: "center" });
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text("Official Complaint Record", 105, 28, { align: "center" });
+      doc.line(20, 35, 190, 35);
+
+      let y = 48;
+      const addRow = (label, val) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(label + ":", 25, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(val || 'N/A'), 75, y);
+        y += 10;
+      };
+
+      addRow("Ticket Number", t.ticketNo);
+      addRow("Lodged On", formatDate(t.createdAt));
+      addRow("Resident", t.name);
+      addRow("House / Plot", t.house);
+      addRow("Category", t.category);
+      addRow("Status", t.status || 'pending');
+      addRow("Assigned Dept", t.department);
+
+      y += 5;
+      doc.setFont("helvetica", "bold");
+      doc.text("Description:", 25, y);
+      y += 8;
+      doc.setFont("helvetica", "normal");
+      doc.text(doc.splitTextToSize(t.description || 'N/A', 160), 25, y);
+
+      doc.save(`Complaint_${(t.ticketNo || 'Record').replace(/\s+/g, '_')}.pdf`);
+    } catch(err) {
+      alert("Error generating PDF: " + err.message);
+    }
+  };
+
+  function renderTicketsList() {
+    const listEl = document.getElementById('tickets-list');
+    if (!listEl) return;
+
+    const isAdmin = currentUserProfile.role === 'admin';
+    const list = isAdmin ? filteredTickets() : ticketsList;
+
+    const summaryEl = document.getElementById('ticket-filter-summary');
+    if (summaryEl) {
+      const count = status => list.filter(t => (t.status || 'pending') === status).length;
+      summaryEl.innerHTML = `Showing <strong>${list.length}</strong> of ${ticketsList.length} complaints — Pending: ${count('pending')} | In Progress: ${count('in-progress')} | Resolved: ${count('resolved')} | Closed: ${count('closed')}`;
+    }
+
+    if (!list.length) {
+      listEl.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${ticketsList.length ? 'No complaints match the selected filter.' : 'No complaints or tickets lodged yet.'}</div>`;
+      return;
+    }
+
+    listEl.innerHTML = list.map(t => `
       <div class="card" style="cursor:default;" onclick="openTicketDetailModal('${t.id}')">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
           <div>
@@ -1081,7 +1305,9 @@
         </div>
         <div style="font-size:13px; color:var(--text); line-height:1.4; margin-bottom:8px;">${escapeHtml(t.description)}</div>
         <div style="font-size:11.5px; color:var(--text-muted);">House: ${escapeHtml(t.house || 'N/A')} | Resident: ${escapeHtml(t.name || 'N/A')}</div>
+        <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Lodged: ${escapeHtml(formatDate(t.createdAt))}</div>
         ${t.department ? `<div style="font-size:11.5px; color:var(--info); margin-top:4px;">Assigned Dept: ${escapeHtml(t.department)}</div>` : ''}
+        ${isAdmin ? `<button class="btn sm secondary" style="margin-top:12px;" onclick="event.stopPropagation(); downloadTicketPDF('${t.id}')">Export PDF</button>` : ''}
       </div>
     `).join('');
   }
@@ -1145,6 +1371,7 @@
       <div style="background:var(--bg-elevated-2); padding:12px; border-radius:10px; font-size:13.5px; line-height:1.5; margin-bottom:16px;">${escapeHtml(t.description)}</div>
 
       ${isAdmin ? `
+        <button class="btn secondary block" onclick="downloadTicketPDF('${t.id}')">Export This Complaint as PDF</button>
         <form id="admin-ticket-form">
           <label>Update Status</label>
           <select id="admin-ticket-status">
@@ -1247,6 +1474,342 @@
         alert("Error updating biodata: " + err.message);
       }
     });
+  };
+
+  // --- MAINTENANCE BILLS ---
+  function formatMoney(amount) {
+    return 'PKR ' + Number(amount || 0).toLocaleString('en-PK');
+  }
+
+  function billStatus(b) {
+    const status = b.status || 'unpaid';
+    if (status === 'unpaid') {
+      const due = toDate(b.dueDate);
+      if (due && due < new Date(new Date().toDateString())) return 'overdue';
+    }
+    return status;
+  }
+
+  function loadBills() {
+    if (!db || !auth.currentUser) return;
+    const isAdmin = currentUserProfile.role === 'admin';
+    const query = isAdmin
+      ? db.collection('bills')
+      : db.collection('bills').where('uid', '==', auth.currentUser.uid);
+
+    query.get().then(snapshot => {
+      billsList = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+          const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
+          return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
+        });
+      renderBillsList();
+    }).catch(e => console.error("Error loading bills:", e));
+  }
+
+  window.setBillFilter = function(filter) {
+    billFilterStatus = filter;
+    document.querySelectorAll('.chip-row .chip').forEach(chip => {
+      chip.classList.toggle('active', chip.textContent.trim().toLowerCase() === (filter === 'all' ? 'all' : filter));
+    });
+    renderBillsList();
+  };
+
+  function renderBillsList() {
+    const listEl = document.getElementById('bills-list');
+    if (!listEl) return;
+    const isAdmin = currentUserProfile.role === 'admin';
+
+    const summaryEl = document.getElementById('bills-summary');
+    if (summaryEl) {
+      const outstanding = billsList.filter(b => billStatus(b) !== 'paid' && billStatus(b) !== 'cancelled').reduce((s, b) => s + Number(b.amount || 0), 0);
+      const collected = billsList.filter(b => billStatus(b) === 'paid').reduce((s, b) => s + Number(b.amount || 0), 0);
+      const billed = billsList.filter(b => billStatus(b) !== 'cancelled').reduce((s, b) => s + Number(b.amount || 0), 0);
+
+      summaryEl.innerHTML = isAdmin ? `
+        <div class="stat-strip">
+          <div class="stat-box"><div class="k">Billed</div><div class="v">${formatMoney(billed)}</div></div>
+          <div class="stat-box"><div class="k">Collected</div><div class="v" style="color:var(--success);">${formatMoney(collected)}</div></div>
+          <div class="stat-box"><div class="k">Outstanding</div><div class="v" style="color:var(--accent-2);">${formatMoney(outstanding)}</div></div>
+        </div>
+      ` : `
+        <div class="due-card">
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700;">Total Outstanding</div>
+          <div style="font-family:var(--font-mono); font-size:28px; font-weight:600; color:var(--accent-2); margin:6px 0 2px;">${formatMoney(outstanding)}</div>
+          <div style="font-size:12px; color:var(--text-muted);">${billsList.filter(b => billStatus(b) === 'unpaid' || billStatus(b) === 'overdue').length} unpaid bill(s) · ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
+        </div>
+      `;
+    }
+
+    const list = billFilterStatus === 'all' ? billsList : billsList.filter(b => billStatus(b) === billFilterStatus);
+
+    if (!list.length) {
+      listEl.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${billsList.length ? 'No bills match the selected filter.' : 'No maintenance bills issued yet.'}</div>`;
+      return;
+    }
+
+    listEl.innerHTML = list.map(b => {
+      const status = billStatus(b);
+      return `
+        <div class="card" onclick="openBillDetailModal('${b.id}')">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+            <div>
+              <span class="ticket-no">${escapeHtml(b.billNo || 'BILL')}</span>
+              <span style="font-weight:700; font-size:15px; color:var(--accent-2); margin-left:6px;">${escapeHtml(b.category || 'Maintenance')}</span>
+            </div>
+            <span class="badge ${status}">${escapeHtml(status)}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin:10px 0 6px;">
+            <div class="amount">${formatMoney(b.amount)}</div>
+            <div style="font-size:11.5px; color:${status === 'overdue' ? 'var(--danger)' : 'var(--text-muted)'};">Due ${escapeHtml(formatDate(b.dueDate))}</div>
+          </div>
+          <div style="font-size:11.5px; color:var(--text-muted);">Period: ${escapeHtml(b.period || 'N/A')}${isAdmin ? ' | ' + escapeHtml(b.name || 'N/A') + ' — ' + escapeHtml(b.house || 'N/A') : ''}</div>
+          <div style="margin-top:12px; display:flex; gap:8px;">
+            ${status === 'paid'
+              ? `<button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Receipt PDF</button>`
+              : (isAdmin
+                  ? `<button class="btn sm primary" onclick="event.stopPropagation(); markBillPaid('${b.id}')">Mark Paid</button>
+                     <button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Invoice PDF</button>`
+                  : `<button class="btn sm primary block" onclick="event.stopPropagation(); payBill('${b.id}')">Pay Now</button>`)}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.payBill = function() {
+    alert("Online payment gateway is not connected yet. Please pay through management and the bill will be marked paid.");
+  };
+
+  window.openIssueBillModal = async function() {
+    if (currentUserProfile.role !== 'admin') return;
+
+    let residents = [];
+    try {
+      const snap = await db.collection('users').where('approved', '==', true).get();
+      residents = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(r => r.role === 'resident');
+    } catch(e) {
+      console.error("Error loading residents for billing:", e);
+    }
+
+    const today = new Date();
+    const defaultPeriod = monthLabel(monthKey(today));
+    const defaultDue = new Date(today.getFullYear(), today.getMonth(), 25).toISOString().slice(0, 10);
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Issue Maintenance Bill</div>
+      <form id="bill-form">
+        <label>Resident / House</label>
+        <select id="bill-resident" required>
+          ${residents.map(r => `<option value="${escapeHtml(r.uid)}">${escapeHtml(r.name)} — ${escapeHtml(r.house || 'N/A')}</option>`).join('')}
+          <option value="__all__">— All approved residents (bulk issue) —</option>
+        </select>
+
+        <label>Bill Category</label>
+        <select id="bill-category" required>
+          <option value="Monthly Maintenance">Monthly Maintenance</option>
+          <option value="Water Supply">Water Supply</option>
+          <option value="Security Surcharge">Security Surcharge</option>
+          <option value="Repair / Damage Recovery">Repair / Damage Recovery</option>
+          <option value="Other">Other</option>
+        </select>
+
+        <label>Billing Period</label>
+        <input type="text" id="bill-period" value="${escapeHtml(defaultPeriod)}" required />
+
+        <label>Amount (PKR)</label>
+        <input type="text" id="bill-amount" placeholder="e.g. 4500" required />
+
+        <label>Due Date</label>
+        <input type="text" id="bill-due" value="${defaultDue}" placeholder="YYYY-MM-DD" required />
+
+        <label>Notes / Breakdown</label>
+        <textarea id="bill-notes" placeholder="Describe what this bill covers..."></textarea>
+
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Issue Bill & Notify Resident</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('bill-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const target = document.getElementById('bill-resident').value;
+      const category = document.getElementById('bill-category').value;
+      const period = document.getElementById('bill-period').value.trim();
+      const amount = Number(document.getElementById('bill-amount').value.trim());
+      const dueDate = document.getElementById('bill-due').value.trim();
+      const notes = document.getElementById('bill-notes').value.trim();
+
+      if (!amount || amount <= 0) {
+        alert("Please enter a valid amount.");
+        return;
+      }
+
+      const targets = target === '__all__' ? residents : residents.filter(r => r.uid === target);
+      if (!targets.length) {
+        alert("No resident selected.");
+        return;
+      }
+
+      try {
+        for (const r of targets) {
+          const billNo = 'BILL-' + Math.floor(100000 + Math.random() * 900000);
+          await db.collection('bills').add({
+            billNo,
+            uid: r.uid,
+            name: r.name,
+            house: r.house || '',
+            category,
+            period,
+            amount,
+            currency: 'PKR',
+            dueDate,
+            notes,
+            status: 'unpaid',
+            issuedBy: currentUserProfile.name,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          await sendNotification(r.uid, `New Maintenance Bill (${billNo})`, `${category} for ${period}: ${formatMoney(amount)}. Due by ${dueDate}.`, 'info');
+        }
+        closeModal();
+        loadBills();
+      } catch(err) {
+        alert("Error issuing bill: " + err.message);
+      }
+    });
+  };
+
+  window.openBillDetailModal = function(billId) {
+    const b = billsList.find(item => item.id === billId);
+    if (!b) return;
+    const isAdmin = currentUserProfile.role === 'admin';
+    const status = billStatus(b);
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span class="ticket-no">${escapeHtml(b.billNo || 'BILL')}</span>
+        <span class="badge ${status}">${escapeHtml(status)}</span>
+      </div>
+      <div style="font-family:var(--font-display); font-size:18px; font-weight:600; color:var(--accent-2); margin-bottom:4px;">${escapeHtml(b.category || 'Maintenance')}</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">${escapeHtml(b.name || '')} (${escapeHtml(b.house || 'N/A')}) · ${escapeHtml(b.period || 'N/A')}</div>
+
+      <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span style="font-size:13px; color:var(--text-muted);">Amount</span><span class="amount">${formatMoney(b.amount)}</span></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span style="font-size:13px; color:var(--text-muted);">Due Date</span><span style="font-size:13.5px;">${escapeHtml(formatDate(b.dueDate))}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span style="font-size:13px; color:var(--text-muted);">${status === 'paid' ? 'Paid On' : 'Issued On'}</span><span style="font-size:13.5px;">${escapeHtml(formatDate(status === 'paid' ? b.paidAt : b.createdAt))}</span></div>
+      </div>
+
+      ${b.notes ? `<div style="font-size:13.5px; line-height:1.5; margin-bottom:16px; white-space:pre-wrap;">${escapeHtml(b.notes)}</div>` : ''}
+
+      <button class="btn secondary block" onclick="downloadBillPDF('${b.id}')" style="margin-bottom:10px;">${status === 'paid' ? 'Download Receipt' : 'Download Invoice'}</button>
+
+      ${isAdmin ? `
+        <form id="admin-bill-form">
+          <label>Update Status</label>
+          <select id="admin-bill-status">
+            <option value="unpaid" ${(b.status||'unpaid')==='unpaid'?'selected':''}>Unpaid</option>
+            <option value="paid" ${b.status==='paid'?'selected':''}>Paid</option>
+            <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
+          </select>
+
+          <label>Payment Reference (offline / bank)</label>
+          <input type="text" id="admin-bill-ref" value="${escapeHtml(b.paymentRef || '')}" placeholder="e.g. HBL TRX 88213" />
+
+          <button type="submit" class="btn primary block" style="margin-top:16px;">Save Bill Update</button>
+        </form>
+      ` : (status === 'paid' ? '' : `
+        <button class="btn primary block" onclick="payBill('${b.id}')">Pay Now — ${formatMoney(b.amount)}</button>
+        <div style="text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px;">Online payment gateway to be connected.</div>
+      `)}
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    if (isAdmin) {
+      document.getElementById('admin-bill-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newStatus = document.getElementById('admin-bill-status').value;
+        const paymentRef = document.getElementById('admin-bill-ref').value.trim();
+
+        try {
+          const update = { status: newStatus, paymentRef };
+          if (newStatus === 'paid') update.paidAt = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection('bills').doc(billId).update(update);
+          await sendNotification(b.uid, `Bill Updated (${b.billNo})`, `Your bill for ${b.period} is now marked: ${newStatus.toUpperCase()}`, 'info');
+          closeModal();
+          loadBills();
+        } catch(err) {
+          alert("Error updating bill: " + err.message);
+        }
+      });
+    }
+  };
+
+  window.markBillPaid = async function(billId) {
+    const b = billsList.find(item => item.id === billId);
+    if (!b || currentUserProfile.role !== 'admin') return;
+    if (!confirm(`Mark ${b.billNo} (${formatMoney(b.amount)}) as paid?`)) return;
+
+    try {
+      await db.collection('bills').doc(billId).update({
+        status: 'paid',
+        paidAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await sendNotification(b.uid, `Payment Received (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been recorded.`, 'success');
+      loadBills();
+    } catch(err) {
+      alert("Error updating bill: " + err.message);
+    }
+  };
+
+  window.downloadBillPDF = function(billId) {
+    const b = billsList.find(item => item.id === billId);
+    if (!b) return;
+    const status = billStatus(b);
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Roshan Pakistan Housing Society", 105, 20, { align: "center" });
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text(status === 'paid' ? "Maintenance Payment Receipt" : "Maintenance Bill / Invoice", 105, 28, { align: "center" });
+      doc.line(20, 35, 190, 35);
+
+      let y = 48;
+      const addRow = (label, val) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(label + ":", 25, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(val || 'N/A'), 85, y);
+        y += 10;
+      };
+
+      addRow("Bill Number", b.billNo);
+      addRow("Resident", b.name);
+      addRow("House / Plot", b.house);
+      addRow("Category", b.category);
+      addRow("Billing Period", b.period);
+      addRow("Amount", formatMoney(b.amount));
+      addRow("Due Date", formatDate(b.dueDate));
+      addRow("Status", status);
+      if (status === 'paid') addRow("Paid On", formatDate(b.paidAt));
+      if (b.paymentRef) addRow("Payment Reference", b.paymentRef);
+
+      y += 5;
+      doc.setFont("helvetica", "bold");
+      doc.text("Notes:", 25, y);
+      y += 8;
+      doc.setFont("helvetica", "normal");
+      doc.text(doc.splitTextToSize(b.notes || 'N/A', 160), 25, y);
+
+      doc.save(`${status === 'paid' ? 'Receipt' : 'Bill'}_${(b.billNo || 'Record').replace(/\s+/g, '_')}.pdf`);
+    } catch(err) {
+      alert("Error generating PDF: " + err.message);
+    }
   };
 
   // --- RESIDENTS DIRECTORY (ADMIN) ---
