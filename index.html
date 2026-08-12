@@ -1687,7 +1687,7 @@
     const status = billStatus(b);
 
     document.getElementById('modal-body').innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding-right:44px; margin-bottom:12px;">
         <span class="ticket-no">${escapeHtml(b.billNo || 'BILL')}</span>
         <span class="badge ${status}">${escapeHtml(status)}</span>
       </div>
