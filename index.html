@@ -18,6 +18,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
 <!-- jsPDF for Admin PDF Export & Receipts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -261,12 +262,14 @@
   let db = null;
   let auth = null;
   let messaging = null;
+  let storage = null;
 
   try {
     if (typeof firebase !== 'undefined') {
       if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
       db = firebase.firestore();
       auth = firebase.auth();
+      storage = firebase.storage();
 
       firebase.messaging.isSupported().then(supported => {
         if (supported) {
@@ -1538,9 +1541,9 @@
           `}
 
           <!-- Payment Receipt Upload Form -->
-          ${!isPaid ? `
-            <div class="upload-receipt-section" style="margin-top: 15px;">
-              <label for="receiptFile_${b.id}" style="display: block; margin-bottom: 5px; font-weight: bold;">
+          ${(!isPaid && !isAdmin) ? `
+            <div class="upload-receipt-section" style="margin-top: 15px; background:var(--bg-elevated-2); padding:10px; border-radius:10px; border:1px solid var(--border);">
+              <label for="receiptFile_${b.id}" style="display: block; margin-bottom: 5px; font-weight: bold; font-size:11px;">
                 Upload Payment Proof (JPG, PNG, PDF):
               </label>
               
@@ -1548,15 +1551,21 @@
                 type="file" 
                 id="receiptFile_${b.id}" 
                 accept="image/jpeg, image/png, application/pdf" 
-                style="margin-bottom: 10px;"
+                style="margin-bottom: 10px; font-size:12px;"
               />
               
               <button 
                 type="button" 
                 onclick="submitPaymentProof('${b.id}')" 
-                style="background-color: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                class="btn sm primary block">
                 Submit Receipt
               </button>
+            </div>
+          ` : ''}
+
+          ${(isAdmin && b.proofUrl) ? `
+            <div style="margin-top:10px;">
+              <a href="${escapeHtml(b.proofUrl)}" target="_blank" style="color:var(--accent-2); font-size:12px; font-weight:700; text-decoration:underline;">📎 View Attached Payment Proof</a>
             </div>
           ` : ''}
 
@@ -1772,14 +1781,25 @@
       return;
     }
 
-    const currentBillId = billId || (typeof window.currentBillId !== 'undefined' ? window.currentBillId : null);
-    const currentUser = currentUserProfile || (typeof window.currentUser !== 'undefined' ? window.currentUser : null);
+    if (!storage) {
+      alert("Firebase Storage is not initialized properly.");
+      return;
+    }
 
-    if (typeof handleProofUpload === 'function') {
-      await handleProofUpload(file, currentBillId, currentUser);
-    } else {
-      console.log("Proof upload triggered for bill:", currentBillId, file);
-      alert("Proof selected successfully. Connect `handleProofUpload` to complete storage processing.");
+    try {
+      const storageRef = storage.ref(`bill_proofs/${billId}_${Date.now()}_${file.name}`);
+      const snapshot = await storageRef.put(file);
+      const downloadURL = await snapshot.ref.getDownloadURL();
+
+      await db.collection('bills').doc(billId).update({
+        proofUrl: downloadURL,
+        proofSubmittedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      alert("Proof of payment submitted successfully!");
+      loadBills();
+    } catch(err) {
+      alert("Error uploading proof: " + err.message);
     }
   };
 
@@ -1830,17 +1850,142 @@
             </div>
           </div>
 
-          <div style="display:flex; gap:8px;">
+          <!-- Resident Contribution & Receipt Upload Section -->
+          ${!isAdmin ? `
+            <div class="upload-receipt-section" style="margin-top: 15px; background:var(--bg-elevated-2); padding:12px; border-radius:10px; border:1px solid var(--border);">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold; font-size:11px;">
+                Contribute & Attach Proof of Payment (JPG, PNG, PDF):
+              </label>
+
+              <input 
+                type="number" 
+                id="fundContribAmount_${f.id}" 
+                placeholder="Amount (PKR)" 
+                min="1" 
+                style="margin-bottom: 8px; font-size:13px;"
+              />
+
+              <input 
+                type="text" 
+                id="fundContribRef_${f.id}" 
+                placeholder="Payment Ref / Note (e.g. Bank Ref / Cash)" 
+                style="margin-bottom: 8px; font-size:13px;"
+              />
+
+              <input 
+                type="file" 
+                id="fundProofFile_${f.id}" 
+                accept="image/jpeg, image/png, application/pdf" 
+                style="margin-bottom: 10px; font-size:12px;"
+              />
+
+              <button 
+                type="button" 
+                onclick="submitFundProof('${f.id}')" 
+                class="btn sm primary block">
+                Submit Contribution Proof
+              </button>
+            </div>
+          ` : ''}
+
+          <div style="display:flex; gap:8px; margin-top:12px;">
             ${isAdmin ? `
               <button class="btn sm primary block" onclick="openRecordContributionModal('${f.id}')">+ Record Contribution</button>
-            ` : `
-              <button class="btn sm primary block" onclick="triggerResidentPayNow()">Contribute Now</button>
-            `}
+              <button class="btn sm secondary block" onclick="viewFundContributionsModal('${f.id}')">View Contributions</button>
+            ` : ''}
           </div>
         </div>
       `;
     }).join('');
   }
+
+  window.submitFundProof = async function(fundId) {
+    const amountInput = document.getElementById(`fundContribAmount_${fundId}`);
+    const refInput = document.getElementById(`fundContribRef_${fundId}`);
+    const fileInput = document.getElementById(`fundProofFile_${fundId}`);
+
+    const amount = Number(amountInput ? amountInput.value : 0);
+    const refNote = refInput ? refInput.value.trim() : '';
+    const file = fileInput ? fileInput.files[0] : null;
+
+    if (!amount || amount <= 0) {
+      alert("Please specify a valid contribution amount.");
+      return;
+    }
+
+    if (!file) {
+      alert("Please attach proof of payment.");
+      return;
+    }
+
+    try {
+      let downloadURL = "";
+      if (storage) {
+        const storageRef = storage.ref(`fund_proofs/${fundId}_${auth.currentUser.uid}_${Date.now()}_${file.name}`);
+        const snapshot = await storageRef.put(file);
+        downloadURL = await snapshot.ref.getDownloadURL();
+      }
+
+      const f = fundsList.find(item => item.id === fundId);
+
+      await db.collection('fund_contributions').add({
+        fundId,
+        fundTitle: f ? f.title : '',
+        uid: auth.currentUser.uid,
+        name: currentUserProfile.name,
+        house: currentUserProfile.house,
+        amount,
+        refNote,
+        proofUrl: downloadURL,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Update total collected
+      const fundRef = db.collection('funds').doc(fundId);
+      await db.runTransaction(async (transaction) => {
+        const doc = await transaction.get(fundRef);
+        if (doc.exists) {
+          const currentCollected = Number(doc.data().collectedAmount) || 0;
+          transaction.update(fundRef, { collectedAmount: currentCollected + amount });
+        }
+      });
+
+      alert("Contribution & proof of payment submitted successfully!");
+      loadFunds();
+    } catch(err) {
+      alert("Error submitting contribution proof: " + err.message);
+    }
+  };
+
+  window.viewFundContributionsModal = async function(fundId) {
+    const f = fundsList.find(item => item.id === fundId);
+    if (!f) return;
+
+    let contribs = [];
+    try {
+      const snap = await db.collection('fund_contributions').where('fundId', '==', fundId).get();
+      contribs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch(e) { console.error(e); }
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Contributions: ${escapeHtml(f.title)}</div>
+      ${contribs.length ? contribs.map(c => `
+        <div style="background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px; border-radius:10px; margin-bottom:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:700; font-size:13.5px; color:var(--accent-2);">${escapeHtml(c.name)} (${escapeHtml(c.house || 'N/A')})</div>
+            <div style="font-family:var(--font-mono); font-weight:800; font-size:13px; color:var(--success);">${formatPKR(c.amount)}</div>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Ref: ${escapeHtml(c.refNote || 'N/A')}</div>
+          ${c.proofUrl ? `
+            <div style="margin-top:6px;">
+              <a href="${escapeHtml(c.proofUrl)}" target="_blank" style="color:var(--accent-2); font-size:12px; font-weight:700; text-decoration:underline;">📎 View Attached Proof</a>
+            </div>
+          ` : '<div style="font-size:11px; color:var(--text-faint); margin-top:4px;">No file attached (Direct Admin Entry)</div>'}
+        </div>
+      `).join('') : '<div style="color:var(--text-muted); text-align:center; padding:20px;">No contributions recorded yet.</div>'}
+    `;
+    document.getElementById('modal-view').classList.add('active');
+  };
 
   window.openCreateFundModal = function() {
     document.getElementById('modal-body').innerHTML = `
