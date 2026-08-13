@@ -152,6 +152,10 @@
   .badge.paid{background:var(--success-soft); color:var(--success);}
   .badge.overdue{background:var(--danger-soft); color:var(--danger);}
   .badge.cancelled{background:rgba(255,255,255,0.1); color:var(--text-muted);}
+  .badge.submitted{background:var(--info-soft); color:var(--info);}
+  .badge.verified{background:var(--success-soft); color:var(--success);}
+  .badge.rejected{background:var(--danger-soft); color:var(--danger);}
+  .badge.active{background:var(--success-soft); color:var(--success);}
 
   .stat-strip{display:flex; gap:8px; margin-bottom:14px;}
   .stat-box{flex:1; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;}
@@ -166,6 +170,12 @@
   .due-card{background:linear-gradient(180deg, var(--bg-elevated-2), var(--bg-elevated)); border:1px solid rgba(242,169,59,0.28); border-radius:var(--radius); padding:16px; margin-bottom:14px;}
   .filter-bar{background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:14px;}
   .filter-bar label{margin-top:0;}
+
+  input[type="file"]{width:100%; padding:10px 12px; margin-top:6px; background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-muted); font-size:12.5px; font-family:var(--font-body);}
+  input[type="file"]::file-selector-button{background:var(--bg-elevated-3); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 12px; margin-right:10px; font-size:12px; font-weight:700; cursor:pointer;}
+  .proof-thumb{max-width:100%; border-radius:var(--radius-sm); border:1px solid var(--border); display:block; margin:8px 0;}
+  .progress{height:8px; background:var(--bg-elevated-2); border:1px solid var(--border-soft); border-radius:6px; overflow:hidden; margin:8px 0 6px;}
+  .progress .fill{height:100%; background:linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius:6px;}
 
   .btn{
     font-family:inherit; font-weight:700; font-size:13.5px; border:none; border-radius:12px;
@@ -290,6 +300,9 @@
   let ticketsList = [];
   let billsList = [];
   let billFilterStatus = 'all';
+  let societySettings = null;
+  let fundsList = [];
+  let fundContribsList = [];
   let ticketFilterMonth = 'all';
   let ticketFilterStatus = 'all';
 
@@ -419,6 +432,9 @@
           </button>
           <button class="tab-btn ${activeTab==='bills'?'active':''}" data-tab="bills">
             <span class="lbl">Bills</span>
+          </button>
+          <button class="tab-btn ${activeTab==='funds'?'active':''}" data-tab="funds">
+            <span class="lbl">Funds</span>
           </button>
           <button class="tab-btn ${activeTab==='biodata'?'active':''}" data-tab="biodata">
             <span class="lbl">${isAdmin ? 'Residents' : 'Profile'}</span>
@@ -743,12 +759,25 @@
         </div>
         <div class="section-sub">${isAdmin ? 'Issue and track maintenance billing per house.' : 'Maintenance charges issued to your house by management.'}</div>
         <div id="bills-summary"></div>
+        <div id="bank-card"></div>
         <div class="chip-row">
-          ${['all','unpaid','overdue','paid'].map(f => `
-            <button class="chip ${billFilterStatus===f?'active':''}" onclick="setBillFilter('${f}')">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)}</button>
+          ${[['all','All'],['unpaid','Unpaid'],['overdue','Overdue'],['submitted','In Review'],['paid','Paid']].map(([f, lbl]) => `
+            <button class="chip ${billFilterStatus===f?'active':''}" data-filter="${f}" onclick="setBillFilter('${f}')">${lbl}</button>
           `).join('')}
         </div>
         <div id="bills-list">Loading bills...</div>
+      `;
+    }
+
+    if (activeTab === 'funds') {
+      return `
+        <div class="section-title">
+          Community Funds
+          ${isAdmin ? '<button class="btn sm primary" onclick="openCreateFundModal()">+ Start Fund</button>' : ''}
+        </div>
+        <div class="section-sub">${isAdmin ? 'Raise and track maintenance & development funds.' : 'Society fundraisers you can contribute to.'}</div>
+        <div id="funds-summary"></div>
+        <div id="funds-list">Loading funds...</div>
       `;
     }
 
@@ -812,6 +841,7 @@
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'tickets') loadTickets();
     if (activeTab === 'bills') loadBills();
+    if (activeTab === 'funds') loadFunds();
     if (activeTab === 'biodata' && isAdmin) loadAllResidents();
     if (activeTab === 'approvals' && isAdmin) loadPendingResidents();
   }
@@ -1506,12 +1536,97 @@
         });
       renderBillsList();
     }).catch(e => console.error("Error loading bills:", e));
+
+    loadSocietySettings().then(renderBankCard);
   }
+
+  async function loadSocietySettings() {
+    if (societySettings !== null) return societySettings;
+    try {
+      const doc = await db.collection('settings').doc('society').get();
+      societySettings = doc.exists ? doc.data() : {};
+    } catch(e) {
+      console.error("Error loading society settings:", e);
+      societySettings = {};
+    }
+    return societySettings;
+  }
+
+  function renderBankCard() {
+    const el = document.getElementById('bank-card');
+    if (!el) return;
+    const isAdmin = currentUserProfile.role === 'admin';
+    const s = societySettings || {};
+    const hasDetails = s.bankName || s.accountNumber || s.iban;
+
+    if (!hasDetails && !isAdmin) { el.innerHTML = ''; return; }
+
+    el.innerHTML = `
+      <div class="filter-bar">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <label>Society Maintenance Account</label>
+          ${isAdmin ? `<button class="btn sm secondary" onclick="openEditBankModal()">${hasDetails ? 'Edit' : 'Add Details'}</button>` : ''}
+        </div>
+        ${hasDetails ? `
+          <div style="font-size:13px; margin-top:8px; line-height:1.7;">
+            ${s.bankName ? `<div><span style="color:var(--text-faint);">Bank:</span> ${escapeHtml(s.bankName)}</div>` : ''}
+            ${s.accountTitle ? `<div><span style="color:var(--text-faint);">Title:</span> ${escapeHtml(s.accountTitle)}</div>` : ''}
+            ${s.accountNumber ? `<div><span style="color:var(--text-faint);">Account #:</span> <span style="font-family:var(--font-mono);">${escapeHtml(s.accountNumber)}</span></div>` : ''}
+            ${s.iban ? `<div><span style="color:var(--text-faint);">IBAN:</span> <span style="font-family:var(--font-mono);">${escapeHtml(s.iban)}</span></div>` : ''}
+            ${s.instructions ? `<div style="color:var(--text-muted); font-size:12px; margin-top:4px;">${escapeHtml(s.instructions)}</div>` : ''}
+          </div>
+          <div style="font-size:11.5px; color:var(--text-faint); margin-top:8px;">Pay your dues to this account, then upload the payment proof on your bill.</div>
+        ` : `<div style="font-size:12.5px; color:var(--text-muted); margin-top:8px;">No account details added yet. Residents will see them here once added.</div>`}
+      </div>
+    `;
+  }
+
+  window.openEditBankModal = function() {
+    if (currentUserProfile.role !== 'admin') return;
+    const s = societySettings || {};
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Society Maintenance Account</div>
+      <form id="bank-form">
+        <label>Bank Name</label>
+        <input type="text" id="bank-name" value="${escapeHtml(s.bankName || '')}" placeholder="e.g. Meezan Bank" />
+        <label>Account Title</label>
+        <input type="text" id="bank-title" value="${escapeHtml(s.accountTitle || '')}" placeholder="e.g. RPHS Maintenance Fund" />
+        <label>Account Number</label>
+        <input type="text" id="bank-number" value="${escapeHtml(s.accountNumber || '')}" placeholder="e.g. 0101-1234567" />
+        <label>IBAN</label>
+        <input type="text" id="bank-iban" value="${escapeHtml(s.iban || '')}" placeholder="e.g. PK36MEZN0001010101234567" />
+        <label>Payment Instructions (optional)</label>
+        <textarea id="bank-instructions" placeholder="e.g. Mention your house number in the transfer reference...">${escapeHtml(s.instructions || '')}</textarea>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save Account Details</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('bank-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = {
+        bankName: document.getElementById('bank-name').value.trim(),
+        accountTitle: document.getElementById('bank-title').value.trim(),
+        accountNumber: document.getElementById('bank-number').value.trim(),
+        iban: document.getElementById('bank-iban').value.trim(),
+        instructions: document.getElementById('bank-instructions').value.trim()
+      };
+      try {
+        await db.collection('settings').doc('society').set(data, { merge: true });
+        societySettings = { ...societySettings, ...data };
+        closeModal();
+        renderBankCard();
+      } catch(err) {
+        alert("Error saving account details: " + err.message);
+      }
+    });
+  };
 
   window.setBillFilter = function(filter) {
     billFilterStatus = filter;
     document.querySelectorAll('.chip-row .chip').forEach(chip => {
-      chip.classList.toggle('active', chip.textContent.trim().toLowerCase() === (filter === 'all' ? 'all' : filter));
+      chip.classList.toggle('active', chip.getAttribute('data-filter') === filter);
     });
     renderBillsList();
   };
@@ -1565,13 +1680,20 @@
             <div style="font-size:11.5px; color:${status === 'overdue' ? 'var(--danger)' : 'var(--text-muted)'};">Due ${escapeHtml(formatDate(b.dueDate))}</div>
           </div>
           <div style="font-size:11.5px; color:var(--text-muted);">Period: ${escapeHtml(b.period || 'N/A')}${isAdmin ? ' | ' + escapeHtml(b.name || 'N/A') + ' — ' + escapeHtml(b.house || 'N/A') : ''}</div>
+          ${!isAdmin && status === 'unpaid' && b.proofRejectedReason ? `<div style="font-size:12px; color:var(--danger); margin-top:8px;">Proof rejected: ${escapeHtml(b.proofRejectedReason)} — please upload again.</div>` : ''}
           <div style="margin-top:12px; display:flex; gap:8px;">
             ${status === 'paid'
               ? `<button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Receipt PDF</button>`
-              : (isAdmin
-                  ? `<button class="btn sm primary" onclick="event.stopPropagation(); markBillPaid('${b.id}')">Mark Paid</button>
-                     <button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Invoice PDF</button>`
-                  : `<button class="btn sm primary block" onclick="event.stopPropagation(); payBill('${b.id}')">Pay Now</button>`)}
+              : status === 'submitted'
+                ? (isAdmin
+                    ? `<button class="btn sm primary" onclick="event.stopPropagation(); openBillDetailModal('${b.id}')">Review Proof</button>
+                       <button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Invoice PDF</button>`
+                    : `<button class="btn sm secondary" onclick="event.stopPropagation(); openBillDetailModal('${b.id}')">Proof Under Review</button>`)
+                : (isAdmin
+                    ? `<button class="btn sm primary" onclick="event.stopPropagation(); markBillPaid('${b.id}')">Mark Paid</button>
+                       <button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Invoice PDF</button>`
+                    : `<button class="btn sm primary" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">Upload Payment Proof</button>
+                       <button class="btn sm secondary" onclick="event.stopPropagation(); payBill('${b.id}')">Pay Now</button>`)}
           </div>
         </div>
       `;
@@ -1579,7 +1701,168 @@
   }
 
   window.payBill = function() {
-    alert("Online payment gateway is not connected yet. Please pay through management and the bill will be marked paid.");
+    alert("Online payment gateway is not connected yet. Please pay to the society maintenance account and upload your payment proof on the bill.");
+  };
+
+  // --- PAYMENT PROOF (UPLOAD + VERIFY) ---
+  const PROOF_MAX_PDF_BYTES = 650 * 1024;
+
+  function readProofFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return reject(new Error("Please choose a file."));
+      const isImage = file.type === 'image/png' || file.type === 'image/jpeg';
+      const isPdf = file.type === 'application/pdf';
+      if (!isImage && !isPdf) return reject(new Error("Only PNG, JPEG or PDF files are allowed."));
+
+      if (isPdf) {
+        if (file.size > PROOF_MAX_PDF_BYTES) return reject(new Error("PDF is too large (max 650 KB). Please upload a screenshot image instead."));
+        const reader = new FileReader();
+        reader.onload = () => resolve({ dataUrl: reader.result, type: 'pdf', name: file.name });
+        reader.onerror = () => reject(new Error("Could not read the file."));
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const maxSide = 1280;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+        if (dataUrl.length > 950 * 1024) return reject(new Error("Image is too large even after compression. Please crop it and try again."));
+        resolve({ dataUrl, type: 'image', name: file.name });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read the image file.")); };
+      img.src = url;
+    });
+  }
+
+  function proofSectionHtml(kind, record) {
+    if (!record.proofData) return '';
+    return `
+      <div style="margin-bottom:14px;">
+        <label style="margin-top:0;">Payment Proof ${record.proofName ? '(' + escapeHtml(record.proofName) + ')' : ''}</label>
+        ${record.proofType === 'image'
+          ? `<img class="proof-thumb" src="${record.proofData}" alt="Payment proof" onclick="viewProofFile('${kind}', '${record.id}')" style="cursor:pointer;" />`
+          : `<button class="btn sm secondary" style="margin-top:6px;" onclick="viewProofFile('${kind}', '${record.id}')">Open PDF Proof</button>`}
+        ${record.paymentRef ? `<div style="font-size:12.5px; color:var(--text-muted); margin-top:6px;">Transaction Ref: <span style="font-family:var(--font-mono);">${escapeHtml(record.paymentRef)}</span></div>` : ''}
+        ${record.proofUploadedAt ? `<div style="font-size:11.5px; color:var(--text-faint); margin-top:2px;">Uploaded: ${escapeHtml(formatDate(record.proofUploadedAt))}</div>` : ''}
+      </div>
+    `;
+  }
+
+  window.viewProofFile = function(kind, id) {
+    const record = kind === 'bill'
+      ? billsList.find(item => item.id === id)
+      : fundContribsList.find(item => item.id === id);
+    if (!record || !record.proofData) return;
+    try {
+      const parts = record.proofData.split(',');
+      const mime = parts[0].match(/data:([^;]+)/)[1];
+      const bytes = atob(parts[1]);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      window.open(URL.createObjectURL(new Blob([arr], { type: mime })), '_blank');
+    } catch(err) {
+      alert("Could not open the proof file: " + err.message);
+    }
+  };
+
+  async function notifyAdmins(title, body, type = 'info') {
+    try {
+      const snap = await db.collection('users').where('role', '==', 'admin').get();
+      await Promise.all(snap.docs.map(d => sendNotification(d.id, title, body, type)));
+    } catch(e) {
+      console.error("Admin notification failed:", e);
+    }
+  }
+
+  window.openUploadProofModal = function(billId) {
+    const b = billsList.find(item => item.id === billId);
+    if (!b || currentUserProfile.role === 'admin') return;
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Upload Payment Proof</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">${escapeHtml(b.billNo || 'BILL')} · ${escapeHtml(b.category || 'Maintenance')} · ${formatMoney(b.amount)}</div>
+      <form id="proof-form">
+        <label>Payment Screenshot / Receipt (PNG, JPEG or PDF)</label>
+        <input type="file" id="proof-file" accept="image/png,image/jpeg,application/pdf" required />
+        <label>Transaction Reference (optional)</label>
+        <input type="text" id="proof-ref" placeholder="e.g. bank / wallet transaction ID" />
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Submit for Verification</button>
+      </form>
+      <div style="text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px;">Management will verify your proof and mark the bill paid.</div>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('proof-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      try {
+        const proof = await readProofFile(document.getElementById('proof-file').files[0]);
+        const paymentRef = document.getElementById('proof-ref').value.trim();
+        await db.collection('bills').doc(billId).update({
+          status: 'submitted',
+          proofData: proof.dataUrl,
+          proofType: proof.type,
+          proofName: proof.name,
+          paymentRef,
+          proofRejectedReason: '',
+          proofUploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await notifyAdmins(`Payment Proof Submitted (${b.billNo})`, `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) uploaded proof for ${formatMoney(b.amount)} — ${b.period}.`, 'info');
+        closeModal();
+        loadBills();
+      } catch(err) {
+        alert("Error submitting proof: " + err.message);
+        submitBtn.disabled = false;
+      }
+    });
+  };
+
+  window.approveBillProof = async function(billId) {
+    const b = billsList.find(item => item.id === billId);
+    if (!b || currentUserProfile.role !== 'admin') return;
+    if (!confirm(`Approve payment proof and mark ${b.billNo} (${formatMoney(b.amount)}) as paid?`)) return;
+
+    try {
+      await db.collection('bills').doc(billId).update({
+        status: 'paid',
+        paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+        verifiedBy: currentUserProfile.name
+      });
+      await sendNotification(b.uid, `Payment Verified (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been verified. Thank you!`, 'success');
+      closeModal();
+      loadBills();
+    } catch(err) {
+      alert("Error approving payment: " + err.message);
+    }
+  };
+
+  window.rejectBillProof = async function(billId) {
+    const b = billsList.find(item => item.id === billId);
+    if (!b || currentUserProfile.role !== 'admin') return;
+    const reason = prompt("Reason for rejecting this payment proof:");
+    if (reason === null) return;
+    if (!reason.trim()) { alert("A reason is required to reject a proof."); return; }
+
+    try {
+      await db.collection('bills').doc(billId).update({
+        status: 'unpaid',
+        proofRejectedReason: reason.trim()
+      });
+      await sendNotification(b.uid, `Payment Proof Rejected (${b.billNo})`, `Reason: ${reason.trim()}. Please upload a valid proof for ${formatMoney(b.amount)} — ${b.period}.`, 'error');
+      closeModal();
+      loadBills();
+    } catch(err) {
+      alert("Error rejecting proof: " + err.message);
+    }
   };
 
   window.openIssueBillModal = async function() {
@@ -1702,13 +1985,23 @@
 
       ${b.notes ? `<div style="font-size:13.5px; line-height:1.5; margin-bottom:16px; white-space:pre-wrap;">${escapeHtml(b.notes)}</div>` : ''}
 
+      ${proofSectionHtml('bill', b)}
+      ${!isAdmin && status === 'unpaid' && b.proofRejectedReason ? `<div style="font-size:12.5px; color:var(--danger); margin-bottom:14px;">Your previous proof was rejected: ${escapeHtml(b.proofRejectedReason)}. Please upload a new one.</div>` : ''}
+      ${!isAdmin && status === 'submitted' ? `<div style="font-size:12.5px; color:var(--info); margin-bottom:14px;">Your payment proof has been submitted and is awaiting verification by management.</div>` : ''}
+
       <button class="btn secondary block" onclick="downloadBillPDF('${b.id}')" style="margin-bottom:10px;">${status === 'paid' ? 'Download Receipt' : 'Download Invoice'}</button>
+
+      ${isAdmin && status === 'submitted' ? `
+        <button class="btn primary block" onclick="approveBillProof('${b.id}')" style="margin-bottom:10px;">Approve Payment — Mark Paid</button>
+        <button class="btn danger block" onclick="rejectBillProof('${b.id}')" style="margin-bottom:16px;">Reject Proof</button>
+      ` : ''}
 
       ${isAdmin ? `
         <form id="admin-bill-form">
           <label>Update Status</label>
           <select id="admin-bill-status">
             <option value="unpaid" ${(b.status||'unpaid')==='unpaid'?'selected':''}>Unpaid</option>
+            <option value="submitted" ${b.status==='submitted'?'selected':''}>In Review</option>
             <option value="paid" ${b.status==='paid'?'selected':''}>Paid</option>
             <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
           </select>
@@ -1718,9 +2011,10 @@
 
           <button type="submit" class="btn primary block" style="margin-top:16px;">Save Bill Update</button>
         </form>
-      ` : (status === 'paid' ? '' : `
-        <button class="btn primary block" onclick="payBill('${b.id}')">Pay Now — ${formatMoney(b.amount)}</button>
-        <div style="text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px;">Online payment gateway to be connected.</div>
+      ` : (status === 'paid' || status === 'submitted' ? '' : `
+        <button class="btn primary block" onclick="openUploadProofModal('${b.id}')" style="margin-bottom:10px;">Upload Payment Proof</button>
+        <button class="btn secondary block" onclick="payBill('${b.id}')">Pay Now — ${formatMoney(b.amount)}</button>
+        <div style="text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px;">Online payment gateway to be connected. Pay to the society account and upload your proof.</div>
       `)}
     `;
     document.getElementById('modal-view').classList.add('active');
@@ -1798,6 +2092,8 @@
       addRow("Status", status);
       if (status === 'paid') addRow("Paid On", formatDate(b.paidAt));
       if (b.paymentRef) addRow("Payment Reference", b.paymentRef);
+      if (b.verifiedBy) addRow("Verified By", b.verifiedBy);
+      if (b.proofData) addRow("Payment Proof", "On file" + (b.proofName ? " (" + b.proofName + ")" : ""));
 
       y += 5;
       doc.setFont("helvetica", "bold");
@@ -1809,6 +2105,288 @@
       doc.save(`${status === 'paid' ? 'Receipt' : 'Bill'}_${(b.billNo || 'Record').replace(/\s+/g, '_')}.pdf`);
     } catch(err) {
       alert("Error generating PDF: " + err.message);
+    }
+  };
+
+  // --- COMMUNITY FUNDS ---
+  function loadFunds() {
+    if (!db || !auth.currentUser) return;
+    Promise.all([
+      db.collection('funds').get(),
+      db.collection('fund_contributions').get()
+    ]).then(([fundsSnap, contribsSnap]) => {
+      fundsList = fundsSnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+          const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
+          return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
+        });
+      fundContribsList = contribsSnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+          const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
+          return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
+        });
+      renderFundsList();
+    }).catch(e => console.error("Error loading funds:", e));
+  }
+
+  function fundVerifiedTotal(fundId) {
+    return fundContribsList.filter(c => c.fundId === fundId && c.status === 'verified').reduce((s, c) => s + Number(c.amount || 0), 0);
+  }
+
+  function renderFundsList() {
+    const listEl = document.getElementById('funds-list');
+    if (!listEl) return;
+    const isAdmin = currentUserProfile.role === 'admin';
+
+    const summaryEl = document.getElementById('funds-summary');
+    if (summaryEl && isAdmin) {
+      const totalCollected = fundContribsList.filter(c => c.status === 'verified').reduce((s, c) => s + Number(c.amount || 0), 0);
+      const pendingCount = fundContribsList.filter(c => c.status === 'submitted').length;
+      summaryEl.innerHTML = `
+        <div class="stat-strip">
+          <div class="stat-box"><div class="k">Active Funds</div><div class="v">${fundsList.filter(f => (f.status || 'active') === 'active').length}</div></div>
+          <div class="stat-box"><div class="k">Collected</div><div class="v" style="color:var(--success);">${formatMoney(totalCollected)}</div></div>
+          <div class="stat-box"><div class="k">To Verify</div><div class="v" style="color:${pendingCount ? 'var(--info)' : 'var(--text)'};">${pendingCount}</div></div>
+        </div>
+      `;
+    }
+
+    if (!fundsList.length) {
+      listEl.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${isAdmin ? 'No funds started yet. Use "+ Start Fund" to raise one.' : 'No community funds are running right now.'}</div>`;
+      return;
+    }
+
+    listEl.innerHTML = fundsList.map(f => {
+      const status = f.status || 'active';
+      const collected = fundVerifiedTotal(f.id);
+      const target = Number(f.targetAmount || 0);
+      const pct = target > 0 ? Math.min(100, Math.round(collected / target * 100)) : 0;
+      const contributors = new Set(fundContribsList.filter(c => c.fundId === f.id && c.status === 'verified').map(c => c.uid)).size;
+      const myPending = fundContribsList.filter(c => c.fundId === f.id && c.uid === auth.currentUser.uid && c.status === 'submitted').length;
+      const pendingCount = fundContribsList.filter(c => c.fundId === f.id && c.status === 'submitted').length;
+
+      return `
+        <div class="card" onclick="openFundDetailModal('${f.id}')">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+            <span style="font-weight:700; font-size:15px; color:var(--accent-2);">${escapeHtml(f.title || 'Fund')}</span>
+            <span class="badge ${status}">${escapeHtml(status)}</span>
+          </div>
+          <div style="font-size:12.5px; color:var(--text-muted); line-height:1.5; margin-bottom:8px;">${escapeHtml((f.purpose || '').slice(0, 120))}${(f.purpose || '').length > 120 ? '…' : ''}</div>
+          ${target > 0 ? `
+            <div class="progress"><div class="fill" style="width:${pct}%;"></div></div>
+            <div style="display:flex; justify-content:space-between; font-size:12px;">
+              <span style="font-family:var(--font-mono); color:var(--success);">${formatMoney(collected)}</span>
+              <span style="color:var(--text-faint);">${pct}% of ${formatMoney(target)}</span>
+            </div>
+          ` : `<div style="font-size:12.5px;"><span style="color:var(--text-faint);">Collected:</span> <span style="font-family:var(--font-mono); color:var(--success);">${formatMoney(collected)}</span></div>`}
+          <div style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${contributors} contributor(s) · Started ${escapeHtml(formatDate(f.createdAt))}${isAdmin && pendingCount ? ` · <span style="color:var(--info);">${pendingCount} awaiting verification</span>` : ''}${!isAdmin && myPending ? ' · <span style="color:var(--info);">Your contribution is under review</span>' : ''}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.openCreateFundModal = function() {
+    if (currentUserProfile.role !== 'admin') return;
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Start a Community Fund</div>
+      <form id="fund-form">
+        <label>Fund Title</label>
+        <input type="text" id="fund-title" placeholder="e.g. Mosque Renovation Fund" required />
+        <label>What is this fund for & why is it needed?</label>
+        <textarea id="fund-purpose" placeholder="Explain the purpose and why the society needs it..." required></textarea>
+        <label>Target Amount (PKR, optional)</label>
+        <input type="text" id="fund-target" placeholder="e.g. 250000" />
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Start Fund & Notify Residents</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('fund-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('fund-title').value.trim();
+      const purpose = document.getElementById('fund-purpose').value.trim();
+      const target = Number(document.getElementById('fund-target').value.trim() || 0);
+      if (document.getElementById('fund-target').value.trim() && (!target || target <= 0)) {
+        alert("Please enter a valid target amount or leave it blank.");
+        return;
+      }
+
+      try {
+        await db.collection('funds').add({
+          title,
+          purpose,
+          targetAmount: target,
+          status: 'active',
+          createdBy: currentUserProfile.name,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await broadcastNotification(`New Fund: ${title}`, `${purpose.slice(0, 140)} — open the Funds tab to contribute.`);
+        closeModal();
+        loadFunds();
+      } catch(err) {
+        alert("Error starting fund: " + err.message);
+      }
+    });
+  };
+
+  window.openFundDetailModal = function(fundId) {
+    const f = fundsList.find(item => item.id === fundId);
+    if (!f) return;
+    const isAdmin = currentUserProfile.role === 'admin';
+    const status = f.status || 'active';
+    const collected = fundVerifiedTotal(f.id);
+    const target = Number(f.targetAmount || 0);
+    const pct = target > 0 ? Math.min(100, Math.round(collected / target * 100)) : 0;
+    const contribs = fundContribsList.filter(c => c.fundId === f.id && (isAdmin || c.uid === auth.currentUser.uid));
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding-right:44px; margin-bottom:12px;">
+        <span style="font-family:var(--font-display); font-size:19px; font-weight:600; color:var(--accent-2);">${escapeHtml(f.title || 'Fund')}</span>
+        <span class="badge ${status}">${escapeHtml(status)}</span>
+      </div>
+      <div style="font-size:13.5px; line-height:1.6; margin-bottom:14px; white-space:pre-wrap;">${escapeHtml(f.purpose || '')}</div>
+
+      <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span style="font-size:13px; color:var(--text-muted);">Collected (verified)</span><span class="amount" style="color:var(--success);">${formatMoney(collected)}</span></div>
+        ${target > 0 ? `
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="font-size:13px; color:var(--text-muted);">Target</span><span style="font-size:13.5px; font-family:var(--font-mono);">${formatMoney(target)}</span></div>
+          <div class="progress"><div class="fill" style="width:${pct}%;"></div></div>
+          <div style="text-align:right; font-size:11.5px; color:var(--text-faint);">${pct}% reached</div>
+        ` : ''}
+        <div style="display:flex; justify-content:space-between;"><span style="font-size:13px; color:var(--text-muted);">Started</span><span style="font-size:13.5px;">${escapeHtml(formatDate(f.createdAt))} by ${escapeHtml(f.createdBy || 'Management')}</span></div>
+      </div>
+
+      ${status === 'active' && !isAdmin ? `
+        <form id="contrib-form" style="margin-bottom:16px;">
+          <label>Contribute — Amount (PKR)</label>
+          <input type="text" id="contrib-amount" placeholder="e.g. 2000" required />
+          <label>Payment Proof (PNG, JPEG or PDF — optional)</label>
+          <input type="file" id="contrib-file" accept="image/png,image/jpeg,application/pdf" />
+          <label>Transaction Reference (optional)</label>
+          <input type="text" id="contrib-ref" placeholder="e.g. bank / wallet transaction ID" />
+          <button type="submit" class="btn primary block" style="margin-top:14px;">Submit Contribution</button>
+        </form>
+      ` : ''}
+
+      ${isAdmin && status === 'active' ? `<button class="btn danger block" onclick="closeFund('${f.id}')" style="margin-bottom:16px;">Close This Fund</button>` : ''}
+
+      <div class="section-title" style="font-size:15px; margin-bottom:8px;">${isAdmin ? 'Contributions' : 'My Contributions'}</div>
+      <div id="fund-contribs">
+        ${contribs.length ? contribs.map(c => `
+          <div style="background:var(--bg-elevated-2); border:1px solid var(--border-soft); border-radius:10px; padding:12px; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size:13px; font-weight:700;">${isAdmin ? escapeHtml(c.name || 'Resident') + ' — ' + escapeHtml(c.house || 'N/A') : formatMoney(c.amount)}</span>
+              <span class="badge ${c.status || 'submitted'}">${escapeHtml(c.status === 'submitted' ? 'in review' : (c.status || 'in review'))}</span>
+            </div>
+            ${isAdmin ? `<div style="font-size:13px; font-family:var(--font-mono); margin-bottom:4px;">${formatMoney(c.amount)}</div>` : ''}
+            <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(formatDate(c.createdAt))}${c.paymentRef ? ' · Ref: ' + escapeHtml(c.paymentRef) : ''}</div>
+            ${c.status === 'rejected' && c.rejectedReason ? `<div style="font-size:12px; color:var(--danger); margin-top:4px;">Rejected: ${escapeHtml(c.rejectedReason)}</div>` : ''}
+            ${c.proofData ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="viewProofFile('contrib', '${c.id}')">View Proof</button>` : ''}
+            ${isAdmin && c.status === 'submitted' ? `
+              <div style="display:flex; gap:8px; margin-top:8px;">
+                <button class="btn sm primary" onclick="verifyContribution('${c.id}')">Verify</button>
+                <button class="btn sm danger" onclick="rejectContribution('${c.id}')">Reject</button>
+              </div>
+            ` : ''}
+          </div>
+        `).join('') : `<div style="font-size:12.5px; color:var(--text-muted);">No contributions ${isAdmin ? 'received' : 'made'} yet.</div>`}
+      </div>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    const contribForm = document.getElementById('contrib-form');
+    if (contribForm) {
+      contribForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+          const amount = Number(document.getElementById('contrib-amount').value.trim());
+          if (!amount || amount <= 0) throw new Error("Please enter a valid amount.");
+          const file = document.getElementById('contrib-file').files[0];
+          const proof = file ? await readProofFile(file) : null;
+          const paymentRef = document.getElementById('contrib-ref').value.trim();
+
+          await db.collection('fund_contributions').add({
+            fundId: f.id,
+            fundTitle: f.title,
+            uid: auth.currentUser.uid,
+            name: currentUserProfile.name,
+            house: currentUserProfile.house || '',
+            amount,
+            currency: 'PKR',
+            paymentRef,
+            proofData: proof ? proof.dataUrl : '',
+            proofType: proof ? proof.type : '',
+            proofName: proof ? proof.name : '',
+            status: 'submitted',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          await notifyAdmins(`Fund Contribution (${f.title})`, `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) submitted ${formatMoney(amount)}${proof ? ' with payment proof' : ''}.`, 'info');
+          closeModal();
+          loadFunds();
+        } catch(err) {
+          alert("Error submitting contribution: " + err.message);
+          submitBtn.disabled = false;
+        }
+      });
+    }
+  };
+
+  window.verifyContribution = async function(contribId) {
+    const c = fundContribsList.find(item => item.id === contribId);
+    if (!c || currentUserProfile.role !== 'admin') return;
+    if (!confirm(`Verify contribution of ${formatMoney(c.amount)} from ${c.name}?`)) return;
+
+    try {
+      await db.collection('fund_contributions').doc(contribId).update({
+        status: 'verified',
+        verifiedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        verifiedBy: currentUserProfile.name
+      });
+      await sendNotification(c.uid, `Contribution Verified (${c.fundTitle})`, `Your contribution of ${formatMoney(c.amount)} has been verified. Thank you for supporting the community!`, 'success');
+      closeModal();
+      loadFunds();
+    } catch(err) {
+      alert("Error verifying contribution: " + err.message);
+    }
+  };
+
+  window.rejectContribution = async function(contribId) {
+    const c = fundContribsList.find(item => item.id === contribId);
+    if (!c || currentUserProfile.role !== 'admin') return;
+    const reason = prompt("Reason for rejecting this contribution:");
+    if (reason === null) return;
+    if (!reason.trim()) { alert("A reason is required to reject a contribution."); return; }
+
+    try {
+      await db.collection('fund_contributions').doc(contribId).update({
+        status: 'rejected',
+        rejectedReason: reason.trim()
+      });
+      await sendNotification(c.uid, `Contribution Rejected (${c.fundTitle})`, `Reason: ${reason.trim()}. Please contact management or submit again.`, 'error');
+      closeModal();
+      loadFunds();
+    } catch(err) {
+      alert("Error rejecting contribution: " + err.message);
+    }
+  };
+
+  window.closeFund = async function(fundId) {
+    const f = fundsList.find(item => item.id === fundId);
+    if (!f || currentUserProfile.role !== 'admin') return;
+    if (!confirm(`Close "${f.title}"? Residents will no longer be able to contribute.`)) return;
+
+    try {
+      await db.collection('funds').doc(fundId).update({ status: 'closed' });
+      await broadcastNotification(`Fund Closed: ${f.title}`, `Total collected: ${formatMoney(fundVerifiedTotal(f.id))}. Thank you to everyone who contributed.`);
+      closeModal();
+      loadFunds();
+    } catch(err) {
+      alert("Error closing fund: " + err.message);
     }
   };
 
