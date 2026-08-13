@@ -807,7 +807,7 @@
           <div class="section-sub">View and track your maintenance payments.</div>
 
           <div class="card" style="background:var(--bg-elevated-2); cursor:default; margin-bottom:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Outstanding</div>
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">TOTAL OUTSTANDING</div>
             <div id="resident-outstanding-val" style="font-family:var(--font-mono); font-size:24px; font-weight:800; color:var(--accent-2); margin-top:4px;">PKR 0</div>
           </div>
 
@@ -1537,6 +1537,29 @@
             </div>
           `}
 
+          <!-- Payment Receipt Upload Form -->
+          ${!isPaid ? `
+            <div class="upload-receipt-section" style="margin-top: 15px;">
+              <label for="receiptFile_${b.id}" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                Upload Payment Proof (JPG, PNG, PDF):
+              </label>
+              
+              <input 
+                type="file" 
+                id="receiptFile_${b.id}" 
+                accept="image/jpeg, image/png, application/pdf" 
+                style="margin-bottom: 10px;"
+              />
+              
+              <button 
+                type="button" 
+                onclick="submitPaymentProof('${b.id}')" 
+                style="background-color: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                Submit Receipt
+              </button>
+            </div>
+          ` : ''}
+
           <div style="display:flex; gap:8px; margin-top:12px;">
             ${isAdmin ? `
               ${!isPaid ? `<button class="btn sm primary" onclick="quickMarkPaid('${b.id}')">Mark Paid</button>` : ''}
@@ -1736,6 +1759,27 @@
       doc.save(`Receipt_${b.billNo}.pdf`);
     } catch(err) {
       alert("Error building receipt PDF: " + err.message);
+    }
+  };
+
+  window.submitPaymentProof = async function(billId) {
+    const inputId = billId ? `receiptFile_${billId}` : "receiptFile";
+    const fileInput = document.getElementById(inputId);
+    const file = fileInput ? fileInput.files[0] : null;
+
+    if (!file) {
+      alert("Please select a file first!");
+      return;
+    }
+
+    const currentBillId = billId || (typeof window.currentBillId !== 'undefined' ? window.currentBillId : null);
+    const currentUser = currentUserProfile || (typeof window.currentUser !== 'undefined' ? window.currentUser : null);
+
+    if (typeof handleProofUpload === 'function') {
+      await handleProofUpload(file, currentBillId, currentUser);
+    } else {
+      console.log("Proof upload triggered for bill:", currentBillId, file);
+      alert("Proof selected successfully. Connect `handleProofUpload` to complete storage processing.");
     }
   };
 
