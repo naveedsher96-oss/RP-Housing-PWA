@@ -19,7 +19,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 
-<!-- jsPDF for Admin PDF Export -->
+<!-- jsPDF for Admin PDF Export & Receipts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <link rel="manifest" href="manifest.json">
@@ -142,12 +142,12 @@
     display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.3px;
     text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap;
   }
-  .badge.pending{background:var(--warning-soft); color:var(--accent-2);}
-  .badge.assigned{background:var(--info-soft); color:var(--info);}
-  .badge.in-progress{background:var(--info-soft); color:var(--info);}
-  .badge.resolved{background:var(--success-soft); color:var(--success);}
-  .badge.closed{background:rgba(255,255,255,0.1); color:var(--text-muted);}
+  .badge.pending, .badge.unpaid{background:var(--warning-soft); color:var(--accent-2);}
+  .badge.assigned, .badge.in-progress{background:var(--info-soft); color:var(--info);}
+  .badge.resolved, .badge.paid, .badge.past{background:var(--success-soft); color:var(--success);}
+  .badge.closed, .badge.cancelled{background:rgba(255,255,255,0.1); color:var(--text-muted);}
   .badge.notice{background:var(--accent-soft); color:var(--accent-2);}
+  .badge.overdue{background:var(--danger-soft); color:var(--danger); border:1px solid rgba(229,97,90,0.3);}
 
   .btn{
     font-family:inherit; font-weight:700; font-size:13.5px; border:none; border-radius:12px;
@@ -160,7 +160,7 @@
   .btn.block{width:100%;}
 
   label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
-  input[type=text], input[type=email], input[type=password], select, textarea{
+  input[type=text], input[type=number], input[type=date], input[type=email], input[type=password], select, textarea{
     width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
     border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
   }
@@ -191,15 +191,30 @@
     background:linear-gradient(0deg, rgba(16,20,42,0.98), rgba(16,20,42,0.9));
     border-top:1px solid var(--border-soft); backdrop-filter:blur(10px);
   }
-  .tabbar-inner{ max-width:520px; width:100%; display:flex; justify-content:space-around; padding:8px 6px; }
-  .tab-btn{ background:none; border:none; color:var(--text-faint); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; flex:1; }
+  .tabbar-inner{ max-width:520px; width:100%; display:flex; justify-space-around; padding:8px 4px; overflow-x:auto; scrollbar-width:none; }
+  .tab-btn{ background:none; border:none; color:var(--text-faint); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; flex:1; min-width:50px; }
   .tab-btn.active{color:var(--accent-2);}
-  .tab-btn .lbl{font-size:11px; font-weight:700;}
+  .tab-btn .lbl{font-size:10px; font-weight:700;}
 
   .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
   .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
   .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:24px;}
   .toggle-auth-mode{text-align:center; margin-top:16px; font-size:13px; color:var(--accent-2); cursor:pointer; text-decoration:underline;}
+
+  /* UI Modules Styles */
+  .metrics-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:16px; }
+  .metric-card { background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:12px; padding:12px 8px; text-align:center; }
+  .metric-card .val { font-size:13px; font-weight:800; color:var(--text); margin-top:4px; font-family:var(--font-mono); }
+  .metric-card .lbl { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.4px; }
+  
+  .filter-chips { display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; margin-bottom:12px; scrollbar-width:none; }
+  .chip { background:var(--bg-elevated-2); border:1px solid var(--border); color:var(--text-muted); border-radius:20px; padding:6px 14px; font-size:11.5px; font-weight:700; white-space:nowrap; cursor:pointer; }
+  .chip.active { background:var(--accent-soft); color:var(--accent-2); border-color:rgba(242,169,59,0.4); }
+
+  .summary-banner { background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:14px; font-size:12px; color:var(--text-muted); line-height:1.5; }
+  
+  .progress-bar-bg { background:var(--bg-elevated-2); border-radius:10px; height:10px; overflow:hidden; position:relative; margin:8px 0; border:1px solid var(--border); }
+  .progress-bar-fill { background:linear-gradient(90deg, var(--accent), var(--accent-2)); height:100%; border-radius:10px; transition:width 0.3s ease; }
 </style>
 </head>
 <body>
@@ -226,6 +241,11 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function formatPKR(val) {
+    const num = Number(val) || 0;
+    return 'PKR ' + num.toLocaleString('en-PK');
   }
 
   const firebaseConfig = {
@@ -270,6 +290,13 @@
   let noticesList = [];
   let pollsList = [];
   let ticketsList = [];
+  let billsList = [];
+  let fundsList = [];
+
+  // Filter States
+  let billFilter = 'All';
+  let ticketMonthFilter = 'All';
+  let ticketStatusFilter = 'All';
 
   const appEl = document.getElementById('app');
 
@@ -333,19 +360,16 @@
       return;
     }
 
-    // EMAIL VERIFICATION GUARD
     if (currentUserProfile.role === 'resident' && !auth.currentUser.emailVerified) {
       renderEmailVerificationScreen();
       return;
     }
 
-    // MANDATORY BIODATA GATE (if resident has not submitted biodata yet)
     if (currentUserProfile.role === 'resident' && !currentUserProfile.biodataSubmitted) {
       renderBiodataFormScreen();
       return;
     }
 
-    // HARDENED PENDING APPROVAL GUARD
     if (currentUserProfile.role === 'resident' && currentUserProfile.approved !== true) {
       renderPendingApprovalScreen();
       return;
@@ -387,7 +411,7 @@
       <nav class="tabbar">
         <div class="tabbar-inner">
           <button class="tab-btn ${activeTab==='notices'?'active':''}" data-tab="notices">
-            <span class="lbl">Announcements</span>
+            <span class="lbl">Notice</span>
           </button>
           <button class="tab-btn ${activeTab==='polls'?'active':''}" data-tab="polls">
             <span class="lbl">Polls</span>
@@ -395,14 +419,24 @@
           <button class="tab-btn ${activeTab==='tickets'?'active':''}" data-tab="tickets">
             <span class="lbl">Complaints</span>
           </button>
-          <button class="tab-btn ${activeTab==='biodata'?'active':''}" data-tab="biodata">
-            <span class="lbl">${isAdmin ? 'Residents' : 'Profile'}</span>
+          <button class="tab-btn ${activeTab==='bills'?'active':''}" data-tab="bills">
+            <span class="lbl">Bills</span>
+          </button>
+          <button class="tab-btn ${activeTab==='funds'?'active':''}" data-tab="funds">
+            <span class="lbl">Funds</span>
           </button>
           ${isAdmin ? `
+            <button class="tab-btn ${activeTab==='biodata'?'active':''}" data-tab="biodata">
+              <span class="lbl">Residents</span>
+            </button>
             <button class="tab-btn ${activeTab==='approvals'?'active':''}" data-tab="approvals">
               <span class="lbl">Approvals</span>
             </button>
-          ` : ''}
+          ` : `
+            <button class="tab-btn ${activeTab==='biodata'?'active':''}" data-tab="biodata">
+              <span class="lbl">Profile</span>
+            </button>
+          `}
         </div>
       </nav>
     `;
@@ -705,7 +739,91 @@
           <button class="btn sm primary" onclick="openNewTicketModal()">+ Lodge Ticket</button>
         </div>
         <div class="section-sub">Report maintenance issues or submit feedback.</div>
+
+        ${isAdmin ? `
+          <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <div style="flex:1;">
+              <select id="ticket-month-filter" onchange="applyTicketFilters()" style="padding:8px 10px; font-size:12.5px;">
+                <option value="All">All Months</option>
+                <option value="08-2026">August 2026</option>
+                <option value="07-2026">July 2026</option>
+                <option value="06-2026">June 2026</option>
+              </select>
+            </div>
+            <div style="flex:1;">
+              <select id="ticket-status-filter" onchange="applyTicketFilters()" style="padding:8px 10px; font-size:12.5px;">
+                <option value="All">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="in-progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+          </div>
+          <div class="summary-banner" id="tickets-summary-text">Loading counters...</div>
+          <button class="btn sm secondary block" onclick="exportFilteredComplaintsPDF()" style="margin-bottom:14px;">🖨️ Print / Export Filtered Report</button>
+        ` : ''}
+
         <div id="tickets-list">Loading complaints directory...</div>
+      `;
+    }
+
+    if (activeTab === 'bills') {
+      if (isAdmin) {
+        return `
+          <div class="section-title">
+            Maintenance Bills
+            <button class="btn sm primary" onclick="openIssueBillModal()">+ Issue Bill</button>
+          </div>
+          <div class="section-sub">Manage society billing and collections.</div>
+
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="lbl">Billed</div>
+              <div class="val" id="metric-billed">PKR 0</div>
+            </div>
+            <div class="metric-card">
+              <div class="lbl">Collected</div>
+              <div class="val" id="metric-collected" style="color:var(--success);">PKR 0</div>
+            </div>
+            <div class="metric-card">
+              <div class="lbl">Outstanding</div>
+              <div class="val" id="metric-outstanding" style="color:var(--danger);">PKR 0</div>
+            </div>
+          </div>
+
+          <div class="filter-chips">
+            <div class="chip ${billFilter==='All'?'active':''}" onclick="setBillFilter('All')">All</div>
+            <div class="chip ${billFilter==='Unpaid'?'active':''}" onclick="setBillFilter('Unpaid')">Unpaid</div>
+            <div class="chip ${billFilter==='Overdue'?'active':''}" onclick="setBillFilter('Overdue')">Overdue</div>
+            <div class="chip ${billFilter==='Past'?'active':''}" onclick="setBillFilter('Past')">Past (Paid)</div>
+          </div>
+
+          <div id="bills-list">Loading billing records...</div>
+        `;
+      } else {
+        return `
+          <div class="section-title">My Bills</div>
+          <div class="section-sub">View and track your maintenance payments.</div>
+
+          <div class="card" style="background:var(--bg-elevated-2); cursor:default; margin-bottom:16px;">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Outstanding</div>
+            <div id="resident-outstanding-val" style="font-family:var(--font-mono); font-size:24px; font-weight:800; color:var(--accent-2); margin-top:4px;">PKR 0</div>
+          </div>
+
+          <div id="bills-list">Loading your bills...</div>
+        `;
+      }
+    }
+
+    if (activeTab === 'funds') {
+      return `
+        <div class="section-title">
+          Community Funds
+          ${isAdmin ? '<button class="btn sm primary" onclick="openCreateFundModal()">+ Start Fund</button>' : ''}
+        </div>
+        <div class="section-sub">Special development initiatives, events, and emergency drives.</div>
+        <div id="funds-list">Loading community funds...</div>
       `;
     }
 
@@ -768,6 +886,8 @@
     if (activeTab === 'notices') loadNotices();
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'tickets') loadTickets();
+    if (activeTab === 'bills') loadBills();
+    if (activeTab === 'funds') loadFunds();
     if (activeTab === 'biodata' && isAdmin) loadAllResidents();
     if (activeTab === 'approvals' && isAdmin) loadPendingResidents();
   }
@@ -843,7 +963,6 @@
     `;
     document.getElementById('modal-view').classList.add('active');
 
-    // Mark as read in batch
     const unreadDocs = notifications.filter(n => !n.read);
     if (unreadDocs.length && db && auth.currentUser) {
       const batch = db.batch();
@@ -884,7 +1003,7 @@
           <span class="badge notice">Notice</span>
         </div>
         <div style="font-size:13.5px; color:var(--text); line-height:1.5; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
-        <div style="font-size:11px; color:var(--text-faint; margin-top:10px;">Posted by Management</div>
+        <div style="font-size:11px; color:var(--text-faint); margin-top:10px;">Posted by Management</div>
       </div>
     `).join('');
   }
@@ -949,7 +1068,6 @@
       
       const totalVotes = Object.keys(votes).length;
 
-      // Tally counts
       const counts = options.map((opt, idx) => {
         let count = 0;
         Object.values(votes).forEach(v => { if (v === idx) count++; });
@@ -1047,7 +1165,7 @@
     }
   };
 
-  // --- TICKETS / COMPLAINTS DIRECTORY ---
+  // --- TICKETS / COMPLAINTS DIRECTORY & EXPORTS ---
   function loadTickets() {
     if (!db) return;
     let query = db.collection('tickets').orderBy('createdAt', 'desc');
@@ -1060,18 +1178,54 @@
     }).catch(e => console.error("Error loading tickets:", e));
   }
 
+  window.applyTicketFilters = function() {
+    const monthEl = document.getElementById('ticket-month-filter');
+    const statusEl = document.getElementById('ticket-status-filter');
+    if (monthEl) ticketMonthFilter = monthEl.value;
+    if (statusEl) ticketStatusFilter = statusEl.value;
+    renderTicketsList();
+  };
+
+  function getFilteredTickets() {
+    return ticketsList.filter(t => {
+      if (ticketStatusFilter !== 'All' && t.status !== ticketStatusFilter) return false;
+
+      if (ticketMonthFilter !== 'All' && t.createdAt) {
+        const date = t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        const key = `${mm}-${yyyy}`;
+        if (key !== ticketMonthFilter) return false;
+      }
+      return true;
+    });
+  }
+
   function renderTicketsList() {
     const listEl = document.getElementById('tickets-list');
     if (!listEl) return;
-    if (!ticketsList.length) {
-      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No complaints or tickets lodged yet.</div>';
+
+    const isAdmin = currentUserProfile.role === 'admin';
+    const filtered = isAdmin ? getFilteredTickets() : ticketsList;
+
+    if (isAdmin) {
+      const pending = filtered.filter(t => t.status === 'pending').length;
+      const inProgress = filtered.filter(t => t.status === 'in-progress').length;
+      const resolved = filtered.filter(t => t.status === 'resolved').length;
+      const closed = filtered.filter(t => t.status === 'closed').length;
+
+      const summaryText = `Showing ${filtered.length} of ${ticketsList.length} complaints — Pending: ${pending} | In Progress: ${inProgress} | Resolved: ${resolved} | Closed: ${closed}`;
+      const summaryEl = document.getElementById('tickets-summary-text');
+      if (summaryEl) summaryEl.innerText = summaryText;
+    }
+
+    if (!filtered.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No complaints match the filter selection.</div>';
       return;
     }
 
-    const isAdmin = currentUserProfile.role === 'admin';
-
-    listEl.innerHTML = ticketsList.map(t => `
-      <div class="card" style="cursor:default;" onclick="openTicketDetailModal('${t.id}')">
+    listEl.innerHTML = filtered.map(t => `
+      <div class="card" style="cursor:default;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
           <div>
             <span class="ticket-no">${escapeHtml(t.ticketNo || 'TICKET')}</span>
@@ -1082,9 +1236,95 @@
         <div style="font-size:13px; color:var(--text); line-height:1.4; margin-bottom:8px;">${escapeHtml(t.description)}</div>
         <div style="font-size:11.5px; color:var(--text-muted);">House: ${escapeHtml(t.house || 'N/A')} | Resident: ${escapeHtml(t.name || 'N/A')}</div>
         ${t.department ? `<div style="font-size:11.5px; color:var(--info); margin-top:4px;">Assigned Dept: ${escapeHtml(t.department)}</div>` : ''}
+
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button class="btn sm secondary" onclick="openTicketDetailModal('${t.id}')">View Details</button>
+          ${isAdmin ? `<button class="btn sm secondary" onclick="exportSingleComplaintPDF('${t.id}')">Export PDF</button>` : ''}
+        </div>
       </div>
     `).join('');
   }
+
+  window.exportFilteredComplaintsPDF = function() {
+    const filtered = getFilteredTickets();
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Roshan Housing Society - Complaints Summary Report", 14, 18);
+      
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Generated: ${new Date().toLocaleDateString()} | Filter: Month (${ticketMonthFilter}), Status (${ticketStatusFilter})`, 14, 25);
+      doc.line(14, 28, 196, 28);
+
+      let y = 36;
+      filtered.forEach((t, i) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFont("helvetica", "bold");
+        doc.text(`${i+1}. [${t.ticketNo || 'TICKET'}] ${t.category} - ${t.status ? t.status.toUpperCase() : 'PENDING'}`, 14, y);
+        y += 6;
+        doc.setFont("helvetica", "normal");
+        doc.text(`Resident: ${t.name || 'N/A'} (${t.house || 'N/A'}) | Dept: ${t.department || 'Unassigned'}`, 14, y);
+        y += 6;
+        const splitDesc = doc.splitTextToSize(`Details: ${t.description}`, 180);
+        doc.text(splitDesc, 14, y);
+        y += (splitDesc.length * 5) + 6;
+      });
+
+      doc.save(`Complaints_Report_${ticketMonthFilter}_${ticketStatusFilter}.pdf`);
+    } catch(err) {
+      alert("Error generating PDF: " + err.message);
+    }
+  };
+
+  window.exportSingleComplaintPDF = function(ticketId) {
+    const t = ticketsList.find(item => item.id === ticketId);
+    if (!t) return;
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Roshan Housing Society", 105, 20, { align: "center" });
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text("Official Complaint Record", 105, 28, { align: "center" });
+      doc.line(20, 34, 190, 34);
+
+      let y = 46;
+      const addRow = (lbl, val) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(lbl + ":", 25, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(val || 'N/A'), 75, y);
+        y += 10;
+      };
+
+      addRow("Ticket Number", t.ticketNo);
+      addRow("Category", t.category);
+      addRow("Current Status", (t.status || 'pending').toUpperCase());
+      addRow("Resident Name", t.name);
+      addRow("House Number", t.house);
+      addRow("Assigned Dept", t.department || 'None');
+
+      y += 6;
+      doc.setFont("helvetica", "bold");
+      doc.text("Issue Description:", 25, y);
+      y += 8;
+      doc.setFont("helvetica", "normal");
+      const splitDesc = doc.splitTextToSize(t.description || '', 160);
+      doc.text(splitDesc, 25, y);
+
+      doc.save(`Ticket_${t.ticketNo}.pdf`);
+    } catch(err) {
+      alert("PDF Error: " + err.message);
+    }
+  };
 
   window.openNewTicketModal = function() {
     document.getElementById('modal-body').innerHTML = `
@@ -1181,6 +1421,503 @@
     }
   };
 
+  // --- MAINTENANCE BILLS MODULE ---
+  function loadBills() {
+    if (!db) return;
+    let query = db.collection('bills').orderBy('createdAt', 'desc');
+    if (currentUserProfile.role !== 'admin') {
+      query = query.where('uid', '==', auth.currentUser.uid);
+    }
+    query.get().then(snapshot => {
+      billsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Auto-evaluate Overdue statuses
+      const todayStr = new Date().toISOString().split('T')[0];
+      billsList.forEach(b => {
+        if (b.status === 'unpaid' && b.dueDate && b.dueDate < todayStr) {
+          b.isOverdue = true;
+        }
+      });
+
+      if (currentUserProfile.role === 'admin') {
+        updateAdminBillMetrics();
+      } else {
+        updateResidentBillBanner();
+      }
+      renderBillsList();
+    }).catch(e => console.error("Error loading bills:", e));
+  }
+
+  function updateAdminBillMetrics() {
+    let billed = 0;
+    let collected = 0;
+    let outstanding = 0;
+
+    billsList.forEach(b => {
+      const amt = Number(b.amount) || 0;
+      if (b.status !== 'cancelled') {
+        billed += amt;
+        if (b.status === 'paid') {
+          collected += amt;
+        } else {
+          outstanding += amt;
+        }
+      }
+    });
+
+    const bEl = document.getElementById('metric-billed');
+    const cEl = document.getElementById('metric-collected');
+    const oEl = document.getElementById('metric-outstanding');
+
+    if (bEl) bEl.innerText = formatPKR(billed);
+    if (cEl) cEl.innerText = formatPKR(collected);
+    if (oEl) oEl.innerText = formatPKR(outstanding);
+  }
+
+  function updateResidentBillBanner() {
+    let outstanding = 0;
+    billsList.forEach(b => {
+      if (b.status === 'unpaid') {
+        outstanding += (Number(b.amount) || 0);
+      }
+    });
+    const oEl = document.getElementById('resident-outstanding-val');
+    if (oEl) oEl.innerText = formatPKR(outstanding);
+  }
+
+  window.setBillFilter = function(filterStr) {
+    billFilter = filterStr;
+    render();
+  };
+
+  function renderBillsList() {
+    const listEl = document.getElementById('bills-list');
+    if (!listEl) return;
+
+    const isAdmin = currentUserProfile.role === 'admin';
+
+    let filtered = billsList;
+    if (isAdmin) {
+      if (billFilter === 'Unpaid') filtered = billsList.filter(b => b.status === 'unpaid');
+      if (billFilter === 'Overdue') filtered = billsList.filter(b => b.status === 'unpaid' && b.isOverdue);
+      if (billFilter === 'Past') filtered = billsList.filter(b => b.status === 'paid');
+    }
+
+    if (!filtered.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No bills found for this view.</div>';
+      return;
+    }
+
+    listEl.innerHTML = filtered.map(b => {
+      const isPaid = b.status === 'paid';
+      const isOverdue = b.status === 'unpaid' && b.isOverdue;
+
+      return `
+        <div class="card" style="cursor:default;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+            <div>
+              <span class="ticket-no">${escapeHtml(b.billNo || 'BILL')}</span>
+              <span style="font-weight:700; font-size:15px; color:var(--accent-2); margin-left:6px;">${escapeHtml(b.category)}</span>
+            </div>
+            <div>
+              ${isPaid ? '<span class="badge paid">PAID</span>' : ''}
+              ${isOverdue ? '<span class="badge overdue">RED OVERDUE</span>' : ''}
+              ${(!isPaid && !isOverdue) ? '<span class="badge unpaid">UNPAID</span>' : ''}
+            </div>
+          </div>
+
+          <div style="font-size:18px; font-weight:800; color:var(--text); font-family:var(--font-mono); margin:6px 0;">${formatPKR(b.amount)}</div>
+          <div style="font-size:12.5px; color:var(--text-muted);">Period: ${escapeHtml(b.billingPeriod || 'N/A')} | House: ${escapeHtml(b.house || 'N/A')}</div>
+          
+          ${isPaid ? `
+            <div style="font-size:11.5px; color:var(--success); margin-top:4px;">Paid On ${escapeHtml(b.paidOnDate || 'Recorded Date')} ${b.paymentRef ? '(' + escapeHtml(b.paymentRef) + ')' : ''}</div>
+          ` : `
+            <div style="font-size:11.5px; color:${isOverdue ? 'var(--danger)' : 'var(--text-faint)'}; margin-top:4px;">
+              DUE ${escapeHtml(b.dueDate || 'N/A')}
+            </div>
+          `}
+
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            ${isAdmin ? `
+              ${!isPaid ? `<button class="btn sm primary" onclick="quickMarkPaid('${b.id}')">Mark Paid</button>` : ''}
+              <button class="btn sm secondary" onclick="openBillDetailModal('${b.id}')">Edit / Ref</button>
+              ${isPaid ? `<button class="btn sm secondary" onclick="downloadReceiptPDF('${b.id}')">Receipt PDF</button>` : ''}
+            ` : `
+              ${!isPaid ? `<button class="btn sm primary" onclick="triggerResidentPayNow()">Pay Now</button>` : ''}
+              ${isPaid ? `<button class="btn sm secondary" onclick="downloadReceiptPDF('${b.id}')">Download Receipt</button>` : ''}
+            `}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.openIssueBillModal = async function() {
+    let resDocs = [];
+    try {
+      const snap = await db.collection('users').where('approved', '==', true).get();
+      resDocs = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+    } catch(e) { console.error(e); }
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Issue Maintenance Bill</div>
+      <form id="issue-bill-form">
+        <label>Resident / House</label>
+        <select id="bill-resident-select" required>
+          <option value="BULK">-- All approved residents (Bulk Issue) --</option>
+          ${resDocs.map(r => `<option value="${r.uid}">${escapeHtml(r.name)} (${escapeHtml(r.house || 'N/A')})</option>`).join('')}
+        </select>
+
+        <label>Bill Category</label>
+        <select id="bill-category" required>
+          <option value="Monthly Maintenance">Monthly Maintenance</option>
+          <option value="Water Supply">Water Supply</option>
+          <option value="Security Surcharge">Security Surcharge</option>
+          <option value="Repair / Damage Recovery">Repair / Damage Recovery</option>
+          <option value="Other">Other</option>
+        </select>
+
+        <label>Billing Period (e.g. August 2026)</label>
+        <input type="text" id="bill-period" placeholder="August 2026" required />
+
+        <label>Amount (PKR)</label>
+        <input type="number" id="bill-amount" placeholder="2500" required min="1" />
+
+        <label>Due Date</label>
+        <input type="date" id="bill-duedate" required />
+
+        <label>Notes / Breakdown</label>
+        <textarea id="bill-notes" placeholder="Detailed breakdown of charges..."></textarea>
+
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Issue Bill(s)</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('issue-bill-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const targetUid = document.getElementById('bill-resident-select').value;
+      const category = document.getElementById('bill-category').value;
+      const billingPeriod = document.getElementById('bill-period').value.trim();
+      const amount = Number(document.getElementById('bill-amount').value);
+      const dueDate = document.getElementById('bill-duedate').value;
+      const notes = document.getElementById('bill-notes').value.trim();
+
+      try {
+        if (targetUid === 'BULK') {
+          const batch = db.batch();
+          resDocs.forEach(r => {
+            const billRef = db.collection('bills').doc();
+            const billNo = 'Bill-' + Math.floor(100000 + Math.random() * 900000);
+            batch.set(billRef, {
+              billNo, category, billingPeriod, amount, dueDate, notes,
+              status: 'unpaid', uid: r.uid, name: r.name, house: r.house,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            sendNotification(r.uid, "New Bill Issued", `A new maintenance bill (${billNo}) of PKR ${amount} has been issued.`, 'info');
+          });
+          await batch.commit();
+        } else {
+          const r = resDocs.find(item => item.uid === targetUid);
+          const billNo = 'Bill-' + Math.floor(100000 + Math.random() * 900000);
+          await db.collection('bills').add({
+            billNo, category, billingPeriod, amount, dueDate, notes,
+            status: 'unpaid', uid: targetUid, name: r ? r.name : '', house: r ? r.house : '',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          await sendNotification(targetUid, "New Bill Issued", `A new bill (${billNo}) of PKR ${amount} has been issued.`, 'info');
+        }
+        closeModal();
+        loadBills();
+      } catch(err) {
+        alert("Error issuing bill: " + err.message);
+      }
+    });
+  };
+
+  window.quickMarkPaid = function(billId) {
+    const b = billsList.find(item => item.id === billId);
+    if (!b) return;
+
+    if (confirm(`Mark ${b.billNo} (PKR ${b.amount}) as paid?`)) {
+      const todayStr = new Date().toLocaleDateString('en-GB');
+      db.collection('bills').doc(billId).update({
+        status: 'paid',
+        paidOnDate: todayStr
+      }).then(() => {
+        sendNotification(b.uid, "Bill Payment Received", `Your payment for ${b.billNo} has been marked as PAID.`, 'success');
+        loadBills();
+      }).catch(e => alert("Error updating status: " + e.message));
+    }
+  };
+
+  window.openBillDetailModal = function(billId) {
+    const b = billsList.find(item => item.id === billId);
+    if (!b) return;
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Bill Adjustment (${escapeHtml(b.billNo)})</div>
+      <form id="edit-bill-form">
+        <label>Update Status</label>
+        <select id="edit-bill-status">
+          <option value="unpaid" ${b.status==='unpaid'?'selected':''}>Unpaid</option>
+          <option value="paid" ${b.status==='paid'?'selected':''}>Paid</option>
+          <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
+        </select>
+
+        <label>Payment Reference (OFFLINE / BANK)</label>
+        <input type="text" id="edit-bill-ref" value="${escapeHtml(b.paymentRef || '')}" placeholder="e.g. HBL TRX 99001" />
+
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save Changes</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('edit-bill-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const status = document.getElementById('edit-bill-status').value;
+      const paymentRef = document.getElementById('edit-bill-ref').value.trim();
+      const todayStr = new Date().toLocaleDateString('en-GB');
+
+      try {
+        await db.collection('bills').doc(billId).update({
+          status,
+          paymentRef,
+          ...(status === 'paid' && !b.paidOnDate ? { paidOnDate: todayStr } : {})
+        });
+        closeModal();
+        loadBills();
+      } catch(err) {
+        alert("Error saving bill adjustment: " + err.message);
+      }
+    });
+  };
+
+  window.triggerResidentPayNow = function() {
+    alert("Online payment gateway is not connected yet. Please pay through management and the bill will be marked paid.");
+  };
+
+  window.downloadReceiptPDF = function(billId) {
+    const b = billsList.find(item => item.id === billId);
+    if (!b) return;
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Roshan Pakistan Housing Society", 105, 20, { align: "center" });
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text("Official Payment & Maintenance Receipt", 105, 28, { align: "center" });
+      doc.line(20, 34, 190, 34);
+
+      let y = 46;
+      const addRow = (lbl, val) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(lbl + ":", 25, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(val || 'N/A'), 80, y);
+        y += 10;
+      };
+
+      addRow("Receipt / Bill No", b.billNo);
+      addRow("Resident Name", b.name);
+      addRow("House / Plot Number", b.house);
+      addRow("Category", b.category);
+      addRow("Billing Period", b.billingPeriod);
+      addRow("Amount Paid", formatPKR(b.amount));
+      addRow("Status", "PAID");
+      addRow("Paid On Date", b.paidOnDate || "Recorded");
+      addRow("Payment Reference", b.paymentRef || "OFFLINE / CASH");
+
+      doc.save(`Receipt_${b.billNo}.pdf`);
+    } catch(err) {
+      alert("Error building receipt PDF: " + err.message);
+    }
+  };
+
+  // --- COMMUNITY FUNDS MODULE ---
+  function loadFunds() {
+    if (!db) return;
+    db.collection('funds').orderBy('createdAt', 'desc').get().then(snapshot => {
+      fundsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderFundsList();
+    }).catch(e => console.error("Error loading funds:", e));
+  }
+
+  function renderFundsList() {
+    const listEl = document.getElementById('funds-list');
+    if (!listEl) return;
+    if (!fundsList.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No community drive or fund campaign active right now.</div>';
+      return;
+    }
+
+    const isAdmin = currentUserProfile.role === 'admin';
+
+    listEl.innerHTML = fundsList.map(f => {
+      const target = Number(f.targetAmount) || 0;
+      const collected = Number(f.collectedAmount) || 0;
+      const pct = target > 0 ? Math.min(100, Math.round((collected / target) * 100)) : 0;
+
+      return `
+        <div class="card" style="cursor:default;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+            <div style="font-weight:700; font-size:16.5px; color:var(--accent-2);">${escapeHtml(f.title)}</div>
+            <span class="badge ${f.status === 'closed' ? 'closed' : 'notice'}">${escapeHtml(f.status || 'Active')}</span>
+          </div>
+
+          <div style="font-size:13px; color:var(--text); line-height:1.4; margin-bottom:12px;">${escapeHtml(f.reason)}</div>
+
+          <div style="background:var(--bg-elevated-2); padding:12px; border-radius:12px; border:1px solid var(--border); margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:4px;">
+              <span>Raised: ${formatPKR(collected)}</span>
+              <span>Target: ${formatPKR(target)}</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width:${pct}%;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-faint); margin-top:4px;">
+              <span>${pct}% Completed</span>
+              ${f.deadline ? `<span>Deadline: ${escapeHtml(f.deadline)}</span>` : ''}
+            </div>
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            ${isAdmin ? `
+              <button class="btn sm primary block" onclick="openRecordContributionModal('${f.id}')">+ Record Contribution</button>
+            ` : `
+              <button class="btn sm primary block" onclick="triggerResidentPayNow()">Contribute Now</button>
+            `}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.openCreateFundModal = function() {
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Start New Community Fund</div>
+      <form id="fund-form">
+        <label>Fund Title</label>
+        <input type="text" id="fund-title" placeholder="e.g. Security CCTV Upgrade Fund" required />
+
+        <label>Target Amount (PKR)</label>
+        <input type="number" id="fund-target" placeholder="150000" required min="1" />
+
+        <label>Reason / Fund Description</label>
+        <textarea id="fund-reason" placeholder="Explain the purpose of this fund drive..." required></textarea>
+
+        <label>Target Deadline (Optional)</label>
+        <input type="date" id="fund-deadline" />
+
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Publish Fund Drive</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('fund-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('fund-title').value.trim();
+      const targetAmount = Number(document.getElementById('fund-target').value);
+      const reason = document.getElementById('fund-reason').value.trim();
+      const deadline = document.getElementById('fund-deadline').value;
+
+      try {
+        await db.collection('funds').add({
+          title,
+          targetAmount,
+          collectedAmount: 0,
+          reason,
+          deadline,
+          status: 'active',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await broadcastNotification("New Community Fund Drive", `A new fund "${title}" has been launched. Target: PKR ${targetAmount.toLocaleString()}`);
+        closeModal();
+        loadFunds();
+      } catch(err) {
+        alert("Error launching fund: " + err.message);
+      }
+    });
+  };
+
+  window.openRecordContributionModal = async function(fundId) {
+    const f = fundsList.find(item => item.id === fundId);
+    if (!f) return;
+
+    let resDocs = [];
+    try {
+      const snap = await db.collection('users').where('approved', '==', true).get();
+      resDocs = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+    } catch(e) { console.error(e); }
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Record Fund Contribution</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Fund: <strong>${escapeHtml(f.title)}</strong></div>
+
+      <form id="contrib-form">
+        <label>Contributor Resident</label>
+        <select id="contrib-resident" required>
+          <option value="">-- Select Resident --</option>
+          ${resDocs.map(r => `<option value="${r.uid}">${escapeHtml(r.name)} (${escapeHtml(r.house || 'N/A')})</option>`).join('')}
+        </select>
+
+        <label>Contributed Amount (PKR)</label>
+        <input type="number" id="contrib-amount" placeholder="5000" required min="1" />
+
+        <label>Payment Reference / Receipt Note</label>
+        <input type="text" id="contrib-ref" placeholder="e.g. Cash / Bank Reference" required />
+
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Add Contribution</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('contrib-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const residentUid = document.getElementById('contrib-resident').value;
+      const amount = Number(document.getElementById('contrib-amount').value);
+      const refNote = document.getElementById('contrib-ref').value.trim();
+
+      const res = resDocs.find(item => item.uid === residentUid);
+
+      try {
+        const fundRef = db.collection('funds').doc(fundId);
+        await db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(fundRef);
+          if (!doc.exists) throw "Fund drive does not exist!";
+          const currentCollected = Number(doc.data().collectedAmount) || 0;
+          transaction.update(fundRef, {
+            collectedAmount: currentCollected + amount
+          });
+        });
+
+        await db.collection('fund_contributions').add({
+          fundId,
+          fundTitle: f.title,
+          uid: residentUid,
+          name: res ? res.name : 'Resident',
+          house: res ? res.house : '',
+          amount,
+          refNote,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await sendNotification(residentUid, "Fund Contribution Acknowledged", `Thank you! Your contribution of PKR ${amount} for "${f.title}" has been recorded.`, 'success');
+
+        closeModal();
+        loadFunds();
+      } catch(err) {
+        alert("Error saving contribution: " + err.message);
+      }
+    });
+  };
+
+  // --- BIODATA EDITING ---
   window.openEditBiodataModal = function() {
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Update Biodata</div>
