@@ -228,6 +228,23 @@
   .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
   .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:24px;}
   .toggle-auth-mode{text-align:center; margin-top:16px; font-size:13px; color:var(--accent-2); cursor:pointer; text-decoration:underline;}
+  .auth-msg{border-radius:var(--radius-sm); padding:11px 13px; font-size:13px; font-weight:600; margin-bottom:14px; border:1px solid var(--border);}
+  .auth-msg.error{background:var(--danger-soft); color:var(--danger);}
+  .auth-msg.success{background:var(--success-soft); color:var(--success);}
+  .auth-msg.info{background:var(--info-soft); color:var(--info);}
+
+  .menu-btn{background:var(--bg-elevated-2); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm); width:38px; height:38px; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .drawer-overlay{position:fixed; top:0; left:0; right:0; bottom:0; z-index:90; background:rgba(10,12,24,0.6); backdrop-filter:blur(3px); opacity:0; pointer-events:none; transition:opacity .25s ease;}
+  .drawer-overlay.open{opacity:1; pointer-events:auto;}
+  .drawer{position:fixed; top:0; bottom:0; left:0; z-index:95; width:260px; max-width:80vw; background:var(--bg-elevated); border-right:1px solid var(--border); transform:translateX(-105%); transition:transform .25s ease; display:flex; flex-direction:column; padding:18px 14px calc(18px + env(safe-area-inset-bottom));}
+  .drawer.open{transform:translateX(0);}
+  .drawer-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; padding:0 6px;}
+  .drawer-title{font-family:var(--font-display); font-size:17px; font-weight:600; color:var(--accent-2);}
+  .drawer-item{display:flex; align-items:center; gap:12px; width:100%; background:none; border:none; color:var(--text-muted); font-family:inherit; font-size:14.5px; font-weight:600; padding:12px 12px; border-radius:var(--radius-sm); cursor:pointer; text-align:left;}
+  .drawer-item:hover{background:var(--bg-elevated-2);}
+  .drawer-item.active{background:var(--accent-soft); color:var(--accent-2);}
+  .drawer-item .ico{font-size:17px; width:22px; text-align:center;}
+  .drawer-footer{margin-top:auto; border-top:1px solid var(--border-soft); padding-top:10px;}
 </style>
 </head>
 <body>
@@ -290,7 +307,10 @@
   // Application State Variables
   let currentUserProfile = null;
   let registrationInProgress = false;
-  let isAuthModeLogin = true;
+  let authMode = 'login'; // 'login' | 'register' | 'reset'
+  let authMessage = null; // { type: 'error'|'success'|'info', text }
+  let wasSignedIn = false;
+  let manualSignOut = false;
   let activeTab = 'notices';
   let notifications = [];
   let pendingResidents = [];
@@ -318,16 +338,31 @@
           const userDoc = await db.collection('users').doc(user.uid).get();
           if (userDoc.exists) {
             currentUserProfile = { uid: user.uid, email: user.email, ...userDoc.data() };
+            wasSignedIn = true;
             saveDeviceToken();
           } else {
             currentUserProfile = null;
+            authMessage = { type: 'error', text: 'No resident record was found for this account. Please register or contact the administrator.' };
             await auth.signOut();
+            return;
           }
         } catch(e) {
           console.error("Failed fetching user profile:", e);
+          currentUserProfile = null;
+          authMessage = { type: 'error', text: friendlyAuthError(e) };
+          try { await auth.signOut(); } catch(_) {}
+          return;
         }
       } else {
         currentUserProfile = null;
+        if (wasSignedIn) {
+          authMessage = manualSignOut
+            ? { type: 'success', text: 'You have been signed out successfully.' }
+            : { type: 'info', text: 'Your session has expired. Please sign in again.' };
+          wasSignedIn = false;
+          manualSignOut = false;
+          authMode = 'login';
+        }
       }
       render();
     });
@@ -391,6 +426,7 @@
 
     appEl.innerHTML = `
       <header class="topbar">
+        <button class="menu-btn" id="menu-btn" title="Menu" aria-label="Open menu">☰</button>
         <div class="brand-mark">
           <img src="icon-192.png" alt="Logo" onerror="this.style.display='none'">
         </div>
@@ -405,7 +441,6 @@
           🔔
           ${unreadCount > 0 ? `<span class="notif-badge">${unreadCount}</span>` : ''}
         </button>
-        <button class="btn sm" id="logout-btn" style="background:var(--bg-elevated-2); color:var(--text-muted);">Logout</button>
       </header>
 
       <main style="padding-bottom:20px;">
@@ -419,31 +454,32 @@
         ${renderContent()}
       </main>
 
-      <nav class="tabbar">
-        <div class="tabbar-inner">
-          <button class="tab-btn ${activeTab==='notices'?'active':''}" data-tab="notices">
-            <span class="lbl">Announcements</span>
+      <div class="drawer-overlay" id="drawer-overlay"></div>
+      <nav class="drawer" id="nav-drawer" aria-label="Main navigation">
+        <div class="drawer-head">
+          <div class="drawer-title">Menu</div>
+          <button class="modal-close" id="drawer-close-btn" style="position:static;" aria-label="Close menu">✕</button>
+        </div>
+        ${[
+          ['notices', '📢', 'Announcements'],
+          ['polls', '🗳️', 'Polls'],
+          ['tickets', '🛠️', 'Complaints'],
+          ['bills', '🧾', 'Bills'],
+          ['funds', '💰', 'Funds'],
+          ['biodata', isAdmin ? '👥' : '👤', isAdmin ? 'Residents' : 'Profile'],
+          ...(isAdmin ? [['approvals', '✅', 'Approvals']] : [])
+        ].map(([tab, ico, lbl]) => `
+          <button class="drawer-item ${activeTab===tab?'active':''}" data-tab="${tab}">
+            <span class="ico">${ico}</span>${lbl}
           </button>
-          <button class="tab-btn ${activeTab==='polls'?'active':''}" data-tab="polls">
-            <span class="lbl">Polls</span>
+        `).join('')}
+        <div class="drawer-footer">
+          <button class="drawer-item" onclick="openNotificationsModal()">
+            <span class="ico">🔔</span>Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}
           </button>
-          <button class="tab-btn ${activeTab==='tickets'?'active':''}" data-tab="tickets">
-            <span class="lbl">Complaints</span>
+          <button class="drawer-item" onclick="doSignOut()" style="color:var(--danger);">
+            <span class="ico">🚪</span>Logout
           </button>
-          <button class="tab-btn ${activeTab==='bills'?'active':''}" data-tab="bills">
-            <span class="lbl">Bills</span>
-          </button>
-          <button class="tab-btn ${activeTab==='funds'?'active':''}" data-tab="funds">
-            <span class="lbl">Funds</span>
-          </button>
-          <button class="tab-btn ${activeTab==='biodata'?'active':''}" data-tab="biodata">
-            <span class="lbl">${isAdmin ? 'Residents' : 'Profile'}</span>
-          </button>
-          ${isAdmin ? `
-            <button class="tab-btn ${activeTab==='approvals'?'active':''}" data-tab="approvals">
-              <span class="lbl">Approvals</span>
-            </button>
-          ` : ''}
         </div>
       </nav>
     `;
@@ -487,7 +523,7 @@
       }
     });
 
-    document.getElementById('logout-verification-btn').addEventListener('click', () => auth.signOut());
+    document.getElementById('logout-verification-btn').addEventListener('click', () => window.doSignOut());
   }
 
   function renderBiodataFormScreen() {
@@ -535,7 +571,7 @@
             <button type="submit" class="btn primary block" style="margin-top:20px;">Save & Submit Biodata</button>
           </form>
         </div>
-        <button class="btn secondary block" onclick="auth.signOut()" style="margin-top:10px;">Sign Out</button>
+        <button class="btn secondary block" onclick="doSignOut()" style="margin-top:10px;">Sign Out</button>
       </div>
     `;
 
@@ -595,7 +631,7 @@
       </div>
     `;
 
-    document.getElementById('logout-pending-btn').addEventListener('click', () => auth.signOut());
+    document.getElementById('logout-pending-btn').addEventListener('click', () => window.doSignOut());
   }
 
   window.requestPushPermission = function() {
@@ -605,20 +641,68 @@
     });
   };
 
+  window.doSignOut = function() {
+    manualSignOut = true;
+    auth.signOut();
+  };
+
+  function friendlyAuthError(err) {
+    const code = (err && err.code) || '';
+    switch (code) {
+      case 'auth/invalid-email':
+        return 'That email address is not valid. Please check it and try again.';
+      case 'auth/user-not-found':
+        return 'No account was found with this email. Please register first or check the email address.';
+      case 'auth/wrong-password':
+        return 'Incorrect password. Please try again or use "Forgot password?" to reset it.';
+      case 'auth/invalid-credential':
+      case 'auth/invalid-login-credentials':
+        return 'Incorrect email or password. Please try again or use "Forgot password?" to reset it.';
+      case 'auth/network-request-failed':
+        return 'Network problem — could not reach the server. Please check your internet connection and try again.';
+      case 'auth/too-many-requests':
+        return 'Too many failed attempts. Please wait a few minutes and try again, or reset your password.';
+      case 'auth/user-disabled':
+        return 'This account has been disabled. Please contact the society administrator.';
+      case 'auth/email-already-in-use':
+        return 'An account with this email already exists. Please sign in instead.';
+      case 'auth/weak-password':
+        return 'Password is too weak. Please use at least 6 characters.';
+      case 'auth/requires-recent-login':
+        return 'For security, please sign in again to continue.';
+      case 'auth/missing-password':
+        return 'Please enter your password.';
+      case 'unavailable':
+        return 'Network problem — could not reach the server. Please check your internet connection and try again.';
+      default:
+        return (err && err.message) ? err.message : 'Something went wrong. Please try again.';
+    }
+  }
+
   function renderOnboarding() {
+    const isLogin = authMode === 'login';
+    const isReset = authMode === 'reset';
+    const subtitle = isReset ? 'Reset your account password'
+      : isLogin ? 'Sign in to access your portal'
+      : 'Register a resident account';
+
     appEl.innerHTML = `
       <div class="onboard-wrap">
         <div class="onboard-title">Roshan Housing Society</div>
-        <div class="onboard-sub">${isAuthModeLogin ? 'Sign in to access your portal' : 'Register a resident account'}</div>
-        
+        <div class="onboard-sub">${subtitle}</div>
+
+        <div id="auth-msg-box">${authMessage ? `<div class="auth-msg ${authMessage.type}">${escapeHtml(authMessage.text)}</div>` : ''}</div>
+
         <form id="auth-form">
           <label>Email Address</label>
           <input type="email" id="auth-email" placeholder="e.g. resident@rphs.pk" required />
 
-          <label>Password</label>
-          <input type="password" id="auth-password" placeholder="••••••••" required minlength="6" />
+          ${!isReset ? `
+            <label>Password</label>
+            <input type="password" id="auth-password" placeholder="••••••••" required minlength="6" />
+          ` : ''}
 
-          ${!isAuthModeLogin ? `
+          ${(!isLogin && !isReset) ? `
             <label>Full Name</label>
             <input type="text" id="auth-name" placeholder="e.g. Naveed Ahmed" required />
 
@@ -633,21 +717,41 @@
             </div>
           ` : ''}
 
-          <button type="submit" class="btn primary block" style="margin-top:20px;">
-            ${isAuthModeLogin ? 'Sign In' : 'Register Resident Account'}
+          <button type="submit" class="btn primary block" id="auth-submit-btn" style="margin-top:20px;">
+            ${isReset ? 'Send Password Reset Email' : isLogin ? 'Sign In' : 'Register Resident Account'}
           </button>
         </form>
 
+        ${isLogin ? `
+          <div class="toggle-auth-mode" id="forgot-password-btn" style="margin-top:14px;">Forgot password?</div>
+        ` : ''}
+
         <div class="toggle-auth-mode" id="toggle-auth-btn">
-          ${isAuthModeLogin ? "Don't have an account? Register here" : 'Already registered? Sign In'}
+          ${isReset ? 'Back to Sign In' : isLogin ? "Don't have an account? Register here" : 'Already registered? Sign In'}
         </div>
       </div>
     `;
 
+    function showAuthMessage(type, text) {
+      authMessage = { type, text };
+      document.getElementById('auth-msg-box').innerHTML =
+        `<div class="auth-msg ${type}">${escapeHtml(text)}</div>`;
+    }
+
     const toggleBtn = document.getElementById('toggle-auth-btn');
     if (toggleBtn) {
       toggleBtn.addEventListener('click', () => {
-        isAuthModeLogin = !isAuthModeLogin;
+        authMode = (authMode === 'login') ? 'register' : 'login';
+        authMessage = null;
+        renderOnboarding();
+      });
+    }
+
+    const forgotBtn = document.getElementById('forgot-password-btn');
+    if (forgotBtn) {
+      forgotBtn.addEventListener('click', () => {
+        authMode = 'reset';
+        authMessage = null;
         renderOnboarding();
       });
     }
@@ -655,13 +759,43 @@
     document.getElementById('auth-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('auth-email').value.trim();
+      const submitBtn = document.getElementById('auth-submit-btn');
+      const originalLabel = submitBtn.textContent;
+
+      function setLoading(label) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = label;
+      }
+      function clearLoading() {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
+      }
+
+      if (isReset) {
+        setLoading('Sending reset email…');
+        try {
+          await auth.sendPasswordResetEmail(email);
+          authMode = 'login';
+          authMessage = { type: 'success', text: 'Password reset email sent to ' + email + '. Check your inbox (and spam folder), then sign in with your new password.' };
+          renderOnboarding();
+        } catch(err) {
+          clearLoading();
+          showAuthMessage('error', friendlyAuthError(err));
+        }
+        return;
+      }
+
       const password = document.getElementById('auth-password').value.trim();
 
-      if (isAuthModeLogin) {
+      if (isLogin) {
+        setLoading('Signing in…');
         try {
           await auth.signInWithEmailAndPassword(email, password);
+          authMessage = null;
+          // Successful sign-in: onAuthStateChanged loads the profile and renders the app.
         } catch(err) {
-          alert('Authentication Error: ' + err.message);
+          clearLoading();
+          showAuthMessage('error', friendlyAuthError(err));
         }
       } else {
         const name = document.getElementById('auth-name').value.trim();
@@ -669,6 +803,7 @@
         const phone = document.getElementById('auth-phone').value.trim();
 
         registrationInProgress = true;
+        setLoading('Creating account…');
 
         try {
           const cred = await auth.createUserWithEmailAndPassword(email, password);
@@ -696,6 +831,8 @@
           };
 
           registrationInProgress = false;
+          wasSignedIn = true;
+          authMessage = null;
 
           try {
             await cred.user.sendEmailVerification();
@@ -708,7 +845,8 @@
 
         } catch(err) {
           registrationInProgress = false;
-          alert('Registration failed: ' + err.message);
+          clearLoading();
+          showAuthMessage('error', friendlyAuthError(err));
         }
       }
     });
@@ -823,15 +961,27 @@
   function bindGlobalEvents() {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => auth.signOut());
+      logoutBtn.addEventListener('click', () => window.doSignOut());
     }
 
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+    document.querySelectorAll('.drawer-item[data-tab]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         activeTab = e.currentTarget.getAttribute('data-tab');
         render();
       });
     });
+
+    const drawer = document.getElementById('nav-drawer');
+    const overlay = document.getElementById('drawer-overlay');
+    const menuBtn = document.getElementById('menu-btn');
+    const closeBtn = document.getElementById('drawer-close-btn');
+    if (drawer && overlay && menuBtn) {
+      const openDrawer = () => { drawer.classList.add('open'); overlay.classList.add('open'); };
+      const closeDrawer = () => { drawer.classList.remove('open'); overlay.classList.remove('open'); };
+      menuBtn.addEventListener('click', openDrawer);
+      overlay.addEventListener('click', closeDrawer);
+      if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+    }
   }
 
   function loadData() {
@@ -935,10 +1085,58 @@
   };
 
   // --- ANNOUNCEMENTS ---
+  // --- ADMIN REMOVE / ARCHIVE ---
+  // Announcements are deleted permanently; bills, funds and complaints are
+  // archived (soft-deleted) so financial/audit records are retained.
+  async function archiveRecord(collection, id, reload) {
+    if (currentUserProfile.role !== 'admin') return;
+    try {
+      await db.collection(collection).doc(id).update({
+        isDeleted: true,
+        deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        deletedBy: currentUserProfile.name
+      });
+      closeModal();
+      reload();
+    } catch(err) {
+      alert("Error removing record: " + err.message);
+    }
+  }
+
+  window.deleteNotice = async function(id) {
+    if (currentUserProfile.role !== 'admin') return;
+    const n = noticesList.find(item => item.id === id);
+    if (!confirm(`Delete the announcement "${n ? n.title : ''}" permanently?`)) return;
+    try {
+      await db.collection('announcements').doc(id).delete();
+      loadNotices();
+    } catch(err) {
+      alert("Error deleting announcement: " + err.message);
+    }
+  };
+
+  window.archiveTicket = function(id) {
+    const t = ticketsList.find(item => item.id === id);
+    if (!confirm(`Remove complaint ${t ? t.ticketNo : ''}? It will be archived (kept for audit) and hidden from the list.`)) return;
+    archiveRecord('tickets', id, loadTickets);
+  };
+
+  window.archiveBill = function(id) {
+    const b = billsList.find(item => item.id === id);
+    if (!confirm(`Remove bill ${b ? b.billNo : ''}? It will be archived (kept for audit) and hidden from the list.`)) return;
+    archiveRecord('bills', id, loadBills);
+  };
+
+  window.archiveFund = function(id) {
+    const f = fundsList.find(item => item.id === id);
+    if (!confirm(`Remove the fund "${f ? f.title : ''}"? It will be archived (kept for audit) along with its contribution records.`)) return;
+    archiveRecord('funds', id, loadFunds);
+  };
+
   function loadNotices() {
     if (!db) return;
     db.collection('announcements').orderBy('createdAt', 'desc').get().then(snapshot => {
-      noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(n => !n.isDeleted);
       renderNoticesList();
     }).catch(e => console.error("Error loading notices:", e));
   }
@@ -946,6 +1144,7 @@
   function renderNoticesList() {
     const listEl = document.getElementById('notices-list');
     if (!listEl) return;
+    const isAdmin = currentUserProfile.role === 'admin';
     if (!noticesList.length) {
       listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No announcements posted yet.</div>';
       return;
@@ -959,6 +1158,7 @@
         </div>
         <div style="font-size:13.5px; color:var(--text); line-height:1.5; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
         <div style="font-size:11px; color:var(--text-faint; margin-top:10px;">Posted by Management</div>
+        ${isAdmin ? `<button class="btn sm danger" style="margin-top:12px;" onclick="deleteNotice('${n.id}')">Delete</button>` : ''}
       </div>
     `).join('');
   }
@@ -1129,7 +1329,7 @@
       query = query.where('uid', '==', auth.currentUser.uid);
     }
     query.get().then(snapshot => {
-      ticketsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      ticketsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(t => !t.isDeleted);
       renderTicketsList();
     }).catch(e => console.error("Error loading tickets:", e));
   }
@@ -1337,7 +1537,10 @@
         <div style="font-size:11.5px; color:var(--text-muted);">House: ${escapeHtml(t.house || 'N/A')} | Resident: ${escapeHtml(t.name || 'N/A')}</div>
         <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Lodged: ${escapeHtml(formatDate(t.createdAt))}</div>
         ${t.department ? `<div style="font-size:11.5px; color:var(--info); margin-top:4px;">Assigned Dept: ${escapeHtml(t.department)}</div>` : ''}
-        ${isAdmin ? `<button class="btn sm secondary" style="margin-top:12px;" onclick="event.stopPropagation(); downloadTicketPDF('${t.id}')">Export PDF</button>` : ''}
+        ${isAdmin ? `<div style="margin-top:12px; display:flex; gap:8px;">
+          <button class="btn sm secondary" onclick="event.stopPropagation(); downloadTicketPDF('${t.id}')">Export PDF</button>
+          <button class="btn sm danger" onclick="event.stopPropagation(); archiveTicket('${t.id}')">Remove</button>
+        </div>` : ''}
       </div>
     `).join('');
   }
@@ -1530,6 +1733,7 @@
     query.get().then(snapshot => {
       billsList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(b => !b.isDeleted)
         .sort((a, b) => {
           const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
@@ -1694,6 +1898,7 @@
                        <button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Invoice PDF</button>`
                     : `<button class="btn sm primary" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">Upload Payment Proof</button>
                        <button class="btn sm secondary" onclick="event.stopPropagation(); payBill('${b.id}')">Pay Now</button>`)}
+            ${isAdmin ? `<button class="btn sm danger" onclick="event.stopPropagation(); archiveBill('${b.id}')">Remove</button>` : ''}
           </div>
         </div>
       `;
@@ -2117,6 +2322,7 @@
     ]).then(([fundsSnap, contribsSnap]) => {
       fundsList = fundsSnap.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(f => !f.isDeleted)
         .sort((a, b) => {
           const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
@@ -2182,6 +2388,7 @@
             </div>
           ` : `<div style="font-size:12.5px;"><span style="color:var(--text-faint);">Collected:</span> <span style="font-family:var(--font-mono); color:var(--success);">${formatMoney(collected)}</span></div>`}
           <div style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${contributors} contributor(s) · Started ${escapeHtml(formatDate(f.createdAt))}${f.deadline ? ' · Deadline ' + escapeHtml(formatDate(f.deadline)) : ''}${isAdmin && pendingCount ? ` · <span style="color:var(--info);">${pendingCount} awaiting verification</span>` : ''}${!isAdmin && myPending ? ' · <span style="color:var(--info);">Your contribution is under review</span>' : ''}</div>
+          ${isAdmin ? `<button class="btn sm danger" style="margin-top:10px;" onclick="event.stopPropagation(); archiveFund('${f.id}')">Remove</button>` : ''}
         </div>
       `;
     }).join('');
