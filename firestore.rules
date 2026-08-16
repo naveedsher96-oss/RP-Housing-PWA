@@ -124,11 +124,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ---------- volunteers ----------
-    match /volunteers/{id} {
-      allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if isApprovedResident() && request.resource.data.uid == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    // ---------- volunteer programs ----------
+    match /volunteer_programs/{id} {
+      allow read: if signedIn();
+      allow create: if isAdmin();
+      // Admin manages programs; approved residents join/leave (update participants)
+      allow update: if isAdmin() || isApprovedResident();
       allow delete: if false;
     }
 

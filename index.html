@@ -1020,9 +1020,12 @@
 
     if (activeTab === 'volunteers') {
       return `
-        <div class="section-title">${isStaff() ? 'Relief Volunteers' : 'Volunteer Registration'}</div>
-        <div class="section-sub">${isStaff() ? 'Residents registered for relief and community work.' : 'Register to help with relief and community work — your profile details are reused automatically.'}</div>
-        <div id="volunteers-body">Loading...</div>
+        <div class="section-title">
+          Volunteer Programs
+          ${isAdmin ? '<button class="btn sm primary" onclick="openStartProgramModal()">+ Start Program</button>' : ''}
+        </div>
+        <div class="section-sub">${isStaff() ? 'Community volunteer programs and the residents who joined them.' : 'Join a volunteer program to help with relief and community work.'}</div>
+        <div id="volunteers-body">Loading programs...</div>
       `;
     }
 
@@ -1147,7 +1150,7 @@
         ['funds', '💰', 'Funds'],
         ['expenses', '💸', 'Expenses'],
         ['reports', '📊', 'Reports'],
-        ['volunteers', '🤝', 'Volunteers'],
+        ['volunteers', '🤝', 'Volunteer Programs'],
         ['biodata', '👥', 'Residents'],
         ['approvals', '✅', 'Approvals'],
         ['board', '🏛️', 'Board Decisions'],
@@ -1160,7 +1163,7 @@
       ['tickets', '🛠️', 'Complaints'],
       ['bills', '🧾', 'Bills'],
       ['funds', '💰', 'Funds'],
-      ['volunteers', '🤝', 'Volunteer'],
+      ['volunteers', '🤝', 'Volunteer Programs'],
       ['reports', '📊', 'Reports'],
       ['biodata', '👤', 'Profile']
     ];
@@ -1328,7 +1331,7 @@
     db.collection('announcements').orderBy('createdAt', 'desc').get().then(snapshot => {
       noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(n => !n.isDeleted);
       renderNoticesList();
-    }).catch(e => console.error("Error loading notices:", e));
+    }).catch(e => { console.error("Error loading notices:", e); showLoadError('notices-list', e); });
   }
 
   function renderNoticesList() {
@@ -1521,7 +1524,7 @@
     query.get().then(snapshot => {
       ticketsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(t => !t.isDeleted);
       renderTicketsList();
-    }).catch(e => console.error("Error loading tickets:", e));
+    }).catch(e => { console.error("Error loading tickets:", e); showLoadError('tickets-list', e); });
   }
 
   function monthKey(date) {
@@ -1928,7 +1931,7 @@
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
         });
       renderBillsList();
-    }).catch(e => console.error("Error loading bills:", e));
+    }).catch(e => { console.error("Error loading bills:", e); showLoadError('bills-list', e); });
 
     loadSocietySettings().then(renderBankCard);
   }
@@ -2534,7 +2537,7 @@
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
         });
       renderFundsList();
-    }).catch(e => console.error("Error loading funds:", e));
+    }).catch(e => { console.error("Error loading funds:", e); showLoadError('funds-list', e); });
   }
 
   function fundVerifiedTotal(fundId) {
@@ -3067,7 +3070,7 @@
         .filter(x => !x.isDeleted)
         .sort((a, b) => String(b.expenseDate || '').localeCompare(String(a.expenseDate || '')));
       renderExpensesList();
-    }).catch(e => console.error("Error loading expenses:", e));
+    }).catch(e => { console.error("Error loading expenses:", e); showLoadError('expenses-list', e); });
   }
 
   function renderExpensesList() {
@@ -3159,91 +3162,160 @@
     archiveRecord('expenses', id, loadExpenses);
   };
 
-  // --- VOLUNTEERS ---
+  // --- VOLUNTEER PROGRAMS ---
+  function showLoadError(elId, e) {
+    const el = document.getElementById(elId);
+    if (el) el.innerHTML = `<div class="card" style="cursor:default; color:var(--danger);">Could not load data: ${escapeHtml(e.message || String(e))}</div>`;
+  }
+
   function loadVolunteers() {
     if (!db) return;
-    db.collection('volunteers').get().then(snapshot => {
+    db.collection('volunteer_programs').get().then(snapshot => {
       volunteersList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(v => !v.isDeleted);
+        .filter(p => !p.isDeleted)
+        .sort((a, b) => {
+          const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
+          return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
+        });
       renderVolunteersBody();
-    }).catch(e => console.error("Error loading volunteers:", e));
+    }).catch(e => { console.error("Error loading volunteer programs:", e); showLoadError('volunteers-body', e); });
   }
 
   function renderVolunteersBody() {
     const el = document.getElementById('volunteers-body');
     if (!el) return;
+    const isAdmin = currentUserProfile.role === 'admin';
 
-    if (isStaff()) {
-      el.innerHTML = volunteersList.length ? volunteersList.map(v => `
-        <div class="card" style="cursor:default;">
-          <div style="font-weight:700; font-size:15px; color:var(--accent-2);">${escapeHtml(v.name)}</div>
-          <div style="font-size:12.5px; color:var(--text-muted);">House: ${escapeHtml(v.house || 'N/A')} | Phone: ${escapeHtml(v.phone || 'N/A')}</div>
-          <div style="font-size:13px; margin-top:6px;"><strong>Skills:</strong> ${escapeHtml(v.skills || 'N/A')}</div>
-          <div style="font-size:13px;"><strong>Availability:</strong> ${escapeHtml(v.availability || 'Any')}</div>
-          <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Registered ${escapeHtml(formatDate(v.registeredAt))}</div>
-        </div>
-      `).join('') : '<div class="card" style="text-align:center; color:var(--text-muted);">No volunteers registered yet.</div>';
+    if (!volunteersList.length) {
+      el.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${isAdmin ? 'No volunteer programs yet. Start one to invite residents.' : 'No volunteer programs announced yet. Check back soon!'}</div>`;
       return;
     }
 
-    const mine = volunteersList.find(v => v.uid === auth.currentUser.uid);
-    if (mine) {
-      el.innerHTML = `
-        <div class="card" style="cursor:default; padding:20px;">
-          <div style="font-size:32px; text-align:center; margin-bottom:8px;">🤝</div>
-          <div style="text-align:center; font-weight:700; color:var(--success); margin-bottom:10px;">You are registered as a relief volunteer</div>
-          <div style="font-size:13px;"><strong>Skills:</strong> ${escapeHtml(mine.skills || 'N/A')}</div>
-          <div style="font-size:13px;"><strong>Availability:</strong> ${escapeHtml(mine.availability || 'Any')}</div>
-          <button class="btn danger block" style="margin-top:14px;" onclick="withdrawVolunteer('${mine.id}')">Withdraw Registration</button>
+    el.innerHTML = volunteersList.map(p => {
+      const parts = p.participants || [];
+      const joined = parts.some(x => x.uid === auth.currentUser.uid);
+      const active = p.status !== 'closed';
+      return `
+      <div class="card" style="cursor:default;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px;">
+          <div style="font-weight:700; font-size:15.5px; color:var(--accent-2);">${escapeHtml(p.title)}</div>
+          <span class="badge ${active ? 'resolved' : 'closed'}">${active ? 'active' : 'closed'}</span>
         </div>
-      `;
-      return;
-    }
-
-    el.innerHTML = `
-      <div class="card" style="cursor:default; padding:18px;">
-        <div style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">Registering as: <strong style="color:var(--text);">${escapeHtml(currentUserProfile.name)}</strong> — House ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
-        <form id="volunteer-form">
-          <label>Skills / Areas You Can Help With</label>
-          <textarea id="vol-skills" placeholder="e.g. first aid, transport, food distribution, electrical work..." required></textarea>
-          <label>Availability (optional)</label>
-          <input type="text" id="vol-avail" placeholder="e.g. weekends, evenings, on-call" />
-          <button type="submit" class="btn primary block" style="margin-top:14px;">Register as Volunteer</button>
-        </form>
-      </div>
-    `;
-
-    document.getElementById('volunteer-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      try {
-        const ref = await db.collection('volunteers').add({
-          uid: auth.currentUser.uid,
-          name: currentUserProfile.name,
-          house: currentUserProfile.house || '',
-          phone: currentUserProfile.phone || '',
-          skills: document.getElementById('vol-skills').value.trim(),
-          availability: document.getElementById('vol-avail').value.trim(),
-          registeredAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        logAudit('volunteer', ref.id, 'create', `${currentUserProfile.name} registered as volunteer`);
-        await notifyAdmins("New Relief Volunteer", `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) registered as a relief volunteer.`, 'info');
-        loadVolunteers();
-      } catch(err) {
-        alert("Error registering: " + err.message);
-      }
-    });
+        <div style="font-size:13px; line-height:1.5; white-space:pre-wrap; margin-bottom:8px;">${escapeHtml(p.description || '')}</div>
+        ${p.schedule ? `<div style="font-size:12.5px; color:var(--text-muted); margin-bottom:6px;">📅 ${escapeHtml(p.schedule)}</div>` : ''}
+        <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:8px;">🤝 ${parts.length} volunteer${parts.length === 1 ? '' : 's'} joined</div>
+        ${isStaff() && parts.length ? `
+          <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:10px;">
+            ${parts.map(x => `<div style="font-size:12.5px; margin-bottom:3px;"><strong>${escapeHtml(x.name)}</strong> <span style="color:var(--text-muted);">— ${escapeHtml(x.house || 'N/A')}${x.phone ? ' · ' + escapeHtml(x.phone) : ''}</span></div>`).join('')}
+          </div>` : ''}
+        ${!isStaff() && active ? (joined
+          ? `<button class="btn sm danger" onclick="leaveProgram('${p.id}')">Leave Program</button> <span style="font-size:12px; color:var(--success); margin-left:8px;">✔ You have joined</span>`
+          : `<button class="btn sm primary" onclick="joinProgram('${p.id}')">Join as Volunteer</button>`) : ''}
+        ${!isStaff() && !active && joined ? '<span style="font-size:12px; color:var(--text-muted);">You volunteered in this program.</span>' : ''}
+        ${isAdmin ? `<div style="margin-top:10px; display:flex; gap:8px;">
+          ${active ? `<button class="btn sm" onclick="closeProgram('${p.id}')">Close Program</button>` : ''}
+          <button class="btn sm danger" onclick="archiveProgram('${p.id}')">Remove</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
   }
 
-  window.withdrawVolunteer = async function(id) {
-    if (!confirm("Withdraw your volunteer registration?")) return;
+  window.openStartProgramModal = function() {
+    if (currentUserProfile.role !== 'admin') return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Start Volunteer Program</div>
+      <form id="program-form">
+        <label>Program Title</label>
+        <input type="text" id="prog-title" placeholder="e.g. Ramzan Food Distribution" required />
+        <label>Description — what will volunteers do?</label>
+        <textarea id="prog-desc" placeholder="Describe the work, who it helps and what is needed..." required></textarea>
+        <label>Schedule / Timing (optional)</label>
+        <input type="text" id="prog-schedule" placeholder="e.g. Every Sunday 9am, main gate" />
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Start & Notify Residents</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('program-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('prog-title').value.trim();
+      try {
+        const ref = await db.collection('volunteer_programs').add({
+          title,
+          description: document.getElementById('prog-desc').value.trim(),
+          schedule: document.getElementById('prog-schedule').value.trim(),
+          status: 'active',
+          participants: [],
+          createdBy: currentUserProfile.name,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        logAudit('volunteer_program', ref.id, 'create', `Program "${title}" started`);
+        await broadcastNotification(`Volunteer Program: ${title}`, `A new volunteer program has started — open the Volunteers tab to join.`);
+        closeModal();
+        loadVolunteers();
+      } catch(err) {
+        alert("Error starting program: " + err.message);
+      }
+    });
+  };
+
+  window.joinProgram = async function(id) {
+    const p = volunteersList.find(item => item.id === id);
+    if (!p || p.status === 'closed') return;
     try {
-      await db.collection('volunteers').doc(id).update({ isDeleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp(), deletedBy: currentUserProfile.name });
-      logAudit('volunteer', id, 'soft_delete', 'Volunteer withdrew registration');
+      const snap = await db.collection('volunteer_programs').doc(id).get();
+      const cur = snap.exists ? (snap.data().participants || []) : [];
+      if (cur.some(x => x.uid === auth.currentUser.uid)) { loadVolunteers(); return; }
+      cur.push({
+        uid: auth.currentUser.uid,
+        name: currentUserProfile.name,
+        house: currentUserProfile.house || '',
+        phone: currentUserProfile.phone || '',
+        joinedAt: new Date().toISOString()
+      });
+      await db.collection('volunteer_programs').doc(id).update({ participants: cur });
+      logAudit('volunteer_program', id, 'update', `${currentUserProfile.name} joined "${p.title}"`);
+      await notifyAdmins("New Volunteer", `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) joined "${p.title}".`, 'info');
       loadVolunteers();
     } catch(err) {
-      alert("Error withdrawing: " + err.message);
+      alert("Error joining program: " + err.message);
     }
+  };
+
+  window.leaveProgram = async function(id) {
+    const p = volunteersList.find(item => item.id === id);
+    if (!p) return;
+    if (!confirm(`Leave the program "${p.title}"?`)) return;
+    try {
+      const snap = await db.collection('volunteer_programs').doc(id).get();
+      const cur = (snap.exists ? (snap.data().participants || []) : []).filter(x => x.uid !== auth.currentUser.uid);
+      await db.collection('volunteer_programs').doc(id).update({ participants: cur });
+      logAudit('volunteer_program', id, 'update', `${currentUserProfile.name} left "${p.title}"`);
+      loadVolunteers();
+    } catch(err) {
+      alert("Error leaving program: " + err.message);
+    }
+  };
+
+  window.closeProgram = async function(id) {
+    const p = volunteersList.find(item => item.id === id);
+    if (!p || currentUserProfile.role !== 'admin') return;
+    if (!confirm(`Close the program "${p.title}"? Residents will no longer be able to join.`)) return;
+    try {
+      await db.collection('volunteer_programs').doc(id).update({ status: 'closed' });
+      logAudit('volunteer_program', id, 'update', `Program "${p.title}" closed with ${(p.participants || []).length} volunteers`);
+      loadVolunteers();
+    } catch(err) {
+      alert("Error closing program: " + err.message);
+    }
+  };
+
+  window.archiveProgram = function(id) {
+    const p = volunteersList.find(item => item.id === id);
+    if (!confirm(`Remove the program "${p ? p.title : ''}"? It will be archived (kept for audit).`)) return;
+    logAudit('volunteer_program', id, 'soft_delete', p ? `Program "${p.title}"` : '');
+    archiveRecord('volunteer_programs', id, loadVolunteers);
   };
 
   // --- REPORTS ---
@@ -3446,7 +3518,7 @@
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
         });
       renderDecisionsList();
-    }).catch(e => console.error("Error loading decisions:", e));
+    }).catch(e => { console.error("Error loading decisions:", e); showLoadError('decisions-list', e); });
   }
 
   function renderDecisionsList() {
@@ -3647,7 +3719,7 @@
         })
         .slice(0, 100);
       renderArchiveAndAudit();
-    }).catch(e => console.error("Error loading archive/audit:", e));
+    }).catch(e => { console.error("Error loading archive/audit:", e); showLoadError('archive-list', e); showLoadError('audit-list', e); });
   }
 
   function renderArchiveAndAudit() {
