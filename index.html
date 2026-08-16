@@ -293,7 +293,7 @@
       db = firebase.firestore();
       auth = firebase.auth();
 
-      firebase.messaging.isSupported().then(supported => {
+      Promise.resolve(firebase.messaging.isSupported()).then(supported => {
         if (supported) {
           messaging = firebase.messaging();
           initPushMessaging();
@@ -381,6 +381,7 @@
           if (userDoc.exists) {
             currentUserProfile = { uid: user.uid, email: user.email, ...userDoc.data() };
             wasSignedIn = true;
+            if (['admin', 'board'].includes(currentUserProfile.role) && activeTab === 'notices') activeTab = 'dashboard';
             saveDeviceToken();
           } else {
             currentUserProfile = null;
@@ -743,6 +744,7 @@
 
     appEl.innerHTML = `
       <div class="onboard-wrap">
+        <div style="text-align:center; margin-bottom:6px;"><img src="logo.png" alt="Roshan Pakistan" style="width:130px; max-width:45%; height:auto;" onerror="this.style.display='none'" /></div>
         <div class="onboard-title">Roshan Housing Society</div>
         <div class="onboard-sub">${subtitle}</div>
 
@@ -909,6 +911,14 @@
 
   function renderContent() {
     const isAdmin = (currentUserProfile.role === 'admin');
+
+    if (activeTab === 'dashboard' && isStaff()) {
+      return `
+        <div class="section-title">Society Dashboard</div>
+        <div class="section-sub">A live overview of the society's people, finances and activity.</div>
+        <div id="dashboard-body">Loading dashboard...</div>
+      `;
+    }
 
     if (activeTab === 'notices') {
       return `
@@ -1115,6 +1125,7 @@
     }
     if (role === 'board') {
       return [
+        ['dashboard', '📈', 'Dashboard'],
         ['board', '🏛️', 'Board Votes'],
         ['notices', '📢', 'Announcements'],
         ['polls', '🗳️', 'Polls'],
@@ -1128,6 +1139,7 @@
     }
     if (role === 'admin') {
       return [
+        ['dashboard', '📈', 'Dashboard'],
         ['notices', '📢', 'Announcements'],
         ['polls', '🗳️', 'Polls'],
         ['tickets', '🛠️', 'Complaints'],
@@ -1157,6 +1169,7 @@
   function loadData() {
     loadNotifications();
     const isAdmin = currentUserProfile.role === 'admin';
+    if (activeTab === 'dashboard' && isStaff()) loadDashboard();
     if (activeTab === 'notices') loadNotices();
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'tickets') loadTickets();
@@ -2889,6 +2902,161 @@
       alert("Error closing fund: " + err.message);
     }
   };
+
+  // --- ADMIN DASHBOARD ---
+  const CHART_COLORS = ['#F2A93B', '#34B398', '#6E8FF2', '#E5615A', '#FFC670', '#9AA0C3', '#B37FEB', '#5AD8A6'];
+
+  function svgDonut(segments, centerLabel, centerValue) {
+    const total = segments.reduce((s, x) => s + x.value, 0);
+    if (!total) return '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:20px 0;">No data yet.</div>';
+    const R = 54, C = 2 * Math.PI * R;
+    let offset = 0;
+    const rings = segments.map((seg, i) => {
+      const frac = seg.value / total;
+      const dash = frac * C;
+      const el = `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${CHART_COLORS[i % CHART_COLORS.length]}" stroke-width="18" stroke-dasharray="${dash} ${C - dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 70 70)"></circle>`;
+      offset += dash;
+      return el;
+    }).join('');
+    const legend = segments.map((seg, i) => `
+      <div style="display:flex; align-items:center; gap:7px; font-size:12px; margin-bottom:5px;">
+        <span style="width:10px; height:10px; border-radius:3px; background:${CHART_COLORS[i % CHART_COLORS.length]}; flex-shrink:0;"></span>
+        <span style="color:var(--text-muted); flex:1;">${escapeHtml(seg.label)}</span>
+        <span style="font-weight:600;">${seg.money === false ? seg.value : formatMoney(seg.value)}</span>
+      </div>`).join('');
+    return `
+      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <svg width="140" height="140" viewBox="0 0 140 140" style="flex-shrink:0;">
+          ${rings}
+          <text x="70" y="65" text-anchor="middle" fill="var(--text-muted)" font-size="10">${escapeHtml(centerLabel || '')}</text>
+          <text x="70" y="82" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="700">${escapeHtml(centerValue || '')}</text>
+        </svg>
+        <div style="flex:1; min-width:130px;">${legend}</div>
+      </div>`;
+  }
+
+  function svgBars(data) {
+    if (!data.length || !data.some(d => d.value > 0)) return '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:20px 0;">No data yet.</div>';
+    const max = Math.max(...data.map(d => d.value), 1);
+    const W = 300, H = 130, bw = Math.min(34, (W - 10) / data.length - 10);
+    const bars = data.map((d, i) => {
+      const x = 10 + i * ((W - 10) / data.length);
+      const h = Math.round((d.value / max) * 88);
+      return `
+        <rect x="${x}" y="${108 - h}" width="${bw}" height="${h}" rx="4" fill="var(--accent)" opacity="0.9"></rect>
+        <text x="${x + bw / 2}" y="${102 - h}" text-anchor="middle" fill="var(--text-muted)" font-size="8.5">${d.value ? Math.round(d.value / 1000) + 'k' : ''}</text>
+        <text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle" fill="var(--text-faint)" font-size="9">${escapeHtml(d.label)}</text>`;
+    }).join('');
+    return `<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${bars}</svg>`;
+  }
+
+  function loadDashboard() {
+    if (!db || !isStaff()) return;
+    Promise.all([
+      db.collection('users').get(),
+      db.collection('bills').get(),
+      db.collection('fund_contributions').get(),
+      db.collection('expenses').get(),
+      db.collection('tickets').get()
+    ]).then(([usersSnap, billsSnap, contribsSnap, expSnap, ticketsSnap]) => {
+      const users = usersSnap.docs.map(d => d.data());
+      const bills = billsSnap.docs.map(d => d.data()).filter(b => !b.isDeleted);
+      const contribs = contribsSnap.docs.map(d => d.data()).filter(c => !c.isDeleted);
+      const expenses = expSnap.docs.map(d => d.data()).filter(x => !x.isDeleted);
+      const tickets = ticketsSnap.docs.map(d => d.data()).filter(t => !t.isDeleted);
+      renderDashboard({ users, bills, contribs, expenses, tickets });
+    }).catch(e => {
+      console.error("Error loading dashboard:", e);
+      const el = document.getElementById('dashboard-body');
+      if (el) el.innerHTML = `<div class="card" style="cursor:default; color:var(--danger);">Could not load dashboard data: ${escapeHtml(e.message)}</div>`;
+    });
+  }
+
+  function renderDashboard(d) {
+    const el = document.getElementById('dashboard-body');
+    if (!el) return;
+
+    const residents = d.users.filter(u => u.role === 'resident' && u.approved === true && u.suspended !== true).length;
+    const pendingApprovals = d.users.filter(u => u.role === 'resident' && u.approved === false && u.membershipStatus !== 'rejected').length;
+
+    const paidBills = d.bills.filter(b => b.status === 'paid');
+    const unpaidBills = d.bills.filter(b => b.status === 'unpaid');
+    const inReviewBills = d.bills.filter(b => b.status === 'submitted');
+    const billed = d.bills.reduce((s, b) => s + Number(b.amount || 0), 0);
+    const collectedBills = paidBills.reduce((s, b) => s + Number(b.amount || 0), 0);
+    const verifiedContribs = d.contribs.filter(c => c.status === 'verified');
+    const contribTotal = verifiedContribs.reduce((s, c) => s + Number(c.amount || 0), 0);
+    const spentTotal = d.expenses.reduce((s, x) => s + Number(x.amount || 0), 0);
+    const openTickets = d.tickets.filter(t => ['pending', 'in-progress'].includes(t.status)).length;
+
+    // last 6 months collections (paid bills + verified contributions)
+    const months = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0'), label: dt.toLocaleString('en', { month: 'short' }), value: 0 });
+    }
+    const addToMonth = (dateVal, amount) => {
+      const dt = toDate(dateVal) || (typeof dateVal === 'string' && dateVal ? new Date(dateVal) : null);
+      if (!dt || isNaN(dt)) return;
+      const key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+      const m = months.find(x => x.key === key);
+      if (m) m.value += Number(amount || 0);
+    };
+    paidBills.forEach(b => addToMonth(b.paidAt || b.paymentDate, b.amount));
+    verifiedContribs.forEach(c => addToMonth(c.paymentDate || c.createdAt, c.amount));
+
+    // spend by category
+    const spendCats = {};
+    d.expenses.forEach(x => { const k = x.category || 'Other'; spendCats[k] = (spendCats[k] || 0) + Number(x.amount || 0); });
+    const spendSegs = Object.entries(spendCats).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 7);
+
+    // contributions by category
+    const contribCats = {};
+    verifiedContribs.forEach(c => { const k = c.category || 'Other'; contribCats[k] = (contribCats[k] || 0) + Number(c.amount || 0); });
+    const contribSegs = Object.entries(contribCats).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 7);
+
+    const stat = (label, value, color) => `
+      <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px;">
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">${label}</div>
+        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:${color || 'var(--text)'};">${value}</div>
+      </div>`;
+
+    el.innerHTML = `
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+        ${stat('Approved Residents', residents)}
+        ${stat('Pending Approvals', pendingApprovals, pendingApprovals ? 'var(--warning)' : 'var(--text)')}
+        ${stat('Open Complaints', openTickets, openTickets ? 'var(--info)' : 'var(--text)')}
+        ${stat('Proofs In Review', inReviewBills.length, inReviewBills.length ? 'var(--warning)' : 'var(--text)')}
+        ${stat('Total Collected', formatMoney(collectedBills + contribTotal), 'var(--success)')}
+        ${stat('Total Spent', formatMoney(spentTotal), 'var(--danger)')}
+      </div>
+
+      <div class="card" style="cursor:default; margin-bottom:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Monthly Collections — last 6 months</div>
+        ${svgBars(months)}
+      </div>
+
+      <div class="card" style="cursor:default; margin-bottom:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Maintenance Bills</div>
+        ${svgDonut([
+          { label: 'Paid', value: paidBills.length, money: false },
+          { label: 'Unpaid', value: unpaidBills.length, money: false },
+          { label: 'In Review', value: inReviewBills.length, money: false }
+        ].filter(s => s.value > 0), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
+      </div>
+
+      <div class="card" style="cursor:default; margin-bottom:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Contributions by Category (verified)</div>
+        ${svgDonut(contribSegs, 'Collected', 'PKR ' + Math.round(contribTotal / 1000) + 'k')}
+      </div>
+
+      <div class="card" style="cursor:default;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Spending by Category</div>
+        ${svgDonut(spendSegs, 'Spent', 'PKR ' + Math.round(spentTotal / 1000) + 'k')}
+      </div>
+    `;
+  }
 
   // --- EXPENSES (STAFF) ---
   function loadExpenses() {
