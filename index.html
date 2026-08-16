@@ -339,7 +339,7 @@
   function isStaff() {
     return currentUserProfile && ['admin', 'board', 'superadmin'].includes(currentUserProfile.role);
   }
-  function isBoard() { return currentUserProfile && currentUserProfile.role === 'board'; }
+  function isBoard() { return currentUserProfile && (currentUserProfile.role === 'board' || currentUserProfile.boardMember === true); }
 
   // Immutable audit trail: every significant mutation is journaled here.
   function logAudit(entityType, entityId, action, details) {
@@ -359,8 +359,13 @@
   async function getBoardMembersCount() {
     if (boardMembersCount !== null) return boardMembersCount;
     try {
-      const snap = await db.collection('users').where('role', '==', 'board').get();
-      boardMembersCount = snap.docs.filter(d => d.data().approved !== false).length;
+      const [roleSnap, flagSnap] = await Promise.all([
+        db.collection('users').where('role', '==', 'board').get(),
+        db.collection('users').where('boardMember', '==', true).get()
+      ]);
+      const seen = {};
+      roleSnap.docs.concat(flagSnap.docs).forEach(d => { seen[d.id] = d.data(); });
+      boardMembersCount = Object.values(seen).filter(u => u.approved !== false).length;
     } catch(e) {
       console.error("Error counting board members:", e);
       boardMembersCount = 0;
@@ -3634,8 +3639,12 @@
 
   async function notifyBoardMembers(title, body) {
     try {
-      const snap = await db.collection('users').where('role', '==', 'board').get();
-      await Promise.all(snap.docs.map(d => sendNotification(d.id, title, body, 'info')));
+      const [roleSnap, flagSnap] = await Promise.all([
+        db.collection('users').where('role', '==', 'board').get(),
+        db.collection('users').where('boardMember', '==', true).get()
+      ]);
+      const ids = [...new Set(roleSnap.docs.concat(flagSnap.docs).map(d => d.id))];
+      await Promise.all(ids.map(id => sendNotification(id, title, body, 'info')));
     } catch(e) {
       console.error("Error notifying board:", e);
     }

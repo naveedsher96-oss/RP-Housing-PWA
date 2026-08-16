@@ -13,7 +13,7 @@ service cloud.firestore {
       return signedIn() && me().role == 'admin';
     }
     function isBoard() {
-      return signedIn() && me().role == 'board';
+      return signedIn() && (me().role == 'board' || me().boardMember == true);
     }
     function isStaff() {
       return signedIn() && me().role in ['admin', 'board', 'superadmin'];
