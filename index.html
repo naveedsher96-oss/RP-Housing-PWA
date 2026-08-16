@@ -340,6 +340,13 @@
     return currentUserProfile && ['admin', 'board', 'superadmin'].includes(currentUserProfile.role);
   }
   function isBoard() { return currentUserProfile && (currentUserProfile.role === 'board' || currentUserProfile.boardMember === true); }
+  function isSuperAdmin() { return currentUserProfile && (currentUserProfile.role === 'superadmin' || currentUserProfile.superAdmin === true); }
+  function roleLabel() {
+    const extras = [];
+    if (currentUserProfile.superAdmin === true && currentUserProfile.role !== 'superadmin') extras.push('super admin');
+    if (currentUserProfile.boardMember === true && currentUserProfile.role !== 'board') extras.push('board');
+    return currentUserProfile.role + (extras.length ? ' + ' + extras.join(' + ') : '');
+  }
 
   // Immutable audit trail: every significant mutation is journaled here.
   function logAudit(entityType, entityId, action, details) {
@@ -488,7 +495,7 @@
           <div class="name">Roshan Housing Society</div>
           <div class="sub">
             <span>${escapeHtml(currentUserProfile.name)} ${currentUserProfile.house ? '(' + escapeHtml(currentUserProfile.house) + ')' : ''}</span>
-            <span class="role-pill">${escapeHtml(currentUserProfile.role)}</span>
+            <span class="role-pill">${escapeHtml(roleLabel())}</span>
           </div>
         </div>
         <button class="notif-bell-btn" onclick="openNotificationsModal()" title="Notifications">
