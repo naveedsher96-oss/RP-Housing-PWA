@@ -325,6 +325,48 @@
   let fundContribsList = [];
   let ticketFilterMonth = 'all';
   let ticketFilterStatus = 'all';
+  let expensesList = [];
+  let volunteersList = [];
+  let decisionsList = [];
+  let auditList = [];
+  let archivedRecords = [];
+  let boardMembersCount = null;
+
+  const FUND_CATEGORIES = ['Zakat', 'Khairat / Sadaqat', 'Welfare', 'Mosque', 'Sanitation', 'Funeral', 'Maintenance', 'Development', 'Other'];
+  const PAYMENT_METHODS = ['Bank Transfer', 'EasyPaisa', 'JazzCash', 'Cash'];
+  const EXPENSE_CATEGORIES = ['Utilities', 'Welfare', 'Maintenance', 'Sanitation', 'Security', 'Mosque', 'Events', 'Other'];
+
+  function isStaff() {
+    return currentUserProfile && ['admin', 'board', 'superadmin'].includes(currentUserProfile.role);
+  }
+  function isBoard() { return currentUserProfile && currentUserProfile.role === 'board'; }
+
+  // Immutable audit trail: every significant mutation is journaled here.
+  function logAudit(entityType, entityId, action, details) {
+    if (!db || !currentUserProfile) return Promise.resolve();
+    return db.collection('audit_log').add({
+      entityType,
+      entityId: entityId || '',
+      action,
+      details: details || '',
+      performedBy: currentUserProfile.name,
+      performedByUid: auth.currentUser ? auth.currentUser.uid : '',
+      role: currentUserProfile.role,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(err => console.error("Audit log write failed:", err));
+  }
+
+  async function getBoardMembersCount() {
+    if (boardMembersCount !== null) return boardMembersCount;
+    try {
+      const snap = await db.collection('users').where('role', '==', 'board').get();
+      boardMembersCount = snap.docs.filter(d => d.data().approved !== false).length;
+    } catch(e) {
+      console.error("Error counting board members:", e);
+      boardMembersCount = 0;
+    }
+    return boardMembersCount;
+  }
 
   const appEl = document.getElementById('app');
 
@@ -421,6 +463,12 @@
       return;
     }
 
+    // SUSPENSION GUARD
+    if (currentUserProfile.suspended === true) {
+      renderSuspendedScreen();
+      return;
+    }
+
     const unreadCount = notifications.filter(n => !n.read).length;
     const isAdmin = currentUserProfile.role === 'admin';
 
@@ -460,15 +508,7 @@
           <div class="drawer-title">Menu</div>
           <button class="modal-close" id="drawer-close-btn" style="position:static;" aria-label="Close menu">✕</button>
         </div>
-        ${[
-          ['notices', '📢', 'Announcements'],
-          ['polls', '🗳️', 'Polls'],
-          ['tickets', '🛠️', 'Complaints'],
-          ['bills', '🧾', 'Bills'],
-          ['funds', '💰', 'Funds'],
-          ['biodata', isAdmin ? '👥' : '👤', isAdmin ? 'Residents' : 'Profile'],
-          ...(isAdmin ? [['approvals', '✅', 'Approvals']] : [])
-        ].map(([tab, ico, lbl]) => `
+        ${drawerItemsForRole().map(([tab, ico, lbl]) => `
           <button class="drawer-item ${activeTab===tab?'active':''}" data-tab="${tab}">
             <span class="ico">${ico}</span>${lbl}
           </button>
@@ -486,6 +526,20 @@
 
     bindGlobalEvents();
     loadData();
+  }
+
+  function renderSuspendedScreen() {
+    appEl.innerHTML = `
+      <div class="onboard-wrap">
+        <div class="onboard-title">Membership Suspended</div>
+        <div class="onboard-sub">Your society membership is currently suspended by the management/Board.</div>
+        <div class="card" style="text-align:center; padding:20px; cursor:default;">
+          <div style="font-size:36px; margin-bottom:10px;">⛔</div>
+          <div style="font-size:14px; color:var(--text-muted);">${currentUserProfile.statusReason ? 'Reason: ' + escapeHtml(currentUserProfile.statusReason) : 'Please contact the society administration for details.'}</div>
+        </div>
+        <button class="btn primary block" onclick="doSignOut()" style="margin-top:20px;">Sign Out</button>
+      </div>
+    `;
   }
 
   function renderEmailVerificationScreen() {
@@ -617,14 +671,15 @@
   }
 
   function renderPendingApprovalScreen() {
+    const rejected = currentUserProfile.membershipStatus === 'rejected';
     appEl.innerHTML = `
       <div class="onboard-wrap">
-        <div class="onboard-title">Account Pending Approval</div>
-        <div class="onboard-sub">Welcome, <strong>${escapeHtml(currentUserProfile.name)}</strong>. Your registration for <strong>${escapeHtml(currentUserProfile.house)}</strong> is currently under review by society administrators.</div>
+        <div class="onboard-title">${rejected ? 'Membership Not Approved' : 'Account Pending Approval'}</div>
+        <div class="onboard-sub">${rejected ? `We’re sorry, <strong>${escapeHtml(currentUserProfile.name)}</strong> — your membership application was not approved.` : `Welcome, <strong>${escapeHtml(currentUserProfile.name)}</strong>. Your registration for <strong>${escapeHtml(currentUserProfile.house)}</strong> is currently under review by society administrators.`}</div>
         
         <div class="card" style="text-align:center; padding:20px; cursor:default;">
-          <div style="font-size:36px; margin-bottom:10px;">⏳</div>
-          <div style="font-size:14px; color:var(--text-muted);">Biodata submitted successfully! You will gain full access once verified by management.</div>
+          <div style="font-size:36px; margin-bottom:10px;">${rejected ? '❌' : '⏳'}</div>
+          <div style="font-size:14px; color:var(--text-muted);">${rejected ? (currentUserProfile.statusReason ? 'Reason: ' + escapeHtml(currentUserProfile.statusReason) : 'Please contact the society administration for details.') : 'Biodata submitted successfully! You will gain full access once verified by management.'}</div>
         </div>
 
         <button class="btn primary block" id="logout-pending-btn" style="margin-top:20px;">Sign Out</button>
@@ -919,8 +974,72 @@
       `;
     }
 
+    if (activeTab === 'expenses') {
+      return `
+        <div class="section-title">
+          Community Expenses
+          ${isAdmin ? '<button class="btn sm primary" onclick="openAddExpenseModal()">+ Add Expense</button>' : ''}
+        </div>
+        <div class="section-sub">Society expenditure records${isAdmin ? ' — entered by management' : ''}.</div>
+        <div id="expenses-summary"></div>
+        <div id="expenses-list">Loading expenses...</div>
+      `;
+    }
+
+    if (activeTab === 'reports') {
+      return `
+        <div class="section-title">Reports</div>
+        <div class="section-sub">${isStaff() ? 'Payments, collections and fund utilization across the society.' : 'Your payment history and community fund utilization.'}</div>
+        ${isStaff() ? `
+          <div class="filter-bar">
+            <label>Filter Payments</label>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+              <input type="date" id="rep-from" style="flex:1; min-width:130px;" />
+              <input type="date" id="rep-to" style="flex:1; min-width:130px;" />
+            </div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <input type="text" id="rep-name" placeholder="Name contains..." style="flex:1;" />
+              <input type="text" id="rep-house" placeholder="House / address contains..." style="flex:1;" />
+            </div>
+            <button class="btn sm secondary block" style="margin-top:10px;" onclick="renderReports()">Apply Filters</button>
+          </div>
+        ` : ''}
+        <div id="reports-body">Loading reports...</div>
+      `;
+    }
+
+    if (activeTab === 'volunteers') {
+      return `
+        <div class="section-title">${isStaff() ? 'Relief Volunteers' : 'Volunteer Registration'}</div>
+        <div class="section-sub">${isStaff() ? 'Residents registered for relief and community work.' : 'Register to help with relief and community work — your profile details are reused automatically.'}</div>
+        <div id="volunteers-body">Loading...</div>
+      `;
+    }
+
+    if (activeTab === 'board') {
+      return `
+        <div class="section-title">
+          ${isBoard() ? 'Board Votes' : 'Board Decisions'}
+          ${isAdmin ? '<button class="btn sm primary" onclick="openCreateDecisionModal()">+ Queue Item for Vote</button>' : ''}
+        </div>
+        <div class="section-sub">${isBoard() ? 'Endorse or oppose pending items. Decisions are final at 3 of 5 votes.' : 'Items queued for the Board\u2019s 3-of-5 vote and their outcomes.'}</div>
+        <div id="decisions-list">Loading decisions...</div>
+      `;
+    }
+
+    if (activeTab === 'archive') {
+      return `
+        <div class="section-title">Audit & Archive</div>
+        <div class="section-sub">Soft-deleted records retained for audit, and the full activity trail.</div>
+        <div class="section-title" style="font-size:15px;">Archived Records</div>
+        <div id="archive-list">Loading...</div>
+        <div class="section-title" style="font-size:15px; margin-top:18px;">Audit Log</div>
+        <div id="audit-list">Loading...</div>
+      `;
+    }
+
     if (activeTab === 'biodata') {
-      if (isAdmin) {
+      if (isStaff()) {
         return `
           <div class="section-title">Residents Directory</div>
           <div class="section-sub">Approved residents database and records.</div>
@@ -984,6 +1103,57 @@
     }
   }
 
+  function drawerItemsForRole() {
+    const role = currentUserProfile.role;
+    if (role === 'superadmin') {
+      return [
+        ['notices', '📢', 'Announcements'],
+        ['biodata', '👥', 'Residents'],
+        ['reports', '📊', 'Reports'],
+        ['archive', '🗄️', 'Audit & Archive']
+      ];
+    }
+    if (role === 'board') {
+      return [
+        ['board', '🏛️', 'Board Votes'],
+        ['notices', '📢', 'Announcements'],
+        ['polls', '🗳️', 'Polls'],
+        ['bills', '🧾', 'Bills'],
+        ['funds', '💰', 'Funds'],
+        ['expenses', '💸', 'Expenses'],
+        ['reports', '📊', 'Reports'],
+        ['biodata', '👥', 'Residents'],
+        ['archive', '🗄️', 'Audit & Archive']
+      ];
+    }
+    if (role === 'admin') {
+      return [
+        ['notices', '📢', 'Announcements'],
+        ['polls', '🗳️', 'Polls'],
+        ['tickets', '🛠️', 'Complaints'],
+        ['bills', '🧾', 'Bills'],
+        ['funds', '💰', 'Funds'],
+        ['expenses', '💸', 'Expenses'],
+        ['reports', '📊', 'Reports'],
+        ['volunteers', '🤝', 'Volunteers'],
+        ['biodata', '👥', 'Residents'],
+        ['approvals', '✅', 'Approvals'],
+        ['board', '🏛️', 'Board Decisions'],
+        ['archive', '🗄️', 'Audit & Archive']
+      ];
+    }
+    return [
+      ['notices', '📢', 'Announcements'],
+      ['polls', '🗳️', 'Polls'],
+      ['tickets', '🛠️', 'Complaints'],
+      ['bills', '🧾', 'Bills'],
+      ['funds', '💰', 'Funds'],
+      ['volunteers', '🤝', 'Volunteer'],
+      ['reports', '📊', 'Reports'],
+      ['biodata', '👤', 'Profile']
+    ];
+  }
+
   function loadData() {
     loadNotifications();
     const isAdmin = currentUserProfile.role === 'admin';
@@ -992,7 +1162,12 @@
     if (activeTab === 'tickets') loadTickets();
     if (activeTab === 'bills') loadBills();
     if (activeTab === 'funds') loadFunds();
-    if (activeTab === 'biodata' && isAdmin) loadAllResidents();
+    if (activeTab === 'expenses' && isStaff()) loadExpenses();
+    if (activeTab === 'reports') loadReportsData();
+    if (activeTab === 'volunteers') loadVolunteers();
+    if (activeTab === 'board' && (isAdmin || isBoard())) loadDecisions();
+    if (activeTab === 'archive' && isStaff()) loadArchiveAndAudit();
+    if (activeTab === 'biodata' && isStaff()) loadAllResidents();
     if (activeTab === 'approvals' && isAdmin) loadPendingResidents();
   }
 
@@ -1096,6 +1271,7 @@
         deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
         deletedBy: currentUserProfile.name
       });
+      logAudit(collection, id, 'soft_delete', 'Record archived by admin');
       closeModal();
       reload();
     } catch(err) {
@@ -1109,6 +1285,7 @@
     if (!confirm(`Delete the announcement "${n ? n.title : ''}" permanently?`)) return;
     try {
       await db.collection('announcements').doc(id).delete();
+      logAudit('announcement', id, 'update', `Announcement "${n ? n.title : ''}" permanently deleted`);
       loadNotices();
     } catch(err) {
       alert("Error deleting announcement: " + err.message);
@@ -1725,8 +1902,7 @@
 
   function loadBills() {
     if (!db || !auth.currentUser) return;
-    const isAdmin = currentUserProfile.role === 'admin';
-    const query = isAdmin
+    const query = isStaff()
       ? db.collection('bills')
       : db.collection('bills').where('uid', '==', auth.currentUser.uid);
 
@@ -1995,6 +2171,12 @@
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Upload Payment Proof</div>
       <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">${escapeHtml(b.billNo || 'BILL')} · ${escapeHtml(b.category || 'Maintenance')} · ${formatMoney(b.amount)}</div>
       <form id="proof-form">
+        <label>Payment Method</label>
+        <select id="proof-method" required>
+          ${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('')}
+        </select>
+        <label>Payment Date</label>
+        <input type="date" id="proof-date" value="${new Date().toISOString().slice(0,10)}" required />
         <label>Payment Screenshot / Receipt (PNG, JPEG or PDF)</label>
         <input type="file" id="proof-file" accept="image/png,image/jpeg,application/pdf" required />
         <label>Transaction Reference (optional)</label>
@@ -2014,6 +2196,8 @@
         const paymentRef = document.getElementById('proof-ref').value.trim();
         await db.collection('bills').doc(billId).update({
           status: 'submitted',
+          paymentMethod: document.getElementById('proof-method').value,
+          paymentDate: document.getElementById('proof-date').value,
           proofData: proof.dataUrl,
           proofType: proof.type,
           proofName: proof.name,
@@ -2042,6 +2226,7 @@
         paidAt: firebase.firestore.FieldValue.serverTimestamp(),
         verifiedBy: currentUserProfile.name
       });
+      logAudit('bill', billId, 'update', `Payment proof approved — ${b.billNo} ${formatMoney(b.amount)} marked paid`);
       await sendNotification(b.uid, `Payment Verified (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been verified. Thank you!`, 'success');
       closeModal();
       loadBills();
@@ -2062,6 +2247,7 @@
         status: 'unpaid',
         proofRejectedReason: reason.trim()
       });
+      logAudit('bill', billId, 'update', `Payment proof rejected — ${b.billNo}: ${reason.trim()}`);
       await sendNotification(b.uid, `Payment Proof Rejected (${b.billNo})`, `Reason: ${reason.trim()}. Please upload a valid proof for ${formatMoney(b.amount)} — ${b.period}.`, 'error');
       closeModal();
       loadBills();
@@ -2254,6 +2440,7 @@
         status: 'paid',
         paidAt: firebase.firestore.FieldValue.serverTimestamp()
       });
+      logAudit('bill', billId, 'update', `Bill ${b.billNo} manually marked paid (${formatMoney(b.amount)})`);
       await sendNotification(b.uid, `Payment Received (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been recorded.`, 'success');
       loadBills();
     } catch(err) {
@@ -2402,6 +2589,10 @@
       <form id="fund-form">
         <label>Fund Title</label>
         <input type="text" id="fund-title" placeholder="e.g. Mosque Renovation Fund" required />
+        <label>Fund Category</label>
+        <select id="fund-category" required>
+          ${FUND_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+        </select>
         <label>What is this fund for & why is it needed?</label>
         <textarea id="fund-purpose" placeholder="Explain the purpose and why the society needs it..." required></textarea>
         <label>Target Amount (PKR, optional)</label>
@@ -2425,8 +2616,10 @@
       }
 
       try {
-        await db.collection('funds').add({
+        const category = document.getElementById('fund-category').value;
+        const ref = await db.collection('funds').add({
           title,
+          category,
           purpose,
           targetAmount: target,
           deadline,
@@ -2434,6 +2627,7 @@
           createdBy: currentUserProfile.name,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
+        logAudit('fund', ref.id, 'create', `Fund "${title}" (${category}) started`);
         await broadcastNotification(`New Fund: ${title}`, `${purpose.slice(0, 140)} — open the Funds tab to contribute.`);
         closeModal();
         loadFunds();
@@ -2458,6 +2652,7 @@
         <span style="font-family:var(--font-display); font-size:19px; font-weight:600; color:var(--accent-2);">${escapeHtml(f.title || 'Fund')}</span>
         <span class="badge ${status}">${escapeHtml(status)}</span>
       </div>
+      ${f.category ? `<div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">Category: <strong style="color:var(--accent-2);">${escapeHtml(f.category)}</strong></div>` : ''}
       <div style="font-size:13.5px; line-height:1.6; margin-bottom:14px; white-space:pre-wrap;">${escapeHtml(f.purpose || '')}</div>
 
       <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px;">
@@ -2471,10 +2666,16 @@
         ${f.deadline ? `<div style="display:flex; justify-content:space-between;"><span style="font-size:13px; color:var(--text-muted);">Deadline</span><span style="font-size:13.5px;">${escapeHtml(formatDate(f.deadline))}</span></div>` : ''}
       </div>
 
-      ${status === 'active' && !isAdmin ? `
+      ${status === 'active' && currentUserProfile.role === 'resident' ? `
         <form id="contrib-form" style="margin-bottom:16px;">
           <label>Contribute — Amount (PKR)</label>
           <input type="number" id="contrib-amount" placeholder="e.g. 2000" required min="1" />
+          <label>Payment Method</label>
+          <select id="contrib-method" required>
+            ${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('')}
+          </select>
+          <label>Payment Date</label>
+          <input type="date" id="contrib-date" value="${new Date().toISOString().slice(0,10)}" required />
           <label>Payment Proof (PNG, JPEG or PDF — optional)</label>
           <input type="file" id="contrib-file" accept="image/png,image/jpeg,application/pdf" />
           <label>Transaction Reference (optional)</label>
@@ -2524,16 +2725,21 @@
           const file = document.getElementById('contrib-file').files[0];
           const proof = file ? await readProofFile(file) : null;
           const paymentRef = document.getElementById('contrib-ref').value.trim();
+          const paymentMethod = document.getElementById('contrib-method').value;
+          const paymentDate = document.getElementById('contrib-date').value;
 
           await db.collection('fund_contributions').add({
             fundId: f.id,
             fundTitle: f.title,
+            category: f.category || 'Other',
             uid: auth.currentUser.uid,
             name: currentUserProfile.name,
             house: currentUserProfile.house || '',
             amount,
             currency: 'PKR',
             paymentRef,
+            paymentMethod,
+            paymentDate,
             proofData: proof ? proof.dataUrl : '',
             proofType: proof ? proof.type : '',
             proofName: proof ? proof.name : '',
@@ -2573,6 +2779,12 @@
         </select>
         <label>Amount (PKR)</label>
         <input type="number" id="record-contrib-amount" placeholder="e.g. 5000" required min="1" />
+        <label>Payment Method</label>
+        <select id="record-contrib-method" required>
+          ${PAYMENT_METHODS.map(m => `<option value="${m}" ${m === 'Cash' ? 'selected' : ''}>${m}</option>`).join('')}
+        </select>
+        <label>Payment Date</label>
+        <input type="date" id="record-contrib-date" value="${new Date().toISOString().slice(0,10)}" required />
         <label>Reference / Note (optional)</label>
         <input type="text" id="record-contrib-ref" placeholder="e.g. Cash received at office" />
         <button type="submit" class="btn primary block" style="margin-top:16px;">Record as Verified</button>
@@ -2585,6 +2797,8 @@
       const uid = document.getElementById('record-contrib-resident').value;
       const amount = Number(document.getElementById('record-contrib-amount').value);
       const paymentRef = document.getElementById('record-contrib-ref').value.trim();
+      const paymentMethod = document.getElementById('record-contrib-method').value;
+      const paymentDate = document.getElementById('record-contrib-date').value;
       const r = residents.find(item => item.uid === uid);
       if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
 
@@ -2592,12 +2806,15 @@
         await db.collection('fund_contributions').add({
           fundId: f.id,
           fundTitle: f.title,
+          category: f.category || 'Other',
           uid,
           name: r ? r.name : '',
           house: r ? (r.house || '') : '',
           amount,
           currency: 'PKR',
           paymentRef,
+          paymentMethod,
+          paymentDate,
           proofData: '',
           proofType: '',
           proofName: '',
@@ -2627,6 +2844,7 @@
         verifiedAt: firebase.firestore.FieldValue.serverTimestamp(),
         verifiedBy: currentUserProfile.name
       });
+      logAudit('contribution', contribId, 'update', `Contribution verified — ${c.name} ${formatMoney(c.amount)} (${c.fundTitle})`);
       await sendNotification(c.uid, `Contribution Verified (${c.fundTitle})`, `Your contribution of ${formatMoney(c.amount)} has been verified. Thank you for supporting the community!`, 'success');
       closeModal();
       loadFunds();
@@ -2647,6 +2865,7 @@
         status: 'rejected',
         rejectedReason: reason.trim()
       });
+      logAudit('contribution', contribId, 'update', `Contribution rejected — ${c.name} ${formatMoney(c.amount)}: ${reason.trim()}`);
       await sendNotification(c.uid, `Contribution Rejected (${c.fundTitle})`, `Reason: ${reason.trim()}. Please contact management or submit again.`, 'error');
       closeModal();
       loadFunds();
@@ -2662,11 +2881,644 @@
 
     try {
       await db.collection('funds').doc(fundId).update({ status: 'closed' });
+      logAudit('fund', fundId, 'update', `Fund "${f.title}" closed — total ${formatMoney(fundVerifiedTotal(f.id))}`);
       await broadcastNotification(`Fund Closed: ${f.title}`, `Total collected: ${formatMoney(fundVerifiedTotal(f.id))}. Thank you to everyone who contributed.`);
       closeModal();
       loadFunds();
     } catch(err) {
       alert("Error closing fund: " + err.message);
+    }
+  };
+
+  // --- EXPENSES (STAFF) ---
+  function loadExpenses() {
+    if (!db || !isStaff()) return;
+    db.collection('expenses').get().then(snapshot => {
+      expensesList = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(x => !x.isDeleted)
+        .sort((a, b) => String(b.expenseDate || '').localeCompare(String(a.expenseDate || '')));
+      renderExpensesList();
+    }).catch(e => console.error("Error loading expenses:", e));
+  }
+
+  function renderExpensesList() {
+    const listEl = document.getElementById('expenses-list');
+    const sumEl = document.getElementById('expenses-summary');
+    if (!listEl) return;
+
+    const total = expensesList.reduce((s, x) => s + Number(x.amount || 0), 0);
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const monthTotal = expensesList.filter(x => String(x.expenseDate || '').startsWith(thisMonth)).reduce((s, x) => s + Number(x.amount || 0), 0);
+
+    if (sumEl) {
+      sumEl.innerHTML = `
+        <div class="stat-strip">
+          <div class="stat-box"><div class="k">Total Spent</div><div class="v" style="color:var(--danger);">${formatMoney(total)}</div></div>
+          <div class="stat-box"><div class="k">This Month</div><div class="v">${formatMoney(monthTotal)}</div></div>
+          <div class="stat-box"><div class="k">Entries</div><div class="v">${expensesList.length}</div></div>
+        </div>
+      `;
+    }
+
+    if (!expensesList.length) {
+      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No expenses recorded yet.</div>';
+      return;
+    }
+
+    listEl.innerHTML = expensesList.map(x => `
+      <div class="card" style="cursor:default;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <span style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(x.category || 'Other')}</span>
+          <span class="amount" style="color:var(--danger);">${formatMoney(x.amount)}</span>
+        </div>
+        <div style="font-size:13px; margin-bottom:4px; white-space:pre-wrap;">${escapeHtml(x.description || '')}</div>
+        <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(x.expenseDate || '')} · Entered by ${escapeHtml(x.enteredBy || 'Management')}${x.decisionRef ? ' · Board ref: ' + escapeHtml(x.decisionRef) : ''}</div>
+        ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" style="margin-top:8px;" onclick="archiveExpense('${x.id}')">Remove</button>` : ''}
+      </div>
+    `).join('');
+  }
+
+  window.openAddExpenseModal = function() {
+    if (currentUserProfile.role !== 'admin') return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Add Expense</div>
+      <form id="expense-form">
+        <label>Category</label>
+        <select id="exp-category" required>
+          ${EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+        </select>
+        <label>Description</label>
+        <textarea id="exp-desc" placeholder="What was this expense for?" required></textarea>
+        <label>Amount (PKR)</label>
+        <input type="number" id="exp-amount" placeholder="e.g. 15000" required min="1" />
+        <label>Expense Date</label>
+        <input type="date" id="exp-date" value="${new Date().toISOString().slice(0,10)}" required />
+        <label>Board Approval Reference (optional)</label>
+        <input type="text" id="exp-decision" placeholder="e.g. Board decision title / ID" />
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Record Expense</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('expense-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const category = document.getElementById('exp-category').value;
+      const description = document.getElementById('exp-desc').value.trim();
+      const amount = Number(document.getElementById('exp-amount').value);
+      const expenseDate = document.getElementById('exp-date').value;
+      const decisionRef = document.getElementById('exp-decision').value.trim();
+      if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
+      try {
+        const ref = await db.collection('expenses').add({
+          category, description, amount, currency: 'PKR', expenseDate, decisionRef,
+          enteredBy: currentUserProfile.name,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        logAudit('expense', ref.id, 'create', `${category} expense of ${formatMoney(amount)}`);
+        closeModal();
+        loadExpenses();
+      } catch(err) {
+        alert("Error recording expense: " + err.message);
+      }
+    });
+  };
+
+  window.archiveExpense = function(id) {
+    const x = expensesList.find(item => item.id === id);
+    if (!confirm(`Remove this ${x ? x.category : ''} expense of ${x ? formatMoney(x.amount) : ''}? It will be archived (kept for audit).`)) return;
+    logAudit('expense', id, 'soft_delete', x ? `${x.category} ${formatMoney(x.amount)}` : '');
+    archiveRecord('expenses', id, loadExpenses);
+  };
+
+  // --- VOLUNTEERS ---
+  function loadVolunteers() {
+    if (!db) return;
+    db.collection('volunteers').get().then(snapshot => {
+      volunteersList = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(v => !v.isDeleted);
+      renderVolunteersBody();
+    }).catch(e => console.error("Error loading volunteers:", e));
+  }
+
+  function renderVolunteersBody() {
+    const el = document.getElementById('volunteers-body');
+    if (!el) return;
+
+    if (isStaff()) {
+      el.innerHTML = volunteersList.length ? volunteersList.map(v => `
+        <div class="card" style="cursor:default;">
+          <div style="font-weight:700; font-size:15px; color:var(--accent-2);">${escapeHtml(v.name)}</div>
+          <div style="font-size:12.5px; color:var(--text-muted);">House: ${escapeHtml(v.house || 'N/A')} | Phone: ${escapeHtml(v.phone || 'N/A')}</div>
+          <div style="font-size:13px; margin-top:6px;"><strong>Skills:</strong> ${escapeHtml(v.skills || 'N/A')}</div>
+          <div style="font-size:13px;"><strong>Availability:</strong> ${escapeHtml(v.availability || 'Any')}</div>
+          <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Registered ${escapeHtml(formatDate(v.registeredAt))}</div>
+        </div>
+      `).join('') : '<div class="card" style="text-align:center; color:var(--text-muted);">No volunteers registered yet.</div>';
+      return;
+    }
+
+    const mine = volunteersList.find(v => v.uid === auth.currentUser.uid);
+    if (mine) {
+      el.innerHTML = `
+        <div class="card" style="cursor:default; padding:20px;">
+          <div style="font-size:32px; text-align:center; margin-bottom:8px;">🤝</div>
+          <div style="text-align:center; font-weight:700; color:var(--success); margin-bottom:10px;">You are registered as a relief volunteer</div>
+          <div style="font-size:13px;"><strong>Skills:</strong> ${escapeHtml(mine.skills || 'N/A')}</div>
+          <div style="font-size:13px;"><strong>Availability:</strong> ${escapeHtml(mine.availability || 'Any')}</div>
+          <button class="btn danger block" style="margin-top:14px;" onclick="withdrawVolunteer('${mine.id}')">Withdraw Registration</button>
+        </div>
+      `;
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="card" style="cursor:default; padding:18px;">
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">Registering as: <strong style="color:var(--text);">${escapeHtml(currentUserProfile.name)}</strong> — House ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
+        <form id="volunteer-form">
+          <label>Skills / Areas You Can Help With</label>
+          <textarea id="vol-skills" placeholder="e.g. first aid, transport, food distribution, electrical work..." required></textarea>
+          <label>Availability (optional)</label>
+          <input type="text" id="vol-avail" placeholder="e.g. weekends, evenings, on-call" />
+          <button type="submit" class="btn primary block" style="margin-top:14px;">Register as Volunteer</button>
+        </form>
+      </div>
+    `;
+
+    document.getElementById('volunteer-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const ref = await db.collection('volunteers').add({
+          uid: auth.currentUser.uid,
+          name: currentUserProfile.name,
+          house: currentUserProfile.house || '',
+          phone: currentUserProfile.phone || '',
+          skills: document.getElementById('vol-skills').value.trim(),
+          availability: document.getElementById('vol-avail').value.trim(),
+          registeredAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        logAudit('volunteer', ref.id, 'create', `${currentUserProfile.name} registered as volunteer`);
+        await notifyAdmins("New Relief Volunteer", `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) registered as a relief volunteer.`, 'info');
+        loadVolunteers();
+      } catch(err) {
+        alert("Error registering: " + err.message);
+      }
+    });
+  }
+
+  window.withdrawVolunteer = async function(id) {
+    if (!confirm("Withdraw your volunteer registration?")) return;
+    try {
+      await db.collection('volunteers').doc(id).update({ isDeleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp(), deletedBy: currentUserProfile.name });
+      logAudit('volunteer', id, 'soft_delete', 'Volunteer withdrew registration');
+      loadVolunteers();
+    } catch(err) {
+      alert("Error withdrawing: " + err.message);
+    }
+  };
+
+  // --- REPORTS ---
+  let reportsData = null;
+
+  function loadReportsData() {
+    if (!db) return;
+    Promise.all([
+      db.collection('bills').get(),
+      db.collection('fund_contributions').get(),
+      db.collection('expenses').get()
+    ]).then(([billsSnap, contribsSnap, expSnap]) => {
+      reportsData = {
+        bills: billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted),
+        contribs: contribsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isDeleted),
+        expenses: expSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.isDeleted)
+      };
+      renderReports();
+    }).catch(e => {
+      console.error("Error loading reports:", e);
+      const el = document.getElementById('reports-body');
+      if (el) el.innerHTML = '<div class="card" style="text-align:center; color:var(--danger);">Could not load report data.</div>';
+    });
+  }
+
+  function paymentRows() {
+    // Unified payment list: paid bills + verified contributions
+    const uid = auth.currentUser.uid;
+    const staff = isStaff();
+    const rows = [];
+    reportsData.bills.filter(b => b.status === 'paid' && (staff || b.uid === uid)).forEach(b => rows.push({
+      date: b.paidAt ? (toDate(b.paidAt) || new Date()).toISOString().slice(0,10) : '',
+      name: b.name || '', house: b.house || '',
+      type: 'Bill — ' + (b.category || 'Maintenance'),
+      method: b.paymentMethod || '', amount: Number(b.amount || 0)
+    }));
+    reportsData.contribs.filter(c => c.status === 'verified' && (staff || c.uid === uid)).forEach(c => rows.push({
+      date: c.paymentDate || (toDate(c.createdAt) ? toDate(c.createdAt).toISOString().slice(0,10) : ''),
+      name: c.name || '', house: c.house || '',
+      type: 'Fund — ' + (c.fundTitle || '') + (c.category ? ' (' + c.category + ')' : ''),
+      method: c.paymentMethod || '', amount: Number(c.amount || 0)
+    }));
+    rows.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    return rows;
+  }
+
+  window.renderReports = function() {
+    const el = document.getElementById('reports-body');
+    if (!el || !reportsData) return;
+    const staff = isStaff();
+
+    let rows = paymentRows();
+    const from = staff && document.getElementById('rep-from') ? document.getElementById('rep-from').value : '';
+    const to = staff && document.getElementById('rep-to') ? document.getElementById('rep-to').value : '';
+    const nameQ = staff && document.getElementById('rep-name') ? document.getElementById('rep-name').value.trim().toLowerCase() : '';
+    const houseQ = staff && document.getElementById('rep-house') ? document.getElementById('rep-house').value.trim().toLowerCase() : '';
+    if (from) rows = rows.filter(r => r.date >= from);
+    if (to) rows = rows.filter(r => r.date <= to);
+    if (nameQ) rows = rows.filter(r => r.name.toLowerCase().includes(nameQ));
+    if (houseQ) rows = rows.filter(r => r.house.toLowerCase().includes(houseQ));
+
+    // Monthly collections with running total
+    const byMonth = {};
+    paymentRows().forEach(r => {
+      const m = String(r.date).slice(0, 7) || 'Unknown';
+      byMonth[m] = (byMonth[m] || 0) + r.amount;
+    });
+    const months = Object.keys(byMonth).sort();
+    let running = 0;
+    const monthRows = months.map(m => { running += byMonth[m]; return { month: m, total: byMonth[m], running }; });
+
+    // Fund utilization: contributions in vs expenses out, by category
+    const collectedByCat = {};
+    reportsData.contribs.filter(c => c.status === 'verified').forEach(c => {
+      const cat = c.category || 'Other';
+      collectedByCat[cat] = (collectedByCat[cat] || 0) + Number(c.amount || 0);
+    });
+    const spentByCat = {};
+    reportsData.expenses.forEach(x => {
+      const cat = x.category || 'Other';
+      spentByCat[cat] = (spentByCat[cat] || 0) + Number(x.amount || 0);
+    });
+    const utilCats = [...new Set([...Object.keys(collectedByCat), ...Object.keys(spentByCat)])].sort();
+
+    el.innerHTML = `
+      <div class="section-title" style="font-size:15px;">${staff ? 'Payments' : 'My Payments'} (${rows.length})</div>
+      ${rows.length ? rows.slice(0, 100).map(r => `
+        <div class="card" style="cursor:default; padding:12px 14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:13px; font-weight:700;">${staff ? escapeHtml(r.name) + ' — ' + escapeHtml(r.house || 'N/A') : escapeHtml(r.type)}</span>
+            <span class="amount" style="color:var(--success);">${formatMoney(r.amount)}</span>
+          </div>
+          <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(r.date)}${staff ? ' · ' + escapeHtml(r.type) : ''}${r.method ? ' · ' + escapeHtml(r.method) : ''}</div>
+        </div>
+      `).join('') : '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No payments found.</div>'}
+
+      <div class="section-title" style="font-size:15px; margin-top:18px;">Monthly Collections</div>
+      ${monthRows.length ? `
+        <div class="card" style="cursor:default;">
+          ${monthRows.map(m => `
+            <div style="display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid var(--border-soft);">
+              <span>${escapeHtml(m.month)}</span>
+              <span style="font-family:var(--font-mono);">${formatMoney(m.total)}</span>
+              <span style="font-family:var(--font-mono); color:var(--text-muted);">Σ ${formatMoney(m.running)}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No collections yet.</div>'}
+
+      <div class="section-title" style="font-size:15px; margin-top:18px;">Fund Utilization by Category</div>
+      <div class="section-sub" style="margin-bottom:10px;">${staff ? 'Collected vs spent per category.' : 'Category totals only — contributor identities are never shown.'}</div>
+      ${utilCats.length ? `
+        <div class="card" style="cursor:default;">
+          ${utilCats.map(cat => `
+            <div style="display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid var(--border-soft);">
+              <span>${escapeHtml(cat)}</span>
+              <span style="font-family:var(--font-mono); color:var(--success);">+${formatMoney(collectedByCat[cat] || 0)}</span>
+              <span style="font-family:var(--font-mono); color:var(--danger);">-${formatMoney(spentByCat[cat] || 0)}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No fund activity yet.</div>'}
+
+      <button class="btn secondary block" style="margin-top:14px;" onclick="exportReportPDF()">Export Report as PDF</button>
+    `;
+  };
+
+  window.exportReportPDF = function() {
+    if (!reportsData) return;
+    const staff = isStaff();
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Roshan Pakistan Housing Society", 105, 18, { align: "center" });
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text(staff ? "Society Finance Report" : "My Payments Report", 105, 26, { align: "center" });
+      doc.setFontSize(9);
+      doc.text(`Generated ${new Date().toLocaleString()} by ${currentUserProfile.name}`, 105, 32, { align: "center" });
+      doc.line(15, 36, 195, 36);
+
+      let y = 44;
+      const line = (txt, bold) => {
+        if (y > 280) { doc.addPage(); y = 20; }
+        doc.setFont("helvetica", bold ? "bold" : "normal");
+        doc.setFontSize(bold ? 11 : 9.5);
+        doc.text(String(txt).slice(0, 110), 15, y);
+        y += bold ? 8 : 6;
+      };
+
+      line(staff ? "Payments" : "My Payments", true);
+      paymentRows().slice(0, 200).forEach(r => {
+        line(`${r.date}  ${staff ? r.name + ' (' + (r.house || 'N/A') + ')  ' : ''}${r.type}  ${r.method ? '[' + r.method + ']  ' : ''}${formatMoney(r.amount)}`);
+      });
+
+      y += 4;
+      line("Monthly Collections", true);
+      const byMonth = {};
+      paymentRows().forEach(r => { const m = String(r.date).slice(0, 7) || 'Unknown'; byMonth[m] = (byMonth[m] || 0) + r.amount; });
+      let running = 0;
+      Object.keys(byMonth).sort().forEach(m => { running += byMonth[m]; line(`${m}   ${formatMoney(byMonth[m])}   (running total ${formatMoney(running)})`); });
+
+      y += 4;
+      line("Fund Utilization by Category", true);
+      const collectedByCat = {}, spentByCat = {};
+      reportsData.contribs.filter(c => c.status === 'verified').forEach(c => { const cat = c.category || 'Other'; collectedByCat[cat] = (collectedByCat[cat] || 0) + Number(c.amount || 0); });
+      reportsData.expenses.forEach(x => { const cat = x.category || 'Other'; spentByCat[cat] = (spentByCat[cat] || 0) + Number(x.amount || 0); });
+      [...new Set([...Object.keys(collectedByCat), ...Object.keys(spentByCat)])].sort().forEach(cat => {
+        line(`${cat}   collected ${formatMoney(collectedByCat[cat] || 0)}   spent ${formatMoney(spentByCat[cat] || 0)}`);
+      });
+
+      const fileName = staff ? 'RPHS_Finance_Report.pdf' : 'My_Payments_Report.pdf';
+      doc.save(fileName);
+
+      db.collection('report_exports').add({
+        reportType: staff ? 'finance_report' : 'member_payments',
+        generatedBy: currentUserProfile.name,
+        generatedByUid: auth.currentUser.uid,
+        role: currentUserProfile.role,
+        fileName,
+        generatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(e => console.error("Export log failed:", e));
+      logAudit('report', '', 'create', `PDF export: ${fileName}`);
+    } catch(err) {
+      alert("Error generating report PDF: " + err.message);
+    }
+  };
+
+  // --- BOARD DECISIONS & 3-OF-5 VOTING ---
+  function loadDecisions() {
+    if (!db) return;
+    db.collection('decisions').get().then(snapshot => {
+      decisionsList = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(d => !d.isDeleted)
+        .sort((a, b) => {
+          const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
+          return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
+        });
+      renderDecisionsList();
+    }).catch(e => console.error("Error loading decisions:", e));
+  }
+
+  function renderDecisionsList() {
+    const el = document.getElementById('decisions-list');
+    if (!el) return;
+    if (!decisionsList.length) {
+      el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No items have been queued for a Board vote yet.</div>';
+      return;
+    }
+
+    el.innerHTML = decisionsList.map(d => {
+      const votes = d.votes || [];
+      const endorse = votes.filter(v => v.choice === 'endorse').length;
+      const oppose = votes.filter(v => v.choice === 'reject').length;
+      const myVote = votes.find(v => v.uid === auth.currentUser.uid);
+      const status = d.status || 'pending';
+      const badgeClass = status === 'approved' ? 'paid' : (status === 'rejected' ? 'overdue' : 'pending');
+      const reasonRequired = d.type === 'membership' || d.type === 'suspension';
+      return `
+        <div class="card" style="cursor:default;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <span style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(d.title || '')}</span>
+            <span class="badge ${badgeClass}">${escapeHtml(status)}</span>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">Type: ${escapeHtml(d.type || 'opinion')} · Queued by ${escapeHtml(d.uploadedBy || '')} · ${escapeHtml(formatDate(d.createdAt))}</div>
+          <div style="font-size:13px; margin-bottom:8px; white-space:pre-wrap;">${escapeHtml(d.description || '')}</div>
+          <div style="font-size:12.5px; margin-bottom:6px;">
+            <span style="color:var(--success);">Endorse: ${endorse}</span> · <span style="color:var(--danger);">Oppose: ${oppose}</span> · Needs ${d.requiredVotes || 3} to finalize
+          </div>
+          ${votes.length ? `<div style="font-size:11.5px; color:var(--text-faint); margin-bottom:6px;">${votes.map(v => `${escapeHtml(v.name)}: ${v.choice === 'endorse' ? '✔ endorsed' : '✘ opposed'}${v.reason ? ' — ' + escapeHtml(v.reason) : ''}`).join('<br/>')}</div>` : ''}
+          ${status === 'pending' && isBoard() && !myVote ? `
+            ${reasonRequired ? `<label style="font-size:12px;">Reason (required)</label><input type="text" id="vote-reason-${d.id}" placeholder="State your reason..." />` : ''}
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="btn sm primary block" onclick="castVote('${d.id}', 'endorse')">Endorse</button>
+              <button class="btn sm danger block" onclick="castVote('${d.id}', 'reject')">Oppose</button>
+            </div>
+          ` : ''}
+          ${status === 'pending' && isBoard() && myVote ? `<div style="font-size:12px; color:var(--info);">You voted: ${myVote.choice === 'endorse' ? 'Endorse' : 'Oppose'}. Waiting for quorum.</div>` : ''}
+          ${d.finalizedAt ? `<div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Finalized ${escapeHtml(formatDate(d.finalizedAt))}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.openCreateDecisionModal = function() {
+    if (currentUserProfile.role !== 'admin') return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Queue Item for Board Vote</div>
+      <form id="decision-form">
+        <label>Type</label>
+        <select id="dec-type" required>
+          <option value="opinion">Opinion / General Decision</option>
+          <option value="expense">Expense Approval</option>
+          <option value="account">Account Details Change</option>
+          <option value="board_change">Board Membership Change</option>
+        </select>
+        <label>Title</label>
+        <input type="text" id="dec-title" placeholder="e.g. Approve gate repair expense" required />
+        <label>Description — what is being decided?</label>
+        <textarea id="dec-desc" placeholder="Full details for the Board..." required></textarea>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Send to Board (3-of-5 vote)</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('decision-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await createDecision({
+          type: document.getElementById('dec-type').value,
+          title: document.getElementById('dec-title').value.trim(),
+          description: document.getElementById('dec-desc').value.trim()
+        });
+        closeModal();
+        loadDecisions();
+      } catch(err) {
+        alert("Error queueing decision: " + err.message);
+      }
+    });
+  };
+
+  async function createDecision(data) {
+    const ref = await db.collection('decisions').add({
+      ...data,
+      requiredVotes: 3,
+      status: 'pending',
+      votes: [],
+      uploadedBy: currentUserProfile.name,
+      uploadedByUid: auth.currentUser.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    logAudit('decision', ref.id, 'create', `${data.type}: ${data.title}`);
+    await notifyBoardMembers("New Item for Board Vote", `"${data.title}" has been queued for your vote. Open Board Votes to endorse or oppose.`);
+    return ref;
+  }
+
+  async function notifyBoardMembers(title, body) {
+    try {
+      const snap = await db.collection('users').where('role', '==', 'board').get();
+      await Promise.all(snap.docs.map(d => sendNotification(d.id, title, body, 'info')));
+    } catch(e) {
+      console.error("Error notifying board:", e);
+    }
+  }
+
+  window.castVote = async function(decisionId, choice) {
+    if (!isBoard()) return;
+    const d = decisionsList.find(item => item.id === decisionId);
+    if (!d || d.status !== 'pending') return;
+    const votes = d.votes || [];
+    if (votes.find(v => v.uid === auth.currentUser.uid)) { alert("You have already voted on this item."); return; }
+
+    const reasonRequired = d.type === 'membership' || d.type === 'suspension';
+    let reason = '';
+    const reasonEl = document.getElementById(`vote-reason-${decisionId}`);
+    if (reasonEl) reason = reasonEl.value.trim();
+    if (reasonRequired && !reason) { alert("A reason is mandatory for membership and suspension decisions."); return; }
+
+    const newVotes = [...votes, {
+      uid: auth.currentUser.uid,
+      name: currentUserProfile.name,
+      choice,
+      reason,
+      votedAt: new Date().toISOString()
+    }];
+
+    const endorse = newVotes.filter(v => v.choice === 'endorse').length;
+    const oppose = newVotes.filter(v => v.choice === 'reject').length;
+    const quorum = d.requiredVotes || 3;
+    const finalStatus = endorse >= quorum ? 'approved' : (oppose >= quorum ? 'rejected' : 'pending');
+
+    try {
+      const update = { votes: newVotes };
+      if (finalStatus !== 'pending') {
+        update.status = finalStatus;
+        update.finalizedAt = firebase.firestore.FieldValue.serverTimestamp();
+      }
+      await db.collection('decisions').doc(decisionId).update(update);
+      logAudit('decision', decisionId, 'update', `${currentUserProfile.name} voted ${choice}${finalStatus !== 'pending' ? ' — auto-tagged ' + finalStatus + ' at quorum' : ''}`);
+      if (finalStatus !== 'pending') {
+        await applyDecisionOutcome({ ...d, votes: newVotes }, finalStatus);
+      }
+      loadDecisions();
+    } catch(err) {
+      alert("Error casting vote: " + err.message);
+    }
+  };
+
+  async function applyDecisionOutcome(d, finalStatus) {
+    const reasons = (d.votes || []).filter(v => v.reason).map(v => v.reason).join('; ');
+    try {
+      if (d.type === 'membership' && d.refUid) {
+        if (finalStatus === 'approved') {
+          await db.collection('users').doc(d.refUid).update({ approved: true, membershipStatus: 'approved', statusReason: reasons });
+          await sendNotification(d.refUid, "Membership Approved", "The Board has approved your membership. Welcome to the society!", "success");
+        } else {
+          await db.collection('users').doc(d.refUid).update({ approved: false, membershipStatus: 'rejected', statusReason: reasons });
+          await sendNotification(d.refUid, "Membership Decision", `The Board did not approve your membership.${reasons ? ' Reason: ' + reasons : ''}`, "error");
+        }
+      } else if (d.type === 'suspension' && d.refUid) {
+        if (finalStatus === 'approved') {
+          await db.collection('users').doc(d.refUid).update({ suspended: true, membershipStatus: 'suspended', statusReason: reasons });
+          await sendNotification(d.refUid, "Membership Suspended", `Your membership has been suspended by the Board.${reasons ? ' Reason: ' + reasons : ''}`, "error");
+        }
+      }
+      logAudit('decision', d.id, 'update', `Outcome applied: ${d.type} ${finalStatus}`);
+      await notifyAdmins(`Board Decision Final: ${d.title}`, `The Board has ${finalStatus} "${d.title}" (${(d.votes || []).length} votes cast).`, finalStatus === 'approved' ? 'success' : 'error');
+    } catch(e) {
+      console.error("Error applying decision outcome:", e);
+    }
+  }
+
+  // --- AUDIT & ARCHIVE (STAFF) ---
+  function loadArchiveAndAudit() {
+    if (!db || !isStaff()) return;
+    Promise.all([
+      db.collection('bills').get(),
+      db.collection('funds').get(),
+      db.collection('tickets').get(),
+      db.collection('expenses').get(),
+      db.collection('audit_log').get()
+    ]).then(([bills, funds, tickets, expenses, audit]) => {
+      archivedRecords = [];
+      const collect = (snap, type, label) => snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(x => x.isDeleted)
+        .forEach(x => archivedRecords.push({ type, label: label(x), record: x }));
+      collect(bills, 'bills', b => `Bill ${b.billNo || b.id} — ${b.name || ''} ${formatMoney(b.amount)}`);
+      collect(funds, 'funds', f => `Fund "${f.title || ''}"`);
+      collect(tickets, 'tickets', t => `Complaint ${t.ticketNo || t.id} — ${t.subject || ''}`);
+      collect(expenses, 'expenses', x => `Expense ${x.category || ''} ${formatMoney(x.amount)}`);
+
+      auditList = audit.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+          const da = toDate(a.timestamp), dbb = toDate(b.timestamp);
+          return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
+        })
+        .slice(0, 100);
+      renderArchiveAndAudit();
+    }).catch(e => console.error("Error loading archive/audit:", e));
+  }
+
+  function renderArchiveAndAudit() {
+    const archEl = document.getElementById('archive-list');
+    const audEl = document.getElementById('audit-list');
+    if (archEl) {
+      archEl.innerHTML = archivedRecords.length ? archivedRecords.map(a => `
+        <div class="card" style="cursor:default;">
+          <div style="font-size:13.5px; font-weight:700; margin-bottom:4px;">${escapeHtml(a.label)}</div>
+          <div style="font-size:11.5px; color:var(--text-faint);">Archived ${escapeHtml(formatDate(a.record.deletedAt))} by ${escapeHtml(a.record.deletedBy || 'Management')}</div>
+          ${currentUserProfile.role === 'admin' ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="restoreRecord('${a.type}', '${a.record.id}')">Restore</button>` : ''}
+        </div>
+      `).join('') : '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No archived records.</div>';
+    }
+    if (audEl) {
+      audEl.innerHTML = auditList.length ? `
+        <div class="card" style="cursor:default;">
+          ${auditList.map(a => `
+            <div style="font-size:12px; padding:6px 0; border-bottom:1px solid var(--border-soft);">
+              <span style="color:var(--accent-2); font-weight:700;">${escapeHtml(a.action)}</span>
+              <span style="color:var(--text-muted);">${escapeHtml(a.entityType)}</span>
+              — ${escapeHtml(a.details || '')}
+              <div style="font-size:10.5px; color:var(--text-faint);">${escapeHtml(formatDate(a.timestamp))} · ${escapeHtml(a.performedBy || '')} (${escapeHtml(a.role || '')})</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No audit entries yet.</div>';
+    }
+  }
+
+  window.restoreRecord = async function(collection, id) {
+    if (currentUserProfile.role !== 'admin') return;
+    if (!confirm("Restore this record? It will reappear in its normal list.")) return;
+    try {
+      await db.collection(collection).doc(id).update({ isDeleted: false, restoredAt: firebase.firestore.FieldValue.serverTimestamp(), restoredBy: currentUserProfile.name });
+      logAudit(collection, id, 'restore', 'Record restored from archive');
+      loadArchiveAndAudit();
+    } catch(err) {
+      alert("Error restoring record: " + err.message);
     }
   };
 
@@ -2698,6 +3550,14 @@
         </div>
         <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">CNIC: ${escapeHtml(r.cnic || 'N/A')} | Phone: ${escapeHtml(r.phone || 'N/A')}</div>
         <div style="font-size:12px; color:var(--text-muted);">Blood Group: ${escapeHtml(r.bloodGroup || 'N/A')} (${escapeHtml(r.occupancyType || 'N/A')})</div>
+        ${r.suspended ? '<div style="font-size:12px; color:var(--danger); margin-top:4px;">Suspended' + (r.statusReason ? ': ' + escapeHtml(r.statusReason) : '') + '</div>' : ''}
+        ${currentUserProfile.role === 'admin' && r.role === 'resident' ? `
+          <div style="margin-top:8px;">
+            ${r.suspended
+              ? `<button class="btn sm secondary" onclick="unsuspendResident('${r.uid}')">Lift Suspension</button>`
+              : `<button class="btn sm danger" onclick="suspendResident('${r.uid}')">Suspend</button>`}
+          </div>
+        ` : ''}
       </div>
     `).join('');
   }
@@ -2755,7 +3615,9 @@
   function loadPendingResidents() {
     if (!db) return;
     db.collection('users').where('approved', '==', false).get().then(snapshot => {
-      pendingResidents = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      pendingResidents = snapshot.docs
+        .map(doc => ({ uid: doc.id, ...doc.data() }))
+        .filter(r => r.membershipStatus !== 'rejected');
       renderApprovalsList();
     }).catch(e => console.error("Error loading approvals:", e));
   }
@@ -2784,20 +3646,104 @@
     `).join('');
   }
 
+  async function hasPendingDecision(type, refUid) {
+    const snap = await db.collection('decisions').get();
+    return snap.docs.some(d => {
+      const x = d.data();
+      return x.type === type && x.refUid === refUid && (x.status || 'pending') === 'pending' && !x.isDeleted;
+    });
+  }
+
   window.approveUser = async function(uid) {
+    const r = pendingResidents.find(item => item.uid === uid);
     try {
-      await db.collection('users').doc(uid).update({ approved: true });
+      const boardCount = await getBoardMembersCount();
+      if (boardCount >= 3) {
+        if (await hasPendingDecision('membership', uid)) { alert("This membership is already awaiting a Board vote."); return; }
+        await createDecision({
+          type: 'membership',
+          refUid: uid,
+          title: `Membership: ${r ? r.name : uid}`,
+          description: `Approve or reject the membership application of ${r ? r.name : ''} (House ${r ? (r.house || 'N/A') : 'N/A'}, ${r ? (r.email || '') : ''}). A reason is mandatory with each vote.`
+        });
+        alert("Sent to the Board for a 3-of-5 vote. The applicant will be notified once the Board decides.");
+        loadPendingResidents();
+        return;
+      }
+      const reason = prompt("Reason for approving this membership (required):");
+      if (reason === null) return;
+      if (!reason.trim()) { alert("A reason is required for every membership decision."); return; }
+      await db.collection('users').doc(uid).update({ approved: true, membershipStatus: 'approved', statusReason: reason.trim() });
+      logAudit('member', uid, 'update', `Membership approved: ${r ? r.name : uid} — ${reason.trim()}`);
       await sendNotification(uid, "Account Approved", "Your account has been approved! You can now access your portal.", "success");
       loadPendingResidents();
     } catch(e) { alert("Error approving user: " + e.message); }
   };
 
   window.rejectUser = async function(uid) {
-    if (!confirm("Are you sure you want to delete this registration request?")) return;
+    const r = pendingResidents.find(item => item.uid === uid);
     try {
-      await db.collection('users').doc(uid).delete();
+      const boardCount = await getBoardMembersCount();
+      if (boardCount >= 3) {
+        if (await hasPendingDecision('membership', uid)) { alert("This membership is already awaiting a Board vote."); return; }
+        await createDecision({
+          type: 'membership',
+          refUid: uid,
+          title: `Membership: ${r ? r.name : uid}`,
+          description: `Approve or reject the membership application of ${r ? r.name : ''} (House ${r ? (r.house || 'N/A') : 'N/A'}, ${r ? (r.email || '') : ''}). A reason is mandatory with each vote.`
+        });
+        alert("Sent to the Board for a 3-of-5 vote.");
+        loadPendingResidents();
+        return;
+      }
+      const reason = prompt("Reason for rejecting this membership (required):");
+      if (reason === null) return;
+      if (!reason.trim()) { alert("A reason is required for every membership decision."); return; }
+      await db.collection('users').doc(uid).update({ approved: false, membershipStatus: 'rejected', statusReason: reason.trim() });
+      logAudit('member', uid, 'update', `Membership rejected: ${r ? r.name : uid} — ${reason.trim()}`);
+      await sendNotification(uid, "Membership Decision", `Your membership application was not approved. Reason: ${reason.trim()}`, "error");
       loadPendingResidents();
-    } catch(e) { alert("Error deleting user: " + e.message); }
+    } catch(e) { alert("Error rejecting user: " + e.message); }
+  };
+
+  window.suspendResident = async function(uid) {
+    if (currentUserProfile.role !== 'admin') return;
+    const r = allResidents.find(item => item.uid === uid);
+    if (!r) return;
+    try {
+      const boardCount = await getBoardMembersCount();
+      if (boardCount >= 3) {
+        if (await hasPendingDecision('suspension', uid)) { alert("A suspension for this resident is already awaiting a Board vote."); return; }
+        if (!confirm(`Send the suspension of ${r.name} to the Board for a 3-of-5 vote?`)) return;
+        await createDecision({
+          type: 'suspension',
+          refUid: uid,
+          title: `Suspension: ${r.name}`,
+          description: `Suspend the membership of ${r.name} (House ${r.house || 'N/A'}). A reason is mandatory with each vote.`
+        });
+        alert("Sent to the Board for a vote.");
+        return;
+      }
+      const reason = prompt(`Reason for suspending ${r.name} (required):`);
+      if (reason === null) return;
+      if (!reason.trim()) { alert("A reason is required for every suspension."); return; }
+      await db.collection('users').doc(uid).update({ suspended: true, membershipStatus: 'suspended', statusReason: reason.trim() });
+      logAudit('member', uid, 'update', `Membership suspended: ${r.name} — ${reason.trim()}`);
+      await sendNotification(uid, "Membership Suspended", `Your membership has been suspended. Reason: ${reason.trim()}`, "error");
+      loadAllResidents();
+    } catch(e) { alert("Error suspending resident: " + e.message); }
+  };
+
+  window.unsuspendResident = async function(uid) {
+    if (currentUserProfile.role !== 'admin') return;
+    const r = allResidents.find(item => item.uid === uid);
+    if (!r || !confirm(`Lift the suspension of ${r.name}?`)) return;
+    try {
+      await db.collection('users').doc(uid).update({ suspended: false, membershipStatus: 'approved' });
+      logAudit('member', uid, 'update', `Suspension lifted: ${r.name}`);
+      await sendNotification(uid, "Suspension Lifted", "Your membership suspension has been lifted. Welcome back!", "success");
+      loadAllResidents();
+    } catch(e) { alert("Error: " + e.message); }
   };
 
 })();
