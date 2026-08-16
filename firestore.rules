@@ -1,0 +1,165 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() {
+      return request.auth != null;
+    }
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isAdmin() {
+      return signedIn() && me().role == 'admin';
+    }
+    function isBoard() {
+      return signedIn() && (me().role == 'board' || me().boardMember == true);
+    }
+    function isStaff() {
+      return signedIn() && me().role in ['admin', 'board', 'superadmin'];
+    }
+    function isApprovedResident() {
+      return signedIn() && me().role == 'resident' && me().approved == true && me().suspended != true;
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      // Own profile, or any staff member
+      allow read: if isOwner(uid) || isStaff();
+
+      // Self-registration: must be your own doc, role 'resident', not pre-approved
+      allow create: if isOwner(uid)
+        && request.resource.data.role == 'resident'
+        && request.resource.data.approved == false;
+
+      // Self-update: cannot escalate role or self-approve/unsuspend
+      allow update: if (isOwner(uid)
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.approved == resource.data.approved
+          && request.resource.data.suspended == resource.data.suspended)
+        || isAdmin();
+
+      // No hard deletes of user records (soft policy)
+      allow delete: if false;
+
+      // In-app notifications: anyone signed in may deliver one; only the owner reads/updates
+      match /notifications/{noteId} {
+        allow read, update, delete: if isOwner(uid);
+        allow create: if signedIn();
+      }
+    }
+
+    // ---------- announcements ----------
+    match /announcements/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------- polls ----------
+    match /polls/{id} {
+      allow read: if signedIn();
+      allow create, delete: if isAdmin();
+      allow update: if signedIn(); // voting updates tallies
+    }
+
+    // ---------- tickets (complaints) ----------
+    match /tickets/{id} {
+      allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isApprovedResident() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin(); // status changes / archive
+      allow delete: if false;    // soft delete only
+    }
+
+    // ---------- bills ----------
+    match /bills/{id} {
+      allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isAdmin();
+      // Admin may update anything; the billed resident may only submit payment proof
+      allow update: if isAdmin()
+        || (signedIn()
+            && resource.data.uid == request.auth.uid
+            && request.resource.data.status == 'submitted'
+            && resource.data.status in ['unpaid', 'submitted']
+            && request.resource.data.amount == resource.data.amount
+            && request.resource.data.uid == resource.data.uid);
+      allow delete: if false; // soft delete only
+    }
+
+    // ---------- funds ----------
+    match /funds/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ---------- fund contributions ----------
+    match /fund_contributions/{id} {
+      // Verified contributions are readable by all signed-in users so fund
+      // progress totals work; unverified ones only by staff or their owner.
+      allow read: if isStaff()
+        || (signedIn() && resource.data.uid == request.auth.uid)
+        || (signedIn() && resource.data.status == 'verified');
+      // Residents submit their own (never pre-verified); admin can record verified cash entries
+      allow create: if isAdmin()
+        || (isApprovedResident()
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.status == 'submitted');
+      allow update: if isAdmin(); // verify / reject
+      allow delete: if false;
+    }
+
+    // ---------- expenses ----------
+    match /expenses/{id} {
+      allow read: if signedIn(); // residents see anonymized category totals in reports
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ---------- board decisions & votes ----------
+    match /decisions/{id} {
+      allow read: if isStaff();
+      allow create: if isAdmin();
+      // Board members vote; admin may maintain records. Status/votes integrity is
+      // enforced app-side; board members cannot create or delete decisions.
+      allow update: if isAdmin() || isBoard();
+      allow delete: if false;
+    }
+
+    // ---------- volunteer programs ----------
+    match /volunteer_programs/{id} {
+      allow read: if signedIn();
+      allow create: if isAdmin();
+      // Admin manages programs; approved residents join/leave (update participants)
+      allow update: if isAdmin() || isApprovedResident();
+      allow delete: if false;
+    }
+
+    // ---------- society settings (bank account etc.) ----------
+    match /settings/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---------- audit log (immutable) ----------
+    match /audit_log/{id} {
+      allow read: if isStaff();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    // ---------- report export log ----------
+    match /report_exports/{id} {
+      allow read: if isStaff();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    // ---------- FCM device tokens ----------
+    match /fcm_tokens/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+  }
+}
