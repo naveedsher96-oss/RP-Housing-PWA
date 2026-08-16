@@ -2,6 +2,14 @@
       "relation": ["delegate_permission/common.handle_all_urls"],
       "target": {
         "namespace": "android_app",
+        "package_name": "pk.rphs.society",
+        "sha256_cert_fingerprints": ["34:2F:AE:2B:A8:19:4D:74:17:12:76:5F:80:D3:DE:54:E5:12:B6:17:C3:15:0F:9A:C0:5A:69:1B:15:83:65:37"]
+      }
+    },
+    {
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
         "package_name": "io.github.naveedsher96_oss.twa",
         "sha256_cert_fingerprints": ["E0:A3:63:51:6E:A1:05:6C:DD:31:10:F2:BA:6D:B7:83:EE:D0:D9:73:40:70:A3:C2:ED:98:B2:73:82:09:7B:37"]
       }
