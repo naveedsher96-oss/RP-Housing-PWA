@@ -2517,12 +2517,28 @@
   };
 
   // --- COMMUNITY FUNDS ---
+  function contribQueries() {
+    // Staff can read all contributions; residents can only read verified ones
+    // (for fund totals) plus their own — collection-wide reads are denied by rules.
+    if (isStaff()) return [db.collection('fund_contributions').get()];
+    return [
+      db.collection('fund_contributions').where('status', '==', 'verified').get(),
+      db.collection('fund_contributions').where('uid', '==', auth.currentUser.uid).get()
+    ];
+  }
+
+  function mergeContribSnaps(snaps) {
+    const map = {};
+    snaps.forEach(snap => snap.docs.forEach(doc => { map[doc.id] = { id: doc.id, ...doc.data() }; }));
+    return Object.values(map);
+  }
+
   function loadFunds() {
     if (!db || !auth.currentUser) return;
     Promise.all([
       db.collection('funds').get(),
-      db.collection('fund_contributions').get()
-    ]).then(([fundsSnap, contribsSnap]) => {
+      Promise.all(contribQueries()).then(mergeContribSnaps)
+    ]).then(([fundsSnap, contribDocs]) => {
       fundsList = fundsSnap.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(f => !f.isDeleted)
@@ -2530,8 +2546,7 @@
           const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
         });
-      fundContribsList = contribsSnap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
+      fundContribsList = contribDocs
         .sort((a, b) => {
           const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
@@ -3323,21 +3338,23 @@
 
   function loadReportsData() {
     if (!db) return;
+    const billsQuery = isStaff()
+      ? db.collection('bills')
+      : db.collection('bills').where('uid', '==', auth.currentUser.uid);
     Promise.all([
-      db.collection('bills').get(),
-      db.collection('fund_contributions').get(),
+      billsQuery.get(),
+      Promise.all(contribQueries()).then(mergeContribSnaps),
       db.collection('expenses').get()
-    ]).then(([billsSnap, contribsSnap, expSnap]) => {
+    ]).then(([billsSnap, contribDocs, expSnap]) => {
       reportsData = {
         bills: billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted),
-        contribs: contribsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isDeleted),
+        contribs: contribDocs.filter(c => !c.isDeleted),
         expenses: expSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.isDeleted)
       };
       renderReports();
     }).catch(e => {
       console.error("Error loading reports:", e);
-      const el = document.getElementById('reports-body');
-      if (el) el.innerHTML = '<div class="card" style="text-align:center; color:var(--danger);">Could not load report data.</div>';
+      showLoadError('reports-body', e);
     });
   }
 
