@@ -188,7 +188,7 @@
   .btn.block{width:100%;}
 
   label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
-  input[type=text], input[type=email], input[type=password], select, textarea{
+  input[type=text], input[type=number], input[type=date], input[type=email], input[type=password], select, textarea{
     width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
     border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
   }
@@ -1902,10 +1902,10 @@
         <input type="text" id="bill-period" value="${escapeHtml(defaultPeriod)}" required />
 
         <label>Amount (PKR)</label>
-        <input type="text" id="bill-amount" placeholder="e.g. 4500" required />
+        <input type="number" id="bill-amount" placeholder="e.g. 4500" required min="1" />
 
         <label>Due Date</label>
-        <input type="text" id="bill-due" value="${defaultDue}" placeholder="YYYY-MM-DD" required />
+        <input type="date" id="bill-due" value="${defaultDue}" required />
 
         <label>Notes / Breakdown</label>
         <textarea id="bill-notes" placeholder="Describe what this bill covers..."></textarea>
@@ -2181,7 +2181,7 @@
               <span style="color:var(--text-faint);">${pct}% of ${formatMoney(target)}</span>
             </div>
           ` : `<div style="font-size:12.5px;"><span style="color:var(--text-faint);">Collected:</span> <span style="font-family:var(--font-mono); color:var(--success);">${formatMoney(collected)}</span></div>`}
-          <div style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${contributors} contributor(s) · Started ${escapeHtml(formatDate(f.createdAt))}${isAdmin && pendingCount ? ` · <span style="color:var(--info);">${pendingCount} awaiting verification</span>` : ''}${!isAdmin && myPending ? ' · <span style="color:var(--info);">Your contribution is under review</span>' : ''}</div>
+          <div style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${contributors} contributor(s) · Started ${escapeHtml(formatDate(f.createdAt))}${f.deadline ? ' · Deadline ' + escapeHtml(formatDate(f.deadline)) : ''}${isAdmin && pendingCount ? ` · <span style="color:var(--info);">${pendingCount} awaiting verification</span>` : ''}${!isAdmin && myPending ? ' · <span style="color:var(--info);">Your contribution is under review</span>' : ''}</div>
         </div>
       `;
     }).join('');
@@ -2198,7 +2198,9 @@
         <label>What is this fund for & why is it needed?</label>
         <textarea id="fund-purpose" placeholder="Explain the purpose and why the society needs it..." required></textarea>
         <label>Target Amount (PKR, optional)</label>
-        <input type="text" id="fund-target" placeholder="e.g. 250000" />
+        <input type="number" id="fund-target" placeholder="e.g. 250000" min="1" />
+        <label>Target Deadline (optional)</label>
+        <input type="date" id="fund-deadline" />
         <button type="submit" class="btn primary block" style="margin-top:16px;">Start Fund & Notify Residents</button>
       </form>
     `;
@@ -2209,6 +2211,7 @@
       const title = document.getElementById('fund-title').value.trim();
       const purpose = document.getElementById('fund-purpose').value.trim();
       const target = Number(document.getElementById('fund-target').value.trim() || 0);
+      const deadline = document.getElementById('fund-deadline').value;
       if (document.getElementById('fund-target').value.trim() && (!target || target <= 0)) {
         alert("Please enter a valid target amount or leave it blank.");
         return;
@@ -2219,6 +2222,7 @@
           title,
           purpose,
           targetAmount: target,
+          deadline,
           status: 'active',
           createdBy: currentUserProfile.name,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -2256,13 +2260,14 @@
           <div class="progress"><div class="fill" style="width:${pct}%;"></div></div>
           <div style="text-align:right; font-size:11.5px; color:var(--text-faint);">${pct}% reached</div>
         ` : ''}
-        <div style="display:flex; justify-content:space-between;"><span style="font-size:13px; color:var(--text-muted);">Started</span><span style="font-size:13.5px;">${escapeHtml(formatDate(f.createdAt))} by ${escapeHtml(f.createdBy || 'Management')}</span></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="font-size:13px; color:var(--text-muted);">Started</span><span style="font-size:13.5px;">${escapeHtml(formatDate(f.createdAt))} by ${escapeHtml(f.createdBy || 'Management')}</span></div>
+        ${f.deadline ? `<div style="display:flex; justify-content:space-between;"><span style="font-size:13px; color:var(--text-muted);">Deadline</span><span style="font-size:13.5px;">${escapeHtml(formatDate(f.deadline))}</span></div>` : ''}
       </div>
 
       ${status === 'active' && !isAdmin ? `
         <form id="contrib-form" style="margin-bottom:16px;">
           <label>Contribute — Amount (PKR)</label>
-          <input type="text" id="contrib-amount" placeholder="e.g. 2000" required />
+          <input type="number" id="contrib-amount" placeholder="e.g. 2000" required min="1" />
           <label>Payment Proof (PNG, JPEG or PDF — optional)</label>
           <input type="file" id="contrib-file" accept="image/png,image/jpeg,application/pdf" />
           <label>Transaction Reference (optional)</label>
@@ -2271,7 +2276,10 @@
         </form>
       ` : ''}
 
-      ${isAdmin && status === 'active' ? `<button class="btn danger block" onclick="closeFund('${f.id}')" style="margin-bottom:16px;">Close This Fund</button>` : ''}
+      ${isAdmin && status === 'active' ? `
+        <button class="btn secondary block" onclick="openRecordContributionModal('${f.id}')" style="margin-bottom:10px;">+ Record Cash / Offline Contribution</button>
+        <button class="btn danger block" onclick="closeFund('${f.id}')" style="margin-bottom:16px;">Close This Fund</button>
+      ` : ''}
 
       <div class="section-title" style="font-size:15px; margin-bottom:8px;">${isAdmin ? 'Contributions' : 'My Contributions'}</div>
       <div id="fund-contribs">
@@ -2334,6 +2342,71 @@
         }
       });
     }
+  };
+
+  window.openRecordContributionModal = async function(fundId) {
+    const f = fundsList.find(item => item.id === fundId);
+    if (!f || currentUserProfile.role !== 'admin') return;
+
+    let residents = [];
+    try {
+      const snap = await db.collection('users').where('approved', '==', true).get();
+      residents = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(r => r.role === 'resident');
+    } catch(e) {
+      console.error("Error loading residents:", e);
+    }
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Record Contribution</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Fund: <strong>${escapeHtml(f.title)}</strong></div>
+      <form id="record-contrib-form">
+        <label>Resident</label>
+        <select id="record-contrib-resident" required>
+          ${residents.map(r => `<option value="${escapeHtml(r.uid)}">${escapeHtml(r.name)} — ${escapeHtml(r.house || 'N/A')}</option>`).join('')}
+        </select>
+        <label>Amount (PKR)</label>
+        <input type="number" id="record-contrib-amount" placeholder="e.g. 5000" required min="1" />
+        <label>Reference / Note (optional)</label>
+        <input type="text" id="record-contrib-ref" placeholder="e.g. Cash received at office" />
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Record as Verified</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('record-contrib-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const uid = document.getElementById('record-contrib-resident').value;
+      const amount = Number(document.getElementById('record-contrib-amount').value);
+      const paymentRef = document.getElementById('record-contrib-ref').value.trim();
+      const r = residents.find(item => item.uid === uid);
+      if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
+
+      try {
+        await db.collection('fund_contributions').add({
+          fundId: f.id,
+          fundTitle: f.title,
+          uid,
+          name: r ? r.name : '',
+          house: r ? (r.house || '') : '',
+          amount,
+          currency: 'PKR',
+          paymentRef,
+          proofData: '',
+          proofType: '',
+          proofName: '',
+          status: 'verified',
+          recordedBy: currentUserProfile.name,
+          verifiedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          verifiedBy: currentUserProfile.name,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await sendNotification(uid, `Contribution Recorded (${f.title})`, `Management recorded your contribution of ${formatMoney(amount)}. Thank you for supporting the community!`, 'success');
+        closeModal();
+        loadFunds();
+      } catch(err) {
+        alert("Error recording contribution: " + err.message);
+      }
+    });
   };
 
   window.verifyContribution = async function(contribId) {
