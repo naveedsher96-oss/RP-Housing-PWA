@@ -245,6 +245,14 @@
   .drawer-item.active{background:var(--accent-soft); color:var(--accent-2);}
   .drawer-item .ico{font-size:17px; width:22px; text-align:center;}
   .drawer-footer{margin-top:auto; border-top:1px solid var(--border-soft); padding-top:10px;}
+
+  .fam-sect-title{font-family:var(--font-display); font-size:16px; font-weight:700; color:var(--accent-2); margin-top:22px; padding-top:14px; border-top:1px solid var(--border);}
+  .fam-hint{font-size:12px; color:var(--text-muted); margin-top:4px;}
+  .fam-member{background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-top:10px;}
+  .fam-member .fam-head{display:flex; align-items:center; gap:10px; font-weight:700; font-size:14px; cursor:pointer;}
+  .fam-member input[type=checkbox]{width:18px; height:18px; accent-color:var(--accent); margin:0;}
+  .fam-grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .fam-add-btn{background:none; border:1px dashed var(--accent); color:var(--accent); border-radius:10px; padding:9px; width:100%; font-size:13px; font-weight:600; margin-top:10px; cursor:pointer;}
 </style>
 </head>
 <body>
@@ -593,6 +601,148 @@
     document.getElementById('logout-verification-btn').addEventListener('click', () => window.doSignOut());
   }
 
+  // --- FAMILY BIODATA SECTION (shared by onboarding form and edit modal) ---
+  const BLOOD_GROUPS = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
+  const FAMILY_SINGLES = [['father','Father'],['mother','Mother'],['spouse','Spouse']];
+  const FAMILY_MULTIS = [['sons','Son'],['daughters','Daughter']];
+  const familyStates = {};
+
+  function bloodOptionsHTML(sel) {
+    return '<option value="">Blood Group</option>' + BLOOD_GROUPS.map(bg => `<option value="${bg}" ${sel===bg?'selected':''}>${bg}</option>`).join('');
+  }
+
+  function famFieldsHTML(idBase, label, m, cnicHint) {
+    return `
+      <label>${label} Name</label>
+      <input type="text" id="${idBase}-name" value="${escapeHtml((m && m.name) || '')}" />
+      <div class="fam-grid2">
+        <div>
+          <label>CNIC${cnicHint ? ' (if 18+)' : ''}</label>
+          <input type="text" id="${idBase}-cnic" value="${escapeHtml((m && m.cnic) || '')}" placeholder="${cnicHint ? 'optional' : '35202-1234567-1'}" />
+        </div>
+        <div>
+          <label>Blood Group</label>
+          <select id="${idBase}-blood">${bloodOptionsHTML(m && m.bloodGroup)}</select>
+        </div>
+      </div>`;
+  }
+
+  function initFamilySection(containerId, family, otherDependents) {
+    family = family || {};
+    familyStates[containerId] = {
+      father: family.father || null,
+      mother: family.mother || null,
+      spouse: family.spouse || null,
+      sons: Array.isArray(family.sons) ? family.sons.slice() : [],
+      daughters: Array.isArray(family.daughters) ? family.daughters.slice() : [],
+      other: otherDependents || ''
+    };
+    drawFamilySection(containerId);
+  }
+
+  function drawFamilySection(containerId) {
+    const st = familyStates[containerId];
+    const el = document.getElementById(containerId);
+    let html = `
+      <div class="fam-sect-title">Family Members Living With You</div>
+      <div class="fam-hint">Tick a box only for the family members who live with you, then fill their details.</div>`;
+
+    FAMILY_SINGLES.forEach(([key, label]) => {
+      const on = !!st[key];
+      html += `
+        <div class="fam-member">
+          <label class="fam-head" style="margin:0; text-transform:none; font-size:14px; color:var(--text); letter-spacing:0;">
+            <input type="checkbox" data-fam-toggle="${key}" ${on ? 'checked' : ''}> ${label}
+          </label>
+          ${on ? `<div>${famFieldsHTML(containerId + '-' + key, label + "'s", st[key], false)}</div>` : ''}
+        </div>`;
+    });
+
+    FAMILY_MULTIS.forEach(([key, label]) => {
+      const on = st[key].length > 0;
+      html += `
+        <div class="fam-member">
+          <label class="fam-head" style="margin:0; text-transform:none; font-size:14px; color:var(--text); letter-spacing:0;">
+            <input type="checkbox" data-fam-toggle="${key}" ${on ? 'checked' : ''}> ${label}(s)
+          </label>
+          ${on ? st[key].map((m, i) => `<div>${famFieldsHTML(containerId + '-' + key + '-' + i, label + ' ' + (i+1) + ' \u2014', m, true)}</div>`).join('') : ''}
+          ${on ? `<button type="button" class="fam-add-btn" data-fam-add="${key}">+ Add another ${label.toLowerCase()}</button>` : ''}
+        </div>`;
+    });
+
+    html += `
+      <label>Other Dependents (optional)</label>
+      <textarea id="${containerId}-other" rows="2" placeholder="Anyone else living with you (e.g. brother, domestic staff)...">${escapeHtml(st.other)}</textarea>`;
+
+    el.innerHTML = html;
+
+    el.querySelectorAll('[data-fam-toggle]').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        syncFamilyInputs(containerId);
+        const key = e.target.getAttribute('data-fam-toggle');
+        if (FAMILY_SINGLES.some(([k]) => k === key)) {
+          st[key] = e.target.checked ? { name:'', cnic:'', bloodGroup:'' } : null;
+        } else {
+          st[key] = e.target.checked ? [{ name:'', cnic:'', bloodGroup:'' }] : [];
+        }
+        drawFamilySection(containerId);
+      });
+    });
+    el.querySelectorAll('[data-fam-add]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        syncFamilyInputs(containerId);
+        st[btn.getAttribute('data-fam-add')].push({ name:'', cnic:'', bloodGroup:'' });
+        drawFamilySection(containerId);
+      });
+    });
+  }
+
+  function readFamMember(idBase) {
+    const nameEl = document.getElementById(idBase + '-name');
+    if (!nameEl) return null;
+    return {
+      name: nameEl.value.trim(),
+      cnic: document.getElementById(idBase + '-cnic').value.trim(),
+      bloodGroup: document.getElementById(idBase + '-blood').value
+    };
+  }
+
+  function syncFamilyInputs(containerId) {
+    const st = familyStates[containerId];
+    FAMILY_SINGLES.forEach(([key]) => {
+      if (st[key]) st[key] = readFamMember(containerId + '-' + key) || st[key];
+    });
+    FAMILY_MULTIS.forEach(([key]) => {
+      st[key] = st[key].map((m, i) => readFamMember(containerId + '-' + key + '-' + i) || m);
+    });
+    const otherEl = document.getElementById(containerId + '-other');
+    if (otherEl) st.other = otherEl.value.trim();
+  }
+
+  function familySummaryText(family, other) {
+    family = family || {};
+    const parts = [];
+    const fmt = (label, m) => label + ': ' + m.name + (m.bloodGroup ? ' (' + m.bloodGroup + ')' : '') + (m.cnic ? ', CNIC ' + m.cnic : '');
+    FAMILY_SINGLES.forEach(([key, label]) => { if (family[key] && family[key].name) parts.push(fmt(label, family[key])); });
+    FAMILY_MULTIS.forEach(([key, label]) => (family[key] || []).forEach((m, i) => { if (m.name) parts.push(fmt(label + ' ' + (i+1), m)); }));
+    if (other) parts.push('Other: ' + other);
+    return parts.join('\n') || 'None';
+  }
+
+  function collectFamilySection(containerId) {
+    syncFamilyInputs(containerId);
+    const st = familyStates[containerId];
+    const check = (label, m, cnicOptional) => {
+      if (!m.name) throw new Error('Please enter the name for ' + label + ' (or untick the box).');
+      if (!m.bloodGroup) throw new Error('Please select the blood group for ' + label + '.');
+      if (!cnicOptional && !m.cnic) throw new Error('Please enter the CNIC for ' + label + '.');
+    };
+    FAMILY_SINGLES.forEach(([key, label]) => { if (st[key]) check(label, st[key], false); });
+    FAMILY_MULTIS.forEach(([key, label]) => st[key].forEach((m, i) => check(label + ' ' + (i+1), m, true)));
+    const family = { father: st.father, mother: st.mother, spouse: st.spouse, sons: st.sons, daughters: st.daughters };
+    return { family, otherDependents: st.other, familyDetails: familySummaryText(family, st.other) };
+  }
+
   function renderBiodataFormScreen() {
     appEl.innerHTML = `
       <div class="onboard-wrap" style="max-width:520px; padding:20px 16px;">
@@ -632,8 +782,7 @@
               <option value="Tenant">Tenant</option>
             </select>
 
-            <label>Family Members / Dependents Details</label>
-            <textarea id="bio-family" placeholder="List names and ages of family members living with you..." required></textarea>
+            <div id="bio-family-sect"></div>
 
             <button type="submit" class="btn primary block" style="margin-top:20px;">Save & Submit Biodata</button>
           </form>
@@ -642,6 +791,8 @@
       </div>
     `;
 
+    initFamilySection('bio-family-sect', currentUserProfile.family, currentUserProfile.otherDependents);
+
     document.getElementById('biodata-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const cnic = document.getElementById('bio-cnic').value.trim();
@@ -649,8 +800,11 @@
       const house = document.getElementById('bio-house').value.trim();
       const bloodGroup = document.getElementById('bio-blood').value;
       const occupancyType = document.getElementById('bio-occupancy').value;
-      const familyDetails = document.getElementById('bio-family').value.trim();
       const name = document.getElementById('bio-name').value.trim();
+
+      let fam;
+      try { fam = collectFamilySection('bio-family-sect'); }
+      catch(err) { alert(err.message); return; }
 
       try {
         await db.collection('users').doc(auth.currentUser.uid).update({
@@ -660,7 +814,9 @@
           house,
           bloodGroup,
           occupancyType,
-          familyDetails,
+          family: fam.family,
+          otherDependents: fam.otherDependents,
+          familyDetails: fam.familyDetails,
           biodataSubmitted: true
         });
 
@@ -672,7 +828,9 @@
           house,
           bloodGroup,
           occupancyType,
-          familyDetails,
+          family: fam.family,
+          otherDependents: fam.otherDependents,
+          familyDetails: fam.familyDetails,
           biodataSubmitted: true
         };
 
@@ -1063,32 +1221,35 @@
       `;
     }
 
+    if (activeTab === 'profile') {
+      return `
+        <div class="section-title">My Profile</div>
+        <div class="section-sub">Your registered society details on file.</div>
+
+        <div class="card" style="cursor:default; padding:20px;">
+          <div style="font-weight:700; font-size:18px; color:var(--accent-2); margin-bottom:4px;">${escapeHtml(currentUserProfile.name)}</div>
+          <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px; text-transform:capitalize;">${escapeHtml(roleLabel())}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>House / Plot:</strong> ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>CNIC:</strong> ${escapeHtml(currentUserProfile.cnic || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>Phone:</strong> ${escapeHtml(currentUserProfile.phone || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>Email:</strong> ${escapeHtml(currentUserProfile.email || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>Blood Group:</strong> ${escapeHtml(currentUserProfile.bloodGroup || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>Occupancy Type:</strong> ${escapeHtml(currentUserProfile.occupancyType || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft);">
+            <strong>Family / Dependents:</strong>
+            <div style="color:var(--text-muted); margin-top:4px; line-height:1.4; white-space:pre-line;">${escapeHtml(currentUserProfile.familyDetails || 'N/A')}</div>
+          </div>
+          <button class="btn secondary block" onclick="openEditBiodataModal()" style="margin-top:16px;">Update Biodata</button>
+        </div>
+      `;
+    }
+
     if (activeTab === 'biodata') {
       if (isStaff()) {
         return `
           <div class="section-title">Residents Directory</div>
           <div class="section-sub">Approved residents database and records.</div>
           <div id="residents-list">Loading residents directory...</div>
-        `;
-      } else {
-        return `
-          <div class="section-title">My Resident Biodata</div>
-          <div class="section-sub">Your registered society details on file.</div>
-          
-          <div class="card" style="cursor:default; padding:20px;">
-            <div style="font-weight:700; font-size:18px; color:var(--accent-2); margin-bottom:12px;">${escapeHtml(currentUserProfile.name)}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>House / Plot:</strong> ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>CNIC:</strong> ${escapeHtml(currentUserProfile.cnic || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Phone:</strong> ${escapeHtml(currentUserProfile.phone || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Email:</strong> ${escapeHtml(currentUserProfile.email || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Blood Group:</strong> ${escapeHtml(currentUserProfile.bloodGroup || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Occupancy Type:</strong> ${escapeHtml(currentUserProfile.occupancyType || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft);">
-              <strong>Family / Dependents:</strong>
-              <div style="color:var(--text-muted); margin-top:4px; line-height:1.4;">${escapeHtml(currentUserProfile.familyDetails || 'N/A')}</div>
-            </div>
-            <button class="btn secondary block" onclick="openEditBiodataModal()" style="margin-top:16px;">Update Biodata</button>
-          </div>
         `;
       }
     }
@@ -1135,7 +1296,8 @@
         ['notices', '📢', 'Announcements'],
         ['biodata', '👥', 'Residents'],
         ['reports', '📊', 'Reports'],
-        ['archive', '🗄️', 'Audit & Archive']
+        ['archive', '🗄️', 'Audit & Archive'],
+        ['profile', '👤', 'Profile']
       ];
     }
     if (role === 'board') {
@@ -1149,7 +1311,8 @@
         ['expenses', '💸', 'Expenses'],
         ['reports', '📊', 'Reports'],
         ['biodata', '👥', 'Residents'],
-        ['archive', '🗄️', 'Audit & Archive']
+        ['archive', '🗄️', 'Audit & Archive'],
+        ['profile', '👤', 'Profile']
       ];
     }
     if (role === 'admin') {
@@ -1166,7 +1329,8 @@
         ['biodata', '👥', 'Residents'],
         ['approvals', '✅', 'Approvals'],
         ['board', '🏛️', 'Board Decisions'],
-        ['archive', '🗄️', 'Audit & Archive']
+        ['archive', '🗄️', 'Audit & Archive'],
+        ['profile', '👤', 'Profile']
       ];
     }
     return [
@@ -1177,7 +1341,7 @@
       ['funds', '💰', 'Funds'],
       ['volunteers', '🤝', 'Volunteer Programs'],
       ['reports', '📊', 'Reports'],
-      ['biodata', '👤', 'Profile']
+      ['profile', '👤', 'Profile']
     ];
   }
 
@@ -1880,13 +2044,13 @@
           <option value="Tenant" ${currentUserProfile.occupancyType==='Tenant'?'selected':''}>Tenant</option>
         </select>
 
-        <label>Family Members / Dependents Details</label>
-        <textarea id="edit-bio-family" required>${escapeHtml(currentUserProfile.familyDetails || '')}</textarea>
+        <div id="edit-family-sect"></div>
 
         <button type="submit" class="btn primary block" style="margin-top:16px;">Save Changes</button>
       </form>
     `;
     document.getElementById('modal-view').classList.add('active');
+    initFamilySection('edit-family-sect', currentUserProfile.family, currentUserProfile.otherDependents);
 
     document.getElementById('edit-bio-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1896,15 +2060,20 @@
       const house = document.getElementById('edit-bio-house').value.trim();
       const bloodGroup = document.getElementById('edit-bio-blood').value;
       const occupancyType = document.getElementById('edit-bio-occupancy').value;
-      const familyDetails = document.getElementById('edit-bio-family').value.trim();
+
+      let fam;
+      try { fam = collectFamilySection('edit-family-sect'); }
+      catch(err) { alert(err.message); return; }
 
       try {
         await db.collection('users').doc(auth.currentUser.uid).update({
-          name, cnic, phone, house, bloodGroup, occupancyType, familyDetails
+          name, cnic, phone, house, bloodGroup, occupancyType,
+          family: fam.family, otherDependents: fam.otherDependents, familyDetails: fam.familyDetails
         });
         currentUserProfile = {
           ...currentUserProfile,
-          name, cnic, phone, house, bloodGroup, occupancyType, familyDetails
+          name, cnic, phone, house, bloodGroup, occupancyType,
+          family: fam.family, otherDependents: fam.otherDependents, familyDetails: fam.familyDetails
         };
         closeModal();
         render();
