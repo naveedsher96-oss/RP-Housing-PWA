@@ -295,6 +295,9 @@
   let auth = null;
   let messaging = null;
 
+  // Web Push certificate key pair from Firebase Console → Project settings → Cloud Messaging → Web configuration.
+  const FCM_VAPID_KEY = '';
+
   try {
     if (typeof firebase !== 'undefined') {
       if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
@@ -439,7 +442,7 @@
     messaging.onMessage((payload) => {
       new Notification(payload.notification.title, {
         body: payload.notification.body,
-        icon: '/icon-192.png'
+        icon: 'icon-192.png'
       });
       loadNotifications();
     });
@@ -447,7 +450,10 @@
 
   function saveDeviceToken() {
     if (!messaging || !currentUserProfile || !auth.currentUser) return;
-    messaging.getToken().then((currentToken) => {
+    if (!FCM_VAPID_KEY) { console.log('FCM VAPID key not configured; push disabled.'); return; }
+    navigator.serviceWorker.register('firebase-messaging-sw.js')
+      .then(reg => messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg }))
+      .then((currentToken) => {
       if (currentToken && db) {
         db.collection('fcm_tokens').doc(auth.currentUser.uid).set({
           token: currentToken,
@@ -459,6 +465,87 @@
       }
     }).catch((err) => console.log('Push token registration error:', err));
   }
+
+  // --- BIOMETRIC (FINGERPRINT) SIGN-IN ---
+  // The saved login is encrypted with a non-extractable AES key kept in IndexedDB and is
+  // only used after the device's fingerprint/face check (WebAuthn platform authenticator).
+  function bufToB64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+  function b64ToBuf(b64) { return Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer; }
+  function bioSupported() { return !!(window.PublicKeyCredential && navigator.credentials && window.isSecureContext && window.crypto && crypto.subtle); }
+  function bioEnrolled() { try { return !!localStorage.getItem('bioCred'); } catch(_) { return false; } }
+
+  function bioDB() {
+    return new Promise((resolve, reject) => {
+      const rq = indexedDB.open('rphs-bio', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('keys');
+      rq.onsuccess = () => resolve(rq.result);
+      rq.onerror = () => reject(rq.error);
+    });
+  }
+  async function bioStoreKey(key) {
+    const d = await bioDB();
+    return new Promise((resolve, reject) => {
+      const tx = d.transaction('keys', 'readwrite');
+      tx.objectStore('keys').put(key, 'aes');
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function bioGetKey() {
+    const d = await bioDB();
+    return new Promise((resolve, reject) => {
+      const rq = d.transaction('keys').objectStore('keys').get('aes');
+      rq.onsuccess = () => resolve(rq.result || null);
+      rq.onerror = () => reject(rq.error);
+    });
+  }
+  async function bioDelKey() {
+    const d = await bioDB();
+    return new Promise((resolve) => {
+      const tx = d.transaction('keys', 'readwrite');
+      tx.objectStore('keys').delete('aes');
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+  }
+
+  async function enableBiometricSignIn(email, password) {
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: { name: 'Roshan Housing Society' },
+      user: { id: crypto.getRandomValues(new Uint8Array(16)), name: email, displayName: email },
+      pubKeyCredParams: [{ type:'public-key', alg:-7 }, { type:'public-key', alg:-257 }],
+      authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required' },
+      timeout: 60000
+    }});
+    const key = await crypto.subtle.generateKey({ name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify({ email, password })));
+    await bioStoreKey(key);
+    localStorage.setItem('bioCred', JSON.stringify({ id: bufToB64(cred.rawId), iv: bufToB64(iv), ct: bufToB64(ct) }));
+  }
+
+  async function biometricSignIn() {
+    const rec = JSON.parse(localStorage.getItem('bioCred'));
+    await navigator.credentials.get({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ type:'public-key', id: b64ToBuf(rec.id) }],
+      userVerification: 'required',
+      timeout: 60000
+    }});
+    const key = await bioGetKey();
+    if (!key) throw new Error('Fingerprint data is missing on this device. Please sign in with your password.');
+    const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv: b64ToBuf(rec.iv) }, key, b64ToBuf(rec.ct));
+    const { email, password } = JSON.parse(new TextDecoder().decode(pt));
+    await auth.signInWithEmailAndPassword(email, password);
+  }
+
+  window.disableBiometricSignIn = function() {
+    localStorage.removeItem('bioCred');
+    bioDelKey();
+    alert('Fingerprint sign-in disabled on this device.');
+    render();
+  };
 
   function render() {
     if (!auth || !auth.currentUser || !currentUserProfile) {
@@ -949,6 +1036,10 @@
           </button>
         </form>
 
+        ${(isLogin && bioSupported() && bioEnrolled()) ? `
+          <button type="button" class="btn secondary block" id="bio-signin-btn" style="margin-top:12px;">🔒 Sign in with Fingerprint</button>
+        ` : ''}
+
         ${isLogin ? `
           <div class="toggle-auth-mode" id="forgot-password-btn" style="margin-top:14px;">Forgot password?</div>
         ` : ''}
@@ -971,6 +1062,30 @@
         authMode = (authMode === 'login') ? 'register' : 'login';
         authMessage = null;
         renderOnboarding();
+      });
+    }
+
+    const bioBtn = document.getElementById('bio-signin-btn');
+    if (bioBtn) {
+      bioBtn.addEventListener('click', async () => {
+        bioBtn.disabled = true;
+        bioBtn.textContent = 'Waiting for fingerprint…';
+        try {
+          await biometricSignIn();
+        } catch(err) {
+          bioBtn.disabled = false;
+          bioBtn.textContent = '🔒 Sign in with Fingerprint';
+          if (err && (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found')) {
+            localStorage.removeItem('bioCred');
+            bioDelKey();
+            showAuthMessage('error', 'Your saved fingerprint login is out of date (password changed). Please sign in with your password to re-enable it.');
+            renderOnboarding();
+          } else if (err && err.name === 'NotAllowedError') {
+            showAuthMessage('info', 'Fingerprint sign-in was cancelled.');
+          } else {
+            showAuthMessage('error', friendlyAuthError(err));
+          }
+        }
       });
     }
 
@@ -1020,6 +1135,16 @@
           await auth.signInWithEmailAndPassword(email, password);
           authMessage = null;
           // Successful sign-in: onAuthStateChanged loads the profile and renders the app.
+          if (bioSupported() && !bioEnrolled()) {
+            setTimeout(async () => {
+              try {
+                if (confirm('Enable fingerprint sign-in on this device for faster access?')) {
+                  await enableBiometricSignIn(email, password);
+                  alert('Fingerprint sign-in enabled. Next time, tap "Sign in with Fingerprint".');
+                }
+              } catch(bioErr) { console.log('Biometric enrollment skipped:', bioErr); }
+            }, 900);
+          }
         } catch(err) {
           clearLoading();
           showAuthMessage('error', friendlyAuthError(err));
@@ -1240,6 +1365,7 @@
             <div style="color:var(--text-muted); margin-top:4px; line-height:1.4; white-space:pre-line;">${escapeHtml(currentUserProfile.familyDetails || 'N/A')}</div>
           </div>
           <button class="btn secondary block" onclick="openEditBiodataModal()" style="margin-top:16px;">Update Biodata</button>
+          ${(bioSupported() && bioEnrolled()) ? `<button class="btn secondary block" onclick="disableBiometricSignIn()" style="margin-top:10px;">Disable Fingerprint Sign-In</button>` : ''}
         </div>
       `;
     }
