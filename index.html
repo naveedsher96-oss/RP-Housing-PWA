@@ -1063,32 +1063,35 @@
       `;
     }
 
+    if (activeTab === 'profile') {
+      return `
+        <div class="section-title">My Profile</div>
+        <div class="section-sub">Your registered society details on file.</div>
+
+        <div class="card" style="cursor:default; padding:20px;">
+          <div style="font-weight:700; font-size:18px; color:var(--accent-2); margin-bottom:4px;">${escapeHtml(currentUserProfile.name)}</div>
+          <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px; text-transform:capitalize;">${escapeHtml(roleLabel())}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>House / Plot:</strong> ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>CNIC:</strong> ${escapeHtml(currentUserProfile.cnic || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>Phone:</strong> ${escapeHtml(currentUserProfile.phone || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>Email:</strong> ${escapeHtml(currentUserProfile.email || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>Blood Group:</strong> ${escapeHtml(currentUserProfile.bloodGroup || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-bottom:8px;"><strong>Occupancy Type:</strong> ${escapeHtml(currentUserProfile.occupancyType || 'N/A')}</div>
+          <div style="font-size:13.5px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft);">
+            <strong>Family / Dependents:</strong>
+            <div style="color:var(--text-muted); margin-top:4px; line-height:1.4;">${escapeHtml(currentUserProfile.familyDetails || 'N/A')}</div>
+          </div>
+          <button class="btn secondary block" onclick="openEditBiodataModal()" style="margin-top:16px;">Update Biodata</button>
+        </div>
+      `;
+    }
+
     if (activeTab === 'biodata') {
       if (isStaff()) {
         return `
           <div class="section-title">Residents Directory</div>
           <div class="section-sub">Approved residents database and records.</div>
           <div id="residents-list">Loading residents directory...</div>
-        `;
-      } else {
-        return `
-          <div class="section-title">My Resident Biodata</div>
-          <div class="section-sub">Your registered society details on file.</div>
-          
-          <div class="card" style="cursor:default; padding:20px;">
-            <div style="font-weight:700; font-size:18px; color:var(--accent-2); margin-bottom:12px;">${escapeHtml(currentUserProfile.name)}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>House / Plot:</strong> ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>CNIC:</strong> ${escapeHtml(currentUserProfile.cnic || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Phone:</strong> ${escapeHtml(currentUserProfile.phone || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Email:</strong> ${escapeHtml(currentUserProfile.email || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Blood Group:</strong> ${escapeHtml(currentUserProfile.bloodGroup || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-bottom:8px;"><strong>Occupancy Type:</strong> ${escapeHtml(currentUserProfile.occupancyType || 'N/A')}</div>
-            <div style="font-size:13.5px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft);">
-              <strong>Family / Dependents:</strong>
-              <div style="color:var(--text-muted); margin-top:4px; line-height:1.4;">${escapeHtml(currentUserProfile.familyDetails || 'N/A')}</div>
-            </div>
-            <button class="btn secondary block" onclick="openEditBiodataModal()" style="margin-top:16px;">Update Biodata</button>
-          </div>
         `;
       }
     }
@@ -1135,7 +1138,8 @@
         ['notices', '📢', 'Announcements'],
         ['biodata', '👥', 'Residents'],
         ['reports', '📊', 'Reports'],
-        ['archive', '🗄️', 'Audit & Archive']
+        ['archive', '🗄️', 'Audit & Archive'],
+        ['profile', '👤', 'Profile']
       ];
     }
     if (role === 'board') {
@@ -1149,7 +1153,8 @@
         ['expenses', '💸', 'Expenses'],
         ['reports', '📊', 'Reports'],
         ['biodata', '👥', 'Residents'],
-        ['archive', '🗄️', 'Audit & Archive']
+        ['archive', '🗄️', 'Audit & Archive'],
+        ['profile', '👤', 'Profile']
       ];
     }
     if (role === 'admin') {
@@ -1166,7 +1171,8 @@
         ['biodata', '👥', 'Residents'],
         ['approvals', '✅', 'Approvals'],
         ['board', '🏛️', 'Board Decisions'],
-        ['archive', '🗄️', 'Audit & Archive']
+        ['archive', '🗄️', 'Audit & Archive'],
+        ['profile', '👤', 'Profile']
       ];
     }
     return [
@@ -1177,7 +1183,7 @@
       ['funds', '💰', 'Funds'],
       ['volunteers', '🤝', 'Volunteer Programs'],
       ['reports', '📊', 'Reports'],
-      ['biodata', '👤', 'Profile']
+      ['profile', '👤', 'Profile']
     ];
   }
 
