@@ -102,9 +102,9 @@ service cloud.firestore {
       allow read: if isStaff()
         || (signedIn() && resource.data.uid == request.auth.uid)
         || (signedIn() && resource.data.status == 'verified');
-      // Residents submit their own (never pre-verified); admin can record verified cash entries
+      // Residents and staff submit their own (never pre-verified); admin can record verified cash entries
       allow create: if isAdmin()
-        || (isApprovedResident()
+        || ((isApprovedResident() || isStaff())
             && request.resource.data.uid == request.auth.uid
             && request.resource.data.status == 'submitted');
       allow update: if isAdmin(); // verify / reject
