@@ -2393,7 +2393,7 @@
                        <button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Invoice PDF</button>`
                     : `<button class="btn sm secondary" onclick="event.stopPropagation(); openBillDetailModal('${b.id}')">Proof Under Review</button>`)
                 : (isAdmin
-                    ? `<button class="btn sm primary" onclick="event.stopPropagation(); markBillPaid('${b.id}')">Mark Paid</button>
+                    ? `${b.uid === auth.currentUser.uid ? `<button class="btn sm primary" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">Upload Payment Proof</button>` : `<button class="btn sm primary" onclick="event.stopPropagation(); markBillPaid('${b.id}')">Mark Paid</button>`}
                        <button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Invoice PDF</button>`
                     : `<button class="btn sm primary" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">Upload Payment Proof</button>
                        <button class="btn sm secondary" onclick="event.stopPropagation(); payBill('${b.id}')">Pay Now</button>`)}
@@ -2488,7 +2488,7 @@
 
   window.openUploadProofModal = function(billId) {
     const b = billsList.find(item => item.id === billId);
-    if (!b || currentUserProfile.role === 'admin') return;
+    if (!b || b.uid !== auth.currentUser.uid) return;
 
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Upload Payment Proof</div>
@@ -2582,13 +2582,16 @@
   window.openIssueBillModal = async function() {
     if (currentUserProfile.role !== 'admin') return;
 
-    let residents = [];
+    let residents = [], staffMembers = [];
     try {
       const snap = await db.collection('users').where('approved', '==', true).get();
-      residents = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(r => r.role === 'resident');
+      const all = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(r => r.suspended !== true);
+      residents = all.filter(r => r.role === 'resident');
+      staffMembers = all.filter(r => r.role !== 'resident');
     } catch(e) {
       console.error("Error loading residents for billing:", e);
     }
+    const billables = [...residents, ...staffMembers];
 
     const today = new Date();
     const defaultPeriod = monthLabel(monthKey(today));
@@ -2600,6 +2603,7 @@
         <label>Resident / House</label>
         <select id="bill-resident" required>
           ${residents.map(r => `<option value="${escapeHtml(r.uid)}">${escapeHtml(r.name)} — ${escapeHtml(r.house || 'N/A')}</option>`).join('')}
+          ${staffMembers.map(r => `<option value="${escapeHtml(r.uid)}">${escapeHtml(r.name)} — ${escapeHtml(r.house || r.role)}${r.uid === auth.currentUser.uid ? ' (you)' : ''}</option>`).join('')}
           <option value="__all__">— All approved residents (bulk issue) —</option>
         </select>
 
@@ -2643,7 +2647,7 @@
         return;
       }
 
-      const targets = target === '__all__' ? residents : residents.filter(r => r.uid === target);
+      const targets = target === '__all__' ? residents : billables.filter(r => r.uid === target);
       if (!targets.length) {
         alert("No resident selected.");
         return;
@@ -2708,6 +2712,10 @@
       ${isAdmin && status === 'submitted' ? `
         <button class="btn primary block" onclick="approveBillProof('${b.id}')" style="margin-bottom:10px;">Approve Payment — Mark Paid</button>
         <button class="btn danger block" onclick="rejectBillProof('${b.id}')" style="margin-bottom:16px;">Reject Proof</button>
+      ` : ''}
+
+      ${isAdmin && b.uid === auth.currentUser.uid && (status === 'unpaid' || status === 'overdue') ? `
+        <button class="btn primary block" onclick="openUploadProofModal('${b.id}')" style="margin-bottom:10px;">Upload Payment Proof (Own Bill)</button>
       ` : ''}
 
       ${isAdmin ? `
@@ -3004,7 +3012,7 @@
         ${f.deadline ? `<div style="display:flex; justify-content:space-between;"><span style="font-size:13px; color:var(--text-muted);">Deadline</span><span style="font-size:13.5px;">${escapeHtml(formatDate(f.deadline))}</span></div>` : ''}
       </div>
 
-      ${status === 'active' && currentUserProfile.role === 'resident' ? `
+      ${status === 'active' ? `
         <form id="contrib-form" style="margin-bottom:16px;">
           <label>Contribute — Amount (PKR)</label>
           <input type="number" id="contrib-amount" placeholder="e.g. 2000" required min="1" />
@@ -3102,7 +3110,7 @@
     let residents = [];
     try {
       const snap = await db.collection('users').where('approved', '==', true).get();
-      residents = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(r => r.role === 'resident');
+      residents = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(r => r.suspended !== true);
     } catch(e) {
       console.error("Error loading residents:", e);
     }
@@ -3113,7 +3121,7 @@
       <form id="record-contrib-form">
         <label>Resident</label>
         <select id="record-contrib-resident" required>
-          ${residents.map(r => `<option value="${escapeHtml(r.uid)}">${escapeHtml(r.name)} — ${escapeHtml(r.house || 'N/A')}</option>`).join('')}
+          ${residents.map(r => `<option value="${escapeHtml(r.uid)}">${escapeHtml(r.name)} — ${escapeHtml(r.house || r.role)}${r.uid === auth.currentUser.uid ? ' (you)' : ''}</option>`).join('')}
         </select>
         <label>Amount (PKR)</label>
         <input type="number" id="record-contrib-amount" placeholder="e.g. 5000" required min="1" />
