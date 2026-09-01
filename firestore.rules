@@ -67,7 +67,7 @@ service cloud.firestore {
 
     // ---------- tickets (complaints) ----------
     match /tickets/{id} {
-      allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow read: if isStaff() || isApprovedResident() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if isApprovedResident() && request.resource.data.uid == request.auth.uid;
       allow update: if isAdmin(); // status changes / archive
       allow delete: if false;    // soft delete only
@@ -75,7 +75,7 @@ service cloud.firestore {
 
     // ---------- bills ----------
     match /bills/{id} {
-      allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow read: if isStaff() || isApprovedResident() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if isAdmin();
       // Admin may update anything; the billed resident may only submit payment proof
       allow update: if isAdmin()

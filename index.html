@@ -1215,6 +1215,14 @@
       `;
     }
 
+    if (activeTab === 'dashboard' && currentUserProfile.role === 'resident') {
+      return `
+        <div class="section-title">Community Dashboard</div>
+        <div class="section-sub">An overview of the society's finances and activity.</div>
+        <div id="dashboard-body">Loading dashboard...</div>
+      `;
+    }
+
     if (activeTab === 'notices') {
       return `
         <div class="section-title">
@@ -1460,6 +1468,7 @@
       ];
     }
     return [
+      ['dashboard', '📈', 'Dashboard'],
       ['notices', '📢', 'Announcements'],
       ['polls', '🗳️', 'Polls'],
       ['tickets', '🛠️', 'Complaints'],
@@ -1475,6 +1484,7 @@
     loadNotifications();
     const isAdmin = currentUserProfile.role === 'admin';
     if (activeTab === 'dashboard' && isStaff()) loadDashboard();
+    if (activeTab === 'dashboard' && currentUserProfile.role === 'resident') loadResidentDashboard();
     if (activeTab === 'notices') loadNotices();
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'tickets') loadTickets();
@@ -3387,6 +3397,81 @@
       <div class="card" style="cursor:default;">
         <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Spending by Category</div>
         ${svgDonut(spendSegs, 'Spent', 'PKR ' + Math.round(spentTotal / 1000) + 'k')}
+      </div>
+    `;
+  }
+
+  function loadResidentDashboard() {
+    if (!db || !auth.currentUser || currentUserProfile.role !== 'resident') return;
+    Promise.all([
+      db.collection('bills').get(),
+      db.collection('fund_contributions').where('status', '==', 'verified').get(),
+      db.collection('expenses').get(),
+      db.collection('tickets').get()
+    ]).then(([billsSnap, contribsSnap, expSnap, ticketsSnap]) => {
+      const bills = billsSnap.docs.map(d => d.data()).filter(b => !b.isDeleted);
+      const contribs = contribsSnap.docs.map(d => d.data()).filter(c => !c.isDeleted);
+      const expenses = expSnap.docs.map(d => d.data()).filter(x => !x.isDeleted);
+      const tickets = ticketsSnap.docs.map(d => d.data()).filter(t => !t.isDeleted);
+      renderResidentDashboard({ bills, contribs, expenses, tickets });
+    }).catch(e => {
+      console.error("Error loading dashboard:", e);
+      const el = document.getElementById('dashboard-body');
+      if (el) el.innerHTML = `<div class="card" style="cursor:default; color:var(--danger);">Could not load dashboard data: ${escapeHtml(e.message)}</div>`;
+    });
+  }
+
+  function renderResidentDashboard(d) {
+    const el = document.getElementById('dashboard-body');
+    if (!el) return;
+
+    const paidBills = d.bills.filter(b => b.status === 'paid');
+    const unpaidBills = d.bills.filter(b => b.status === 'unpaid');
+    const inReviewBills = d.bills.filter(b => b.status === 'submitted');
+    const billed = d.bills.reduce((s, b) => s + Number(b.amount || 0), 0);
+    const collectedBills = paidBills.reduce((s, b) => s + Number(b.amount || 0), 0);
+    const contribTotal = d.contribs.reduce((s, c) => s + Number(c.amount || 0), 0);
+    const spentTotal = d.expenses.reduce((s, x) => s + Number(x.amount || 0), 0);
+    const openTickets = d.tickets.filter(t => ['pending', 'in-progress'].includes(t.status)).length;
+
+    // last 6 months expenses
+    const months = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0'), label: dt.toLocaleString('en', { month: 'short' }), value: 0 });
+    }
+    d.expenses.forEach(x => {
+      const key = String(x.expenseDate || '').slice(0, 7);
+      const m = months.find(mm => mm.key === key);
+      if (m) m.value += Number(x.amount || 0);
+    });
+
+    const stat = (label, value, color) => `
+      <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px;">
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">${label}</div>
+        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:${color || 'var(--text)'};">${value}</div>
+      </div>`;
+
+    el.innerHTML = `
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+        ${stat('Open Complaints', openTickets, openTickets ? 'var(--info)' : 'var(--text)')}
+        ${stat('Total Collected', formatMoney(collectedBills + contribTotal), 'var(--success)')}
+        ${stat('Total Spent', formatMoney(spentTotal), 'var(--danger)')}
+      </div>
+
+      <div class="card" style="cursor:default; margin-bottom:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Monthly Expenses — last 6 months</div>
+        ${svgBars(months)}
+      </div>
+
+      <div class="card" style="cursor:default;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Maintenance Bills</div>
+        ${svgDonut([
+          { label: 'Paid', value: paidBills.length, money: false },
+          { label: 'Unpaid', value: unpaidBills.length, money: false },
+          { label: 'In Review', value: inReviewBills.length, money: false }
+        ].filter(s => s.value > 0), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
       </div>
     `;
   }
