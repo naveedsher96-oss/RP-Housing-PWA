@@ -37,9 +37,9 @@ service cloud.firestore {
 
       // Self-update: cannot escalate role or self-approve/unsuspend
       allow update: if (isOwner(uid)
-          && request.resource.data.role == resource.data.role
-          && request.resource.data.approved == resource.data.approved
-          && request.resource.data.suspended == resource.data.suspended)
+          && request.resource.data.get('role', '') == resource.data.get('role', '')
+          && request.resource.data.get('approved', false) == resource.data.get('approved', false)
+          && request.resource.data.get('suspended', false) == resource.data.get('suspended', false))
         || isAdmin();
 
       // No hard deletes of user records (soft policy)
