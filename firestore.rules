@@ -123,7 +123,7 @@ service cloud.firestore {
 
     // ---------- board decisions & votes ----------
     match /decisions/{id} {
-      allow read: if isStaff();
+      allow read: if isStaff() || isBoard();
       allow create: if isAdmin();
       // Board members vote; admin may maintain records. Status/votes integrity is
       // enforced app-side; board members cannot create or delete decisions.
