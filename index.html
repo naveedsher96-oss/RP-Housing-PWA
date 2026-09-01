@@ -1471,6 +1471,7 @@
     }
     return [
       ['dashboard', '📈', 'Dashboard'],
+      ...(isBoard() ? [['board', '🏛️', 'Board Votes']] : []),
       ['notices', '📢', 'Announcements'],
       ['polls', '🗳️', 'Polls'],
       ['tickets', '🛠️', 'Complaints'],
