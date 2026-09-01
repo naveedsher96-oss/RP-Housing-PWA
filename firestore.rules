@@ -12,6 +12,9 @@ service cloud.firestore {
     function isAdmin() {
       return signedIn() && me().role == 'admin';
     }
+    function isSuperAdmin() {
+      return signedIn() && (me().role == 'superadmin' || me().superAdmin == true);
+    }
     function isBoard() {
       return signedIn() && (me().role == 'board' || me().boardMember == true);
     }
@@ -40,7 +43,7 @@ service cloud.firestore {
           && request.resource.data.get('role', '') == resource.data.get('role', '')
           && request.resource.data.get('approved', false) == resource.data.get('approved', false)
           && request.resource.data.get('suspended', false) == resource.data.get('suspended', false))
-        || isAdmin();
+        || isAdmin() || isSuperAdmin();
 
       // No hard deletes of user records (soft policy)
       allow delete: if false;
