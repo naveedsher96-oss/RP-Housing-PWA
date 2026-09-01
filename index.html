@@ -1428,6 +1428,7 @@
     if (role === 'superadmin') {
       return [
         ['notices', '📢', 'Announcements'],
+        ['board', '🏛️', 'Board Decisions'],
         ['biodata', '👥', 'Residents'],
         ['reports', '📊', 'Reports'],
         ['archive', '🗄️', 'Audit & Archive'],
@@ -1493,7 +1494,7 @@
     if (activeTab === 'expenses' && isStaff()) loadExpenses();
     if (activeTab === 'reports') loadReportsData();
     if (activeTab === 'volunteers') loadVolunteers();
-    if (activeTab === 'board' && (isAdmin || isBoard())) loadDecisions();
+    if (activeTab === 'board' && (isAdmin || isBoard() || isSuperAdmin())) loadDecisions();
     if (activeTab === 'archive' && isStaff()) loadArchiveAndAudit();
     if (activeTab === 'biodata' && isStaff()) loadAllResidents();
     if (activeTab === 'approvals' && isAdmin) loadPendingResidents();
@@ -3974,11 +3975,31 @@
             </div>
           ` : ''}
           ${status === 'pending' && isBoard() && myVote ? `<div style="font-size:12px; color:var(--info);">You voted: ${myVote.choice === 'endorse' ? 'Endorse' : 'Oppose'}. Waiting for quorum.</div>` : ''}
+          ${status === 'pending' && !isBoard() ? `<div style="font-size:12px; color:var(--text-faint);">Only Board members can vote on this item.</div>` : ''}
           ${d.finalizedAt ? `<div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Finalized ${escapeHtml(formatDate(d.finalizedAt))}</div>` : ''}
+          ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" style="margin-top:8px;" onclick="archiveDecision('${d.id}')">Remove</button>` : ''}
         </div>
       `;
     }).join('');
   }
+
+  window.archiveDecision = async function(decisionId) {
+    if (currentUserProfile.role !== 'admin') return;
+    const d = decisionsList.find(item => item.id === decisionId);
+    if (!d) return;
+    if (!confirm(`Remove "${d.title || 'this item'}" from the Board queue? It will be archived.`)) return;
+    try {
+      await db.collection('decisions').doc(decisionId).update({
+        isDeleted: true,
+        deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        deletedBy: currentUserProfile.name
+      });
+      logAudit('decision', decisionId, 'archive', `Removed from Board queue: ${d.title || ''}`);
+      loadDecisions();
+    } catch(err) {
+      alert("Error removing item: " + err.message);
+    }
+  };
 
   window.openCreateDecisionModal = function() {
     if (currentUserProfile.role !== 'admin') return;
