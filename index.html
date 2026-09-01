@@ -1388,7 +1388,7 @@
       }
     }
 
-    if (activeTab === 'approvals' && isAdmin) {
+    if (activeTab === 'approvals' && (isAdmin || isSuperAdmin())) {
       return `
         <div class="section-title">Resident Approvals</div>
         <div class="section-sub">Authorize or reject pending resident registrations.</div>
@@ -1428,6 +1428,7 @@
     if (role === 'superadmin') {
       return [
         ['notices', '📢', 'Announcements'],
+        ['approvals', '✅', 'Approvals'],
         ['board', '🏛️', 'Board Decisions'],
         ['biodata', '👥', 'Residents'],
         ['reports', '📊', 'Reports'],
@@ -1497,7 +1498,7 @@
     if (activeTab === 'board' && (isAdmin || isBoard() || isSuperAdmin())) loadDecisions();
     if (activeTab === 'archive' && isStaff()) loadArchiveAndAudit();
     if (activeTab === 'biodata' && isStaff()) loadAllResidents();
-    if (activeTab === 'approvals' && isAdmin) loadPendingResidents();
+    if (activeTab === 'approvals' && (isAdmin || isSuperAdmin())) loadPendingResidents();
   }
 
   // --- SUBCOLLECTION NOTIFICATION SYSTEM ---
@@ -4339,19 +4340,6 @@
   window.approveUser = async function(uid) {
     const r = pendingResidents.find(item => item.uid === uid);
     try {
-      const boardCount = await getBoardMembersCount();
-      if (boardCount >= 3) {
-        if (await hasPendingDecision('membership', uid)) { alert("This membership is already awaiting a Board vote."); return; }
-        await createDecision({
-          type: 'membership',
-          refUid: uid,
-          title: `Membership: ${r ? r.name : uid}`,
-          description: `Approve or reject the membership application of ${r ? r.name : ''} (House ${r ? (r.house || 'N/A') : 'N/A'}, ${r ? (r.email || '') : ''}). A reason is mandatory with each vote.`
-        });
-        alert("Sent to the Board for a 3-of-5 vote. The applicant will be notified once the Board decides.");
-        loadPendingResidents();
-        return;
-      }
       const reason = prompt("Reason for approving this membership (required):");
       if (reason === null) return;
       if (!reason.trim()) { alert("A reason is required for every membership decision."); return; }
@@ -4365,19 +4353,6 @@
   window.rejectUser = async function(uid) {
     const r = pendingResidents.find(item => item.uid === uid);
     try {
-      const boardCount = await getBoardMembersCount();
-      if (boardCount >= 3) {
-        if (await hasPendingDecision('membership', uid)) { alert("This membership is already awaiting a Board vote."); return; }
-        await createDecision({
-          type: 'membership',
-          refUid: uid,
-          title: `Membership: ${r ? r.name : uid}`,
-          description: `Approve or reject the membership application of ${r ? r.name : ''} (House ${r ? (r.house || 'N/A') : 'N/A'}, ${r ? (r.email || '') : ''}). A reason is mandatory with each vote.`
-        });
-        alert("Sent to the Board for a 3-of-5 vote.");
-        loadPendingResidents();
-        return;
-      }
       const reason = prompt("Reason for rejecting this membership (required):");
       if (reason === null) return;
       if (!reason.trim()) { alert("A reason is required for every membership decision."); return; }
