@@ -9,20 +9,25 @@ service cloud.firestore {
     function me() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
+    // Missing fields raise an error in rules (which fails the whole rule),
+    // so every profile field is read via get() with a default.
     function isAdmin() {
-      return signedIn() && me().role == 'admin';
+      return signedIn() && me().get('role', '') == 'admin';
     }
     function isSuperAdmin() {
-      return signedIn() && (me().role == 'superadmin' || me().superAdmin == true);
+      return signedIn() && (me().get('role', '') == 'superadmin' || me().get('superAdmin', false) == true);
     }
     function isBoard() {
-      return signedIn() && (me().role == 'board' || me().boardMember == true);
+      return signedIn() && (me().get('role', '') == 'board' || me().get('boardMember', false) == true);
     }
     function isStaff() {
-      return signedIn() && me().role in ['admin', 'board', 'superadmin'];
+      return signedIn() && me().get('role', '') in ['admin', 'board', 'superadmin'];
     }
     function isApprovedResident() {
-      return signedIn() && me().role == 'resident' && me().approved == true && me().suspended != true;
+      return signedIn()
+        && me().get('role', '') == 'resident'
+        && me().get('approved', false) == true
+        && me().get('suspended', false) != true;
     }
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
