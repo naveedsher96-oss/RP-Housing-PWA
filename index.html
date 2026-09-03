@@ -4378,11 +4378,8 @@
   window.approveUser = async function(uid) {
     const r = pendingResidents.find(item => item.uid === uid);
     try {
-      const reason = prompt("Reason for approving this membership (required):");
-      if (reason === null) return;
-      if (!reason.trim()) { alert("A reason is required for every membership decision."); return; }
-      await db.collection('users').doc(uid).update({ approved: true, membershipStatus: 'approved', statusReason: reason.trim() });
-      logAudit('member', uid, 'update', `Membership approved: ${r ? r.name : uid} — ${reason.trim()}`);
+      await db.collection('users').doc(uid).update({ approved: true, membershipStatus: 'approved', statusReason: '' });
+      logAudit('member', uid, 'update', `Membership approved: ${r ? r.name : uid}`);
       await sendNotification(uid, "Account Approved", "Your account has been approved! You can now access your portal.", "success");
       loadPendingResidents();
     } catch(e) { alert("Error approving user: " + e.message); }
@@ -4391,12 +4388,12 @@
   window.rejectUser = async function(uid) {
     const r = pendingResidents.find(item => item.uid === uid);
     try {
-      const reason = prompt("Reason for rejecting this membership (required):");
+      const reason = prompt("Reason for rejecting (optional):");
       if (reason === null) return;
-      if (!reason.trim()) { alert("A reason is required for every membership decision."); return; }
-      await db.collection('users').doc(uid).update({ approved: false, membershipStatus: 'rejected', statusReason: reason.trim() });
-      logAudit('member', uid, 'update', `Membership rejected: ${r ? r.name : uid} — ${reason.trim()}`);
-      await sendNotification(uid, "Membership Decision", `Your membership application was not approved. Reason: ${reason.trim()}`, "error");
+      const note = reason.trim();
+      await db.collection('users').doc(uid).update({ approved: false, membershipStatus: 'rejected', statusReason: note });
+      logAudit('member', uid, 'update', `Membership rejected: ${r ? r.name : uid}${note ? ' — ' + note : ''}`);
+      await sendNotification(uid, "Membership Decision", `Your membership application was not approved.${note ? ' Reason: ' + note : ''}`, "error");
       loadPendingResidents();
     } catch(e) { alert("Error rejecting user: " + e.message); }
   };
