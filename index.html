@@ -253,11 +253,22 @@
   .fam-member input[type=checkbox]{width:18px; height:18px; accent-color:var(--accent); margin:0;}
   .fam-grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .fam-add-btn{background:none; border:1px dashed var(--accent); color:var(--accent); border-radius:10px; padding:9px; width:100%; font-size:13px; font-weight:600; margin-top:10px; cursor:pointer;}
+  .boot-wrap{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 24px; text-align:center;}
+  .boot-spinner{width:34px; height:34px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:boot-spin .9s linear infinite; margin:22px auto 0;}
+  @keyframes boot-spin{to{transform:rotate(360deg);}}
+  .boot-msg{font-size:13.5px; color:var(--text-muted); margin-top:14px; max-width:320px; line-height:1.5;}
 </style>
 </head>
 <body>
 
-<div id="app"></div>
+<div id="app">
+  <div class="boot-wrap">
+    <span style="display:inline-block; background:#FDFDF8; border-radius:20px; padding:14px 20px; box-shadow:0 6px 24px rgba(0,0,0,0.35);"><img src="logo.png" alt="Roshan Pakistan" style="width:110px; max-width:40vw; height:auto; display:block;" onerror="this.parentElement.style.display='none'" /></span>
+    <div class="onboard-title" style="margin-top:18px;">Roshan Housing Society</div>
+    <div class="boot-spinner"></div>
+    <div class="boot-msg" id="boot-msg">Loading…</div>
+  </div>
+</div>
 
 <!-- Modal Container -->
 <div id="modal-view" class="modal-overlay">
@@ -294,12 +305,28 @@
   let db = null;
   let auth = null;
   let messaging = null;
+  let initialRenderDone = false;
 
   // Web Push certificate key pair from Firebase Console → Project settings → Cloud Messaging → Web configuration.
   const FCM_VAPID_KEY = 'BPowhgKlPnW9Z-SKzoNRj-pbW7Q3P0oufZYePF3daGZ187M1umpFb211xzTNPUrgg8yNuhBvbKij65bIWBaRICM';
 
+  const BOOT_TIMEOUT_MS = 12000;
+
+  function renderBootError(message) {
+    initialRenderDone = true;
+    document.getElementById('app').innerHTML = `
+      <div class="boot-wrap">
+        <span style="display:inline-block; background:#FDFDF8; border-radius:20px; padding:14px 20px; box-shadow:0 6px 24px rgba(0,0,0,0.35);"><img src="logo.png" alt="Roshan Pakistan" style="width:110px; max-width:40vw; height:auto; display:block;" onerror="this.parentElement.style.display='none'" /></span>
+        <div class="onboard-title" style="margin-top:18px;">Roshan Housing Society</div>
+        <div class="auth-msg error" style="margin-top:18px; max-width:360px;">${escapeHtml(message)}</div>
+        <button class="btn primary" style="margin-top:16px;" onclick="location.reload()">Retry</button>
+      </div>`;
+  }
+
   try {
-    if (typeof firebase !== 'undefined') {
+    if (typeof firebase === 'undefined') {
+      renderBootError('Could not load the app. Please check your internet connection and try again.');
+    } else {
       if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
       db = firebase.firestore();
       auth = firebase.auth();
@@ -313,6 +340,7 @@
     }
   } catch(e) {
     console.error("Firebase Init Error:", e);
+    renderBootError('Could not start the app. Please check your internet connection and try again.');
   }
 
   // Application State Variables
@@ -432,6 +460,14 @@
       }
       render();
     });
+
+    // Never leave the user on a blank/loading screen: if the auth state has not
+    // resolved in time (slow or blocked network), fall through to the sign-in screen.
+    setTimeout(() => {
+      if (initialRenderDone) return;
+      authMessage = { type: 'info', text: 'Connection is slow. Please check your internet and sign in again.' };
+      render();
+    }, BOOT_TIMEOUT_MS);
   }
 
   function initPushMessaging() {
@@ -548,6 +584,7 @@
   };
 
   function render() {
+    initialRenderDone = true;
     if (!auth || !auth.currentUser || !currentUserProfile) {
       renderOnboarding();
       return;
