@@ -3635,9 +3635,11 @@
   }
 
   // --- EXPENSES (STAFF) ---
-  function loadExpenses() {
-    if (!db || !isStaff()) return;
-    Promise.all([
+  // Fetches expenses plus everything needed to compute source balances
+  // (paid bills, funds, verified contributions) and stores them in
+  // expensesList / expenseSources.
+  function fetchExpenseData() {
+    return Promise.all([
       db.collection('expenses').get(),
       db.collection('bills').get(),
       db.collection('funds').get(),
@@ -3652,8 +3654,14 @@
         funds: fundsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => !f.isDeleted),
         contribs: contribsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isDeleted)
       };
-      renderExpensesList();
-    }).catch(e => { console.error("Error loading expenses:", e); showLoadError('expenses-list', e); });
+    });
+  }
+
+  function loadExpenses() {
+    if (!db || !isStaff()) return;
+    fetchExpenseData()
+      .then(renderExpensesList)
+      .catch(e => { console.error("Error loading expenses:", e); showLoadError('expenses-list', e); });
   }
 
   function renderExpensesList() {
@@ -3700,15 +3708,39 @@
     `).join('');
   }
 
-  window.openAddExpenseModal = function() {
+  window.openAddExpenseModal = async function() {
     if (currentUserProfile.role !== 'admin') return;
+    const modalBody = document.getElementById('modal-body');
+    modalBody.innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Add Expense</div>
+      <div style="color:var(--text-muted); font-size:13.5px;">Loading account balances…</div>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    // Always read fresh balances so the Pay From list reflects the latest
+    // verified bills / contributions, even if the tab was opened a while ago.
+    try {
+      await fetchExpenseData();
+    } catch (err) {
+      console.error("Error loading expense sources:", err);
+      modalBody.innerHTML = `
+        <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Add Expense</div>
+        <div class="card" style="cursor:default; color:var(--danger);">Could not load account balances: ${escapeHtml(err.message || String(err))}</div>
+        <button class="btn secondary block" style="margin-top:12px;" onclick="openAddExpenseModal()">Retry</button>
+      `;
+      return;
+    }
+    if (!document.getElementById('modal-view').classList.contains('active')) return;
+    renderExpensesList();
+
     const billsAcct = billsAccountSummary(expenseSources.bills, expensesList);
-    const fundOptions = expenseSources.funds
+    const fundRows = expenseSources.funds
       .map(f => ({ f, s: fundSummary(f.id, expenseSources.contribs, expensesList) }))
-      .filter(({ f, s }) => (f.status || 'active') === 'active' || s.balance > 0)
-      .map(({ f, s }) => `<option value="fund:${f.id}">Fund: ${escapeHtml(f.title || 'Fund')} — balance ${formatMoney(s.balance)}</option>`)
+      .sort((a, b) => b.s.balance - a.s.balance);
+    const fundOptions = fundRows
+      .map(({ f, s }) => `<option value="fund:${f.id}">Fund: ${escapeHtml(f.title || 'Fund')}${(f.status || 'active') !== 'active' ? ' (closed)' : ''} — balance ${formatMoney(s.balance)}</option>`)
       .join('');
-    document.getElementById('modal-body').innerHTML = `
+    modalBody.innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Add Expense</div>
       <form id="expense-form">
         <label>Pay From</label>
@@ -3716,7 +3748,10 @@
           <option value="bills">Bills account — balance ${formatMoney(billsAcct.balance)}</option>
           ${fundOptions}
         </select>
-        <div style="font-size:11.5px; color:var(--text-faint); margin:-6px 0 10px;">Bills account = all verified maintenance bill payments. Fund = money raised for that specific fund.</div>
+        <div style="font-size:11.5px; color:var(--text-faint); margin:-6px 0 10px;">
+          Bills account = ${formatMoney(billsAcct.collected)} from ${expenseSources.bills.filter(b => b.status === 'paid').length} paid bill(s) minus ${formatMoney(billsAcct.spent)} spent.
+          ${fundRows.length ? `${fundRows.length} fund(s) listed — each shows verified contributions minus spending from that fund.` : 'No community funds found — start one in the Funds tab to spend from it.'}
+        </div>
         <label>Category</label>
         <select id="exp-category" required>
           ${EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
