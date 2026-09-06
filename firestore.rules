@@ -74,6 +74,23 @@ service cloud.firestore {
       allow create: if canPublish()
         && request.resource.data.get('createdBy', '') == request.auth.uid;
       allow update, delete: if isAdmin() || isSuperAdmin() || ownsPost();
+
+      // Resident comments on an announcement. Approved residents, staff and
+      // board members may comment (as themselves); a comment can be removed by
+      // its author, admin/superadmin, or the board member who posted the notice.
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if (isApprovedResident() || isStaff() || isBoard())
+          && request.resource.data.get('uid', '') == request.auth.uid
+          && request.resource.data.get('text', '') is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && get(/databases/$(database)/documents/announcements/$(id)).data.get('allowComments', true) == true;
+        allow update: if false;
+        allow delete: if isAdmin() || isSuperAdmin()
+          || (signedIn() && resource.data.get('uid', '') == request.auth.uid)
+          || (isBoard() && get(/databases/$(database)/documents/announcements/$(id)).data.get('createdBy', '') == request.auth.uid);
+      }
     }
 
     // ---------- polls ----------
