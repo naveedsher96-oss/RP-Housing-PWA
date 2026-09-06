@@ -1264,7 +1264,7 @@
       return `
         <div class="section-title">
           Announcements
-          ${isAdmin ? '<button class="btn sm primary" onclick="openPostNoticeModal()">+ New Notice</button>' : ''}
+          ${canPublish() ? '<button class="btn sm primary" onclick="openPostNoticeModal()">+ New Notice</button>' : ''}
         </div>
         <div class="section-sub">Official community news and circulars.</div>
         <div id="notices-list">Loading announcements...</div>
@@ -1275,7 +1275,7 @@
       return `
         <div class="section-title">
           Community Polls
-          ${isAdmin ? '<button class="btn sm primary" onclick="openCreatePollModal()">+ New Poll</button>' : ''}
+          ${canPublish() ? '<button class="btn sm primary" onclick="openCreatePollModal()">+ New Poll</button>' : ''}
         </div>
         <div class="section-sub">Vote on society decisions and proposals.</div>
         <div id="polls-list">Loading polls...</div>
@@ -1465,6 +1465,7 @@
     if (role === 'superadmin') {
       return [
         ['notices', '📢', 'Announcements'],
+        ['polls', '🗳️', 'Polls'],
         ['approvals', '✅', 'Approvals'],
         ['board', '🏛️', 'Board Decisions'],
         ['biodata', '👥', 'Residents'],
@@ -1647,9 +1648,34 @@
     }
   }
 
+  // Announcements and polls: admin, superadmin and board members may publish.
+  // Admin/superadmin may delete any; a board member may delete their own posts.
+  function canPublish() {
+    return !!currentUserProfile
+      && (currentUserProfile.role === 'admin' || isSuperAdmin() || isBoard());
+  }
+
+  function canDeletePost(doc) {
+    if (!currentUserProfile || !doc) return false;
+    if (currentUserProfile.role === 'admin' || isSuperAdmin()) return true;
+    return isBoard() && !!auth.currentUser && doc.createdBy === auth.currentUser.uid;
+  }
+
+  function publisherFields() {
+    return {
+      createdBy: auth.currentUser.uid,
+      createdByName: currentUserProfile.name || '',
+      createdByRole: isBoard() && currentUserProfile.role !== 'admin' && !isSuperAdmin() ? 'board' : 'management'
+    };
+  }
+
+  function postedByLabel(doc) {
+    return doc.createdByRole === 'board' ? 'Posted by Board' : 'Posted by Management';
+  }
+
   window.deleteNotice = async function(id) {
-    if (currentUserProfile.role !== 'admin') return;
     const n = noticesList.find(item => item.id === id);
+    if (!canDeletePost(n)) return;
     if (!confirm(`Delete the announcement "${n ? n.title : ''}" permanently?`)) return;
     try {
       await db.collection('announcements').doc(id).delete();
@@ -1657,6 +1683,19 @@
       loadNotices();
     } catch(err) {
       alert("Error deleting announcement: " + err.message);
+    }
+  };
+
+  window.deletePoll = async function(id) {
+    const p = pollsList.find(item => item.id === id);
+    if (!canDeletePost(p)) return;
+    if (!confirm(`Delete the poll "${p ? p.question : ''}" permanently? All votes will be lost.`)) return;
+    try {
+      await db.collection('polls').doc(id).delete();
+      logAudit('poll', id, 'update', `Poll "${p ? p.question : ''}" permanently deleted`);
+      loadPolls();
+    } catch(err) {
+      alert("Error deleting poll: " + err.message);
     }
   };
 
@@ -1689,7 +1728,6 @@
   function renderNoticesList() {
     const listEl = document.getElementById('notices-list');
     if (!listEl) return;
-    const isAdmin = currentUserProfile.role === 'admin';
     if (!noticesList.length) {
       listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No announcements posted yet.</div>';
       return;
@@ -1702,8 +1740,8 @@
           <span class="badge notice">Notice</span>
         </div>
         <div style="font-size:13.5px; color:var(--text); line-height:1.5; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
-        <div style="font-size:11px; color:var(--text-faint; margin-top:10px;">Posted by Management</div>
-        ${isAdmin ? `<button class="btn sm danger" style="margin-top:12px;" onclick="deleteNotice('${n.id}')">Delete</button>` : ''}
+        <div style="font-size:11px; color:var(--text-faint); margin-top:10px;">${postedByLabel(n)}</div>
+        ${canDeletePost(n) ? `<button class="btn sm danger" style="margin-top:12px;" onclick="deleteNotice('${n.id}')">Delete</button>` : ''}
       </div>
     `).join('');
   }
@@ -1730,6 +1768,7 @@
         await db.collection('announcements').add({
           title,
           content,
+          ...publisherFields(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         await broadcastNotification("New Announcement: " + title, content);
@@ -1778,7 +1817,7 @@
       return `
         <div class="card" style="cursor:default;">
           <div style="font-weight:700; font-size:16px; color:var(--accent-2); margin-bottom:6px;">${escapeHtml(poll.question)}</div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Total Votes: ${totalVotes}</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Total Votes: ${totalVotes} · ${postedByLabel(poll)}</div>
 
           <div style="display:flex; flex-direction:column; gap:8px;">
             ${options.map((opt, idx) => {
@@ -1800,6 +1839,7 @@
               `;
             }).join('')}
           </div>
+          ${canDeletePost(poll) ? `<button class="btn sm danger" style="margin-top:12px;" onclick="deletePoll('${poll.id}')">Delete Poll</button>` : ''}
         </div>
       `;
     }).join('');
@@ -1837,6 +1877,7 @@
           question,
           options,
           votes: {},
+          ...publisherFields(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         await broadcastNotification("New Poll Available", question);

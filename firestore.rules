@@ -32,11 +32,19 @@ service cloud.firestore {
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
+    // Announcements & polls: admin, superadmin and board members publish;
+    // admin/superadmin manage any post, board members only their own.
+    function canPublish() {
+      return isAdmin() || isSuperAdmin() || isBoard();
+    }
+    function ownsPost() {
+      return isBoard() && resource.data.get('createdBy', '') == request.auth.uid;
+    }
 
     // ---------- users ----------
     match /users/{uid} {
-      // Own profile, or any staff member
-      allow read: if isOwner(uid) || isStaff();
+      // Own profile, any staff member, or a board member (needed to broadcast notices)
+      allow read: if isOwner(uid) || isStaff() || isBoard();
 
       // Self-registration: must be your own doc, role 'resident', not pre-approved
       allow create: if isOwner(uid)
@@ -63,13 +71,17 @@ service cloud.firestore {
     // ---------- announcements ----------
     match /announcements/{id} {
       allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
+      allow create: if canPublish()
+        && request.resource.data.get('createdBy', '') == request.auth.uid;
+      allow update, delete: if isAdmin() || isSuperAdmin() || ownsPost();
     }
 
     // ---------- polls ----------
     match /polls/{id} {
       allow read: if signedIn();
-      allow create, delete: if isAdmin();
+      allow create: if canPublish()
+        && request.resource.data.get('createdBy', '') == request.auth.uid;
+      allow delete: if isAdmin() || isSuperAdmin() || ownsPost();
       allow update: if signedIn(); // voting updates tallies
     }
 
