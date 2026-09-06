@@ -2688,7 +2688,11 @@
 
     const today = new Date();
     const defaultPeriod = monthLabel(monthKey(today));
-    const defaultDue = new Date(today.getFullYear(), today.getMonth(), 25).toISOString().slice(0, 10);
+    // Bills fall due on the 20th; when issued after the 20th, default to next month's.
+    const BILL_DUE_DAY = 20;
+    const dueMonthOffset = today.getDate() > BILL_DUE_DAY ? 1 : 0;
+    const dueD = new Date(today.getFullYear(), today.getMonth() + dueMonthOffset, BILL_DUE_DAY);
+    const defaultDue = `${dueD.getFullYear()}-${String(dueD.getMonth() + 1).padStart(2, '0')}-${String(dueD.getDate()).padStart(2, '0')}`;
 
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Issue Maintenance Bill</div>
