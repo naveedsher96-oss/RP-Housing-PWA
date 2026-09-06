@@ -365,6 +365,8 @@
   let ticketFilterMonth = 'all';
   let ticketFilterStatus = 'all';
   let expensesList = [];
+  let expenseSources = { bills: [], funds: [], contribs: [] };
+  let fundExpensesList = [];
   let volunteersList = [];
   let decisionsList = [];
   let auditList = [];
@@ -2943,8 +2945,10 @@
     if (!db || !auth.currentUser) return;
     Promise.all([
       db.collection('funds').get(),
-      Promise.all(contribQueries()).then(mergeContribSnaps)
-    ]).then(([fundsSnap, contribDocs]) => {
+      Promise.all(contribQueries()).then(mergeContribSnaps),
+      db.collection('expenses').get()
+    ]).then(([fundsSnap, contribDocs, expSnap]) => {
+      fundExpensesList = expSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.isDeleted);
       fundsList = fundsSnap.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(f => !f.isDeleted)
@@ -2972,13 +2976,17 @@
 
     const summaryEl = document.getElementById('funds-summary');
     if (summaryEl && isAdmin) {
-      const totalCollected = fundContribsList.filter(c => c.status === 'verified').reduce((s, c) => s + Number(c.amount || 0), 0);
+      const acct = allFundsSummary(fundContribsList, fundExpensesList);
       const pendingCount = fundContribsList.filter(c => c.status === 'submitted').length;
       summaryEl.innerHTML = `
         <div class="stat-strip">
           <div class="stat-box"><div class="k">Active Funds</div><div class="v">${fundsList.filter(f => (f.status || 'active') === 'active').length}</div></div>
-          <div class="stat-box"><div class="k">Collected</div><div class="v" style="color:var(--success);">${formatMoney(totalCollected)}</div></div>
+          <div class="stat-box"><div class="k">Collected</div><div class="v" style="color:var(--success);">${formatMoney(acct.collected)}</div></div>
           <div class="stat-box"><div class="k">To Verify</div><div class="v" style="color:${pendingCount ? 'var(--info)' : 'var(--text)'};">${pendingCount}</div></div>
+        </div>
+        <div class="stat-strip">
+          <div class="stat-box"><div class="k">Spent From Funds</div><div class="v" style="color:var(--danger);">${formatMoney(acct.spent)}</div></div>
+          <div class="stat-box"><div class="k">Funds Balance</div><div class="v" style="color:${balanceColor(acct.balance)};">${formatMoney(acct.balance)}</div></div>
         </div>
       `;
     }
@@ -2991,6 +2999,7 @@
     listEl.innerHTML = fundsList.map(f => {
       const status = f.status || 'active';
       const collected = fundVerifiedTotal(f.id);
+      const acct = fundSummary(f.id, fundContribsList, fundExpensesList);
       const target = Number(f.targetAmount || 0);
       const pct = target > 0 ? Math.min(100, Math.round(collected / target * 100)) : 0;
       const contributors = new Set(fundContribsList.filter(c => c.fundId === f.id && c.status === 'verified').map(c => c.uid)).size;
@@ -3011,6 +3020,10 @@
               <span style="color:var(--text-faint);">${pct}% of ${formatMoney(target)}</span>
             </div>
           ` : `<div style="font-size:12.5px;"><span style="color:var(--text-faint);">Collected:</span> <span style="font-family:var(--font-mono); color:var(--success);">${formatMoney(collected)}</span></div>`}
+          <div style="display:flex; gap:14px; font-size:12px; margin-top:6px;">
+            <span><span style="color:var(--text-faint);">Spent:</span> <span style="font-family:var(--font-mono); color:var(--danger);">${formatMoney(acct.spent)}</span></span>
+            <span><span style="color:var(--text-faint);">Balance:</span> <span style="font-family:var(--font-mono); color:${balanceColor(acct.balance)}; font-weight:600;">${formatMoney(acct.balance)}</span></span>
+          </div>
           <div style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${contributors} contributor(s) · Started ${escapeHtml(formatDate(f.createdAt))}${f.deadline ? ' · Deadline ' + escapeHtml(formatDate(f.deadline)) : ''}${isAdmin && pendingCount ? ` · <span style="color:var(--info);">${pendingCount} awaiting verification</span>` : ''}${!isAdmin && myPending ? ' · <span style="color:var(--info);">Your contribution is under review</span>' : ''}</div>
           ${isAdmin ? `<button class="btn sm danger" style="margin-top:10px;" onclick="event.stopPropagation(); archiveFund('${f.id}')">Remove</button>` : ''}
         </div>
@@ -3080,6 +3093,10 @@
     const isAdmin = currentUserProfile.role === 'admin';
     const status = f.status || 'active';
     const collected = fundVerifiedTotal(f.id);
+    const acct = fundSummary(f.id, fundContribsList, fundExpensesList);
+    const spending = fundExpensesList
+      .filter(x => expenseSource(x) === 'fund' && x.fundId === f.id)
+      .sort((a, b) => String(b.expenseDate || '').localeCompare(String(a.expenseDate || '')));
     const target = Number(f.targetAmount || 0);
     const pct = target > 0 ? Math.min(100, Math.round(collected / target * 100)) : 0;
     const contribs = fundContribsList.filter(c => c.fundId === f.id && (isAdmin || c.uid === auth.currentUser.uid));
@@ -3094,6 +3111,8 @@
 
       <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span style="font-size:13px; color:var(--text-muted);">Collected (verified)</span><span class="amount" style="color:var(--success);">${formatMoney(collected)}</span></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span style="font-size:13px; color:var(--text-muted);">Spent from this fund</span><span class="amount" style="color:var(--danger);">${formatMoney(acct.spent)}</span></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px; padding-top:8px; border-top:1px solid var(--border);"><span style="font-size:13px; font-weight:700;">Balance</span><span class="amount" style="color:${balanceColor(acct.balance)};">${formatMoney(acct.balance)}</span></div>
         ${target > 0 ? `
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="font-size:13px; color:var(--text-muted);">Target</span><span style="font-size:13.5px; font-family:var(--font-mono);">${formatMoney(target)}</span></div>
           <div class="progress"><div class="fill" style="width:${pct}%;"></div></div>
@@ -3146,6 +3165,20 @@
             ` : ''}
           </div>
         `).join('') : `<div style="font-size:12.5px; color:var(--text-muted);">No contributions ${isAdmin ? 'received' : 'made'} yet.</div>`}
+      </div>
+
+      <div class="section-title" style="font-size:15px; margin:16px 0 8px;">Spending From This Fund</div>
+      <div id="fund-spending">
+        ${spending.length ? spending.map(x => `
+          <div style="background:var(--bg-elevated-2); border:1px solid var(--border-soft); border-radius:10px; padding:12px; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size:13px; font-weight:700;">${escapeHtml(x.category || 'Other')}</span>
+              <span style="font-family:var(--font-mono); font-size:13px; color:var(--danger);">${formatMoney(x.amount)}</span>
+            </div>
+            <div style="font-size:12.5px; white-space:pre-wrap; margin-bottom:4px;">${escapeHtml(x.description || '')}</div>
+            <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(x.expenseDate || '')} · Entered by ${escapeHtml(x.enteredBy || 'Management')}</div>
+          </div>
+        `).join('') : `<div style="font-size:12.5px; color:var(--text-muted);">Nothing has been spent from this fund yet.</div>`}
       </div>
     `;
     document.getElementById('modal-view').classList.add('active');
@@ -3412,6 +3445,8 @@
     const contribTotal = verifiedContribs.reduce((s, c) => s + Number(c.amount || 0), 0);
     const spentTotal = d.expenses.reduce((s, x) => s + Number(x.amount || 0), 0);
     const openTickets = d.tickets.filter(t => ['pending', 'in-progress'].includes(t.status)).length;
+    const billsAcct = billsAccountSummary(d.bills, d.expenses);
+    const fundsAcct = allFundsSummary(d.contribs, d.expenses);
 
     // last 6 months collections (paid bills + verified contributions)
     const months = [];
@@ -3454,6 +3489,8 @@
         ${stat('Proofs In Review', inReviewBills.length, inReviewBills.length ? 'var(--warning)' : 'var(--text)')}
         ${stat('Total Collected', formatMoney(collectedBills + contribTotal), 'var(--success)')}
         ${stat('Total Spent', formatMoney(spentTotal), 'var(--danger)')}
+        ${stat('Bills Account Balance', formatMoney(billsAcct.balance), balanceColor(billsAcct.balance))}
+        ${stat('Funds Balance', formatMoney(fundsAcct.balance), balanceColor(fundsAcct.balance))}
       </div>
 
       <div class="card" style="cursor:default; margin-bottom:14px;">
@@ -3514,6 +3551,8 @@
     const contribTotal = d.contribs.reduce((s, c) => s + Number(c.amount || 0), 0);
     const spentTotal = d.expenses.reduce((s, x) => s + Number(x.amount || 0), 0);
     const openTickets = d.tickets.filter(t => ['pending', 'in-progress'].includes(t.status)).length;
+    const billsAcct = billsAccountSummary(d.bills, d.expenses);
+    const fundsAcct = allFundsSummary(d.contribs, d.expenses);
 
     // last 6 months expenses
     const months = [];
@@ -3539,6 +3578,8 @@
         ${stat('Open Complaints', openTickets, openTickets ? 'var(--info)' : 'var(--text)')}
         ${stat('Total Collected', formatMoney(collectedBills + contribTotal), 'var(--success)')}
         ${stat('Total Spent', formatMoney(spentTotal), 'var(--danger)')}
+        ${stat('Bills Account Balance', formatMoney(billsAcct.balance), balanceColor(billsAcct.balance))}
+        ${stat('Funds Balance', formatMoney(fundsAcct.balance), balanceColor(fundsAcct.balance))}
       </div>
 
       <div class="card" style="cursor:default; margin-bottom:14px;">
@@ -3557,14 +3598,60 @@
     `;
   }
 
+  // --- MONEY SOURCES ---
+  // Every expense is paid from one of two pools: the Bills account (all verified
+  // maintenance bill payments) or a specific community Fund. Legacy expenses
+  // without a `source` are treated as Bills-account spending.
+  const sumAmounts = (arr) => arr.reduce((s, x) => s + Number(x.amount || 0), 0);
+
+  function expenseSource(x) {
+    return x && x.source === 'fund' && x.fundId ? 'fund' : 'bills';
+  }
+
+  function expenseSourceLabel(x) {
+    return expenseSource(x) === 'fund' ? `Fund: ${x.fundTitle || 'Community Fund'}` : 'Bills account';
+  }
+
+  function billsAccountSummary(bills, expenses) {
+    const collected = sumAmounts(bills.filter(b => !b.isDeleted && b.status === 'paid'));
+    const spent = sumAmounts(expenses.filter(x => !x.isDeleted && expenseSource(x) === 'bills'));
+    return { collected, spent, balance: collected - spent };
+  }
+
+  function fundSummary(fundId, contribs, expenses) {
+    const collected = sumAmounts(contribs.filter(c => !c.isDeleted && c.fundId === fundId && c.status === 'verified'));
+    const spent = sumAmounts(expenses.filter(x => !x.isDeleted && expenseSource(x) === 'fund' && x.fundId === fundId));
+    return { collected, spent, balance: collected - spent };
+  }
+
+  function allFundsSummary(contribs, expenses) {
+    const collected = sumAmounts(contribs.filter(c => !c.isDeleted && c.status === 'verified'));
+    const spent = sumAmounts(expenses.filter(x => !x.isDeleted && expenseSource(x) === 'fund'));
+    return { collected, spent, balance: collected - spent };
+  }
+
+  function balanceColor(v) {
+    return v < 0 ? 'var(--danger)' : 'var(--success)';
+  }
+
   // --- EXPENSES (STAFF) ---
   function loadExpenses() {
     if (!db || !isStaff()) return;
-    db.collection('expenses').get().then(snapshot => {
-      expensesList = snapshot.docs
+    Promise.all([
+      db.collection('expenses').get(),
+      db.collection('bills').get(),
+      db.collection('funds').get(),
+      db.collection('fund_contributions').get()
+    ]).then(([expSnap, billsSnap, fundsSnap, contribsSnap]) => {
+      expensesList = expSnap.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(x => !x.isDeleted)
         .sort((a, b) => String(b.expenseDate || '').localeCompare(String(a.expenseDate || '')));
+      expenseSources = {
+        bills: billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted),
+        funds: fundsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => !f.isDeleted),
+        contribs: contribsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isDeleted)
+      };
       renderExpensesList();
     }).catch(e => { console.error("Error loading expenses:", e); showLoadError('expenses-list', e); });
   }
@@ -3574,12 +3661,18 @@
     const sumEl = document.getElementById('expenses-summary');
     if (!listEl) return;
 
-    const total = expensesList.reduce((s, x) => s + Number(x.amount || 0), 0);
+    const total = sumAmounts(expensesList);
     const thisMonth = new Date().toISOString().slice(0, 7);
-    const monthTotal = expensesList.filter(x => String(x.expenseDate || '').startsWith(thisMonth)).reduce((s, x) => s + Number(x.amount || 0), 0);
+    const monthTotal = sumAmounts(expensesList.filter(x => String(x.expenseDate || '').startsWith(thisMonth)));
+    const billsAcct = billsAccountSummary(expenseSources.bills, expensesList);
+    const fundsAcct = allFundsSummary(expenseSources.contribs, expensesList);
 
     if (sumEl) {
       sumEl.innerHTML = `
+        <div class="stat-strip">
+          <div class="stat-box"><div class="k">Bills Account Balance</div><div class="v" style="color:${balanceColor(billsAcct.balance)};">${formatMoney(billsAcct.balance)}</div><div style="font-size:10.5px; color:var(--text-faint); margin-top:2px;">${formatMoney(billsAcct.collected)} collected · ${formatMoney(billsAcct.spent)} spent</div></div>
+          <div class="stat-box"><div class="k">Funds Balance</div><div class="v" style="color:${balanceColor(fundsAcct.balance)};">${formatMoney(fundsAcct.balance)}</div><div style="font-size:10.5px; color:var(--text-faint); margin-top:2px;">${formatMoney(fundsAcct.collected)} collected · ${formatMoney(fundsAcct.spent)} spent</div></div>
+        </div>
         <div class="stat-strip">
           <div class="stat-box"><div class="k">Total Spent</div><div class="v" style="color:var(--danger);">${formatMoney(total)}</div></div>
           <div class="stat-box"><div class="k">This Month</div><div class="v">${formatMoney(monthTotal)}</div></div>
@@ -3600,6 +3693,7 @@
           <span class="amount" style="color:var(--danger);">${formatMoney(x.amount)}</span>
         </div>
         <div style="font-size:13px; margin-bottom:4px; white-space:pre-wrap;">${escapeHtml(x.description || '')}</div>
+        <div style="font-size:12px; margin-bottom:4px;"><span style="color:var(--text-faint);">Paid from:</span> <span style="color:${expenseSource(x) === 'fund' ? 'var(--info)' : 'var(--accent-2)'}; font-weight:600;">${escapeHtml(expenseSourceLabel(x))}</span></div>
         <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(x.expenseDate || '')} · Entered by ${escapeHtml(x.enteredBy || 'Management')}${x.decisionRef ? ' · Board ref: ' + escapeHtml(x.decisionRef) : ''}</div>
         ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" style="margin-top:8px;" onclick="archiveExpense('${x.id}')">Remove</button>` : ''}
       </div>
@@ -3608,15 +3702,27 @@
 
   window.openAddExpenseModal = function() {
     if (currentUserProfile.role !== 'admin') return;
+    const billsAcct = billsAccountSummary(expenseSources.bills, expensesList);
+    const fundOptions = expenseSources.funds
+      .map(f => ({ f, s: fundSummary(f.id, expenseSources.contribs, expensesList) }))
+      .filter(({ f, s }) => (f.status || 'active') === 'active' || s.balance > 0)
+      .map(({ f, s }) => `<option value="fund:${f.id}">Fund: ${escapeHtml(f.title || 'Fund')} — balance ${formatMoney(s.balance)}</option>`)
+      .join('');
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Add Expense</div>
       <form id="expense-form">
+        <label>Pay From</label>
+        <select id="exp-source" required>
+          <option value="bills">Bills account — balance ${formatMoney(billsAcct.balance)}</option>
+          ${fundOptions}
+        </select>
+        <div style="font-size:11.5px; color:var(--text-faint); margin:-6px 0 10px;">Bills account = all verified maintenance bill payments. Fund = money raised for that specific fund.</div>
         <label>Category</label>
         <select id="exp-category" required>
           ${EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
         </select>
-        <label>Description</label>
-        <textarea id="exp-desc" placeholder="What was this expense for?" required></textarea>
+        <label>Details / Note (required)</label>
+        <textarea id="exp-desc" placeholder="What was this expense for, who/what it went to, receipt no., who approved it..." required minlength="10"></textarea>
         <label>Amount (PKR)</label>
         <input type="number" id="exp-amount" placeholder="e.g. 15000" required min="1" />
         <label>Expense Date</label>
@@ -3635,14 +3741,33 @@
       const amount = Number(document.getElementById('exp-amount').value);
       const expenseDate = document.getElementById('exp-date').value;
       const decisionRef = document.getElementById('exp-decision').value.trim();
+      const sourceVal = document.getElementById('exp-source').value;
       if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
+      if (description.length < 10) { alert("Please write a detailed note for this expense (at least 10 characters)."); return; }
+
+      let source = 'bills', fundId = '', fundTitle = '', available = billsAcct.balance, sourceName = 'Bills account';
+      if (sourceVal.startsWith('fund:')) {
+        fundId = sourceVal.slice(5);
+        const f = expenseSources.funds.find(item => item.id === fundId);
+        if (!f) { alert("Selected fund not found. Please reload and try again."); return; }
+        source = 'fund';
+        fundTitle = f.title || 'Fund';
+        available = fundSummary(fundId, expenseSources.contribs, expensesList).balance;
+        sourceName = `Fund: ${fundTitle}`;
+      }
+      if (amount > available) {
+        alert(`Only ${formatMoney(available)} is available in ${sourceName}. Reduce the amount or choose another source.`);
+        return;
+      }
+
       try {
         const ref = await db.collection('expenses').add({
           category, description, amount, currency: 'PKR', expenseDate, decisionRef,
+          source, fundId, fundTitle,
           enteredBy: currentUserProfile.name,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        logAudit('expense', ref.id, 'create', `${category} expense of ${formatMoney(amount)}`);
+        logAudit('expense', ref.id, 'create', `${category} expense of ${formatMoney(amount)} paid from ${sourceName}`);
         closeModal();
         loadExpenses();
       } catch(err) {
@@ -3654,7 +3779,7 @@
   window.archiveExpense = function(id) {
     const x = expensesList.find(item => item.id === id);
     if (!confirm(`Remove this ${x ? x.category : ''} expense of ${x ? formatMoney(x.amount) : ''}? It will be archived (kept for audit).`)) return;
-    logAudit('expense', id, 'soft_delete', x ? `${x.category} ${formatMoney(x.amount)}` : '');
+    logAudit('expense', id, 'soft_delete', x ? `${x.category} ${formatMoney(x.amount)} (${expenseSourceLabel(x)})` : '');
     archiveRecord('expenses', id, loadExpenses);
   };
 
