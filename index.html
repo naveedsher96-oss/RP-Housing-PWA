@@ -355,6 +355,8 @@
   let pendingResidents = [];
   let allResidents = [];
   let noticesList = [];
+  let noticeComments = {}; // announcementId -> comments[] (oldest first)
+  let openCommentThreads = new Set();
   let pollsList = [];
   let ticketsList = [];
   let billsList = [];
@@ -1721,11 +1723,140 @@
 
   function loadNotices() {
     if (!db) return;
-    db.collection('announcements').orderBy('createdAt', 'desc').get().then(snapshot => {
+    db.collection('announcements').orderBy('createdAt', 'desc').get().then(async snapshot => {
       noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(n => !n.isDeleted);
+      const threads = await Promise.all(noticesList.map(n =>
+        db.collection('announcements').doc(n.id).collection('comments').orderBy('createdAt', 'asc').get()
+          .then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+          .catch(e => { console.error("Error loading comments:", e); return []; })
+      ));
+      noticeComments = {};
+      noticesList.forEach((n, i) => { noticeComments[n.id] = threads[i]; });
       renderNoticesList();
     }).catch(e => { console.error("Error loading notices:", e); showLoadError('notices-list', e); });
   }
+
+  // Approved residents, staff and board members may comment on announcements.
+  function canComment() {
+    if (!currentUserProfile) return false;
+    if (isStaff() || isBoard()) return true;
+    return currentUserProfile.role === 'resident' && currentUserProfile.approved === true && currentUserProfile.suspended !== true;
+  }
+
+  function canDeleteComment(notice, c) {
+    if (!auth.currentUser || !c) return false;
+    return c.uid === auth.currentUser.uid || canDeletePost(notice);
+  }
+
+  function commentsAllowed(n) {
+    return n.allowComments !== false;
+  }
+
+  function commentAuthorTag(c) {
+    if (c.role === 'board') return '<span class="badge notice" style="font-size:9.5px; padding:1px 6px; margin-left:6px;">Board</span>';
+    if (c.role === 'management') return '<span class="badge verified" style="font-size:9.5px; padding:1px 6px; margin-left:6px;">Management</span>';
+    return '';
+  }
+
+  function renderCommentThread(n) {
+    const comments = noticeComments[n.id] || [];
+    const open = openCommentThreads.has(n.id);
+    const count = comments.length;
+    const toggleLabel = `${count ? count : 'No'} comment${count === 1 ? '' : 's'}${commentsAllowed(n) ? '' : ' · closed'}`;
+    if (!open) {
+      return `<button class="btn sm secondary" style="margin-top:12px;" onclick="toggleComments('${n.id}')">&#128172; ${toggleLabel}</button>`;
+    }
+    const items = comments.length ? comments.map(c => `
+      <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:8px 10px; margin-bottom:6px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="font-size:12px; font-weight:700; color:var(--text);">${escapeHtml(c.name || 'Resident')}${commentAuthorTag(c)}</div>
+          <div style="font-size:10.5px; color:var(--text-faint); white-space:nowrap;">${escapeHtml(formatDate(c.createdAt))}</div>
+        </div>
+        <div style="font-size:13px; color:var(--text); line-height:1.45; white-space:pre-wrap; margin-top:3px;">${escapeHtml(c.text || '')}</div>
+        ${canDeleteComment(n, c) ? `<button class="btn sm danger" style="margin-top:6px; padding:3px 8px; font-size:10.5px;" onclick="deleteComment('${n.id}','${c.id}')">Delete</button>` : ''}
+      </div>`).join('')
+      : '<div style="font-size:12.5px; color:var(--text-muted); padding:6px 0;">No comments yet. Be the first to respond.</div>';
+    const composer = !commentsAllowed(n)
+      ? '<div style="font-size:12px; color:var(--text-faint); margin-top:6px;">Comments are closed on this announcement.</div>'
+      : canComment()
+        ? `<form onsubmit="return postComment(event,'${n.id}')" style="margin-top:8px;">
+            <textarea id="comment-input-${n.id}" placeholder="Write a comment..." required maxlength="500" style="min-height:56px; margin-top:0;"></textarea>
+            <div style="display:flex; justify-content:flex-end; margin-top:6px;"><button type="submit" class="btn sm primary">Post Comment</button></div>
+          </form>`
+        : '';
+    return `
+      <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div style="font-size:12px; font-weight:700; color:var(--text-muted);">&#128172; ${toggleLabel}</div>
+          <div style="display:flex; gap:6px;">
+            ${canDeletePost(n) ? `<button class="btn sm secondary" style="padding:3px 8px; font-size:10.5px;" onclick="toggleCommentsAllowed('${n.id}')">${commentsAllowed(n) ? 'Close comments' : 'Reopen comments'}</button>` : ''}
+            <button class="btn sm secondary" style="padding:3px 8px; font-size:10.5px;" onclick="toggleComments('${n.id}')">Hide</button>
+          </div>
+        </div>
+        ${items}
+        ${composer}
+      </div>`;
+  }
+
+  window.toggleComments = function(id) {
+    if (openCommentThreads.has(id)) openCommentThreads.delete(id); else openCommentThreads.add(id);
+    renderNoticesList();
+  };
+
+  window.toggleCommentsAllowed = async function(id) {
+    const n = noticesList.find(item => item.id === id);
+    if (!n || !canDeletePost(n)) return;
+    const next = !commentsAllowed(n);
+    try {
+      await db.collection('announcements').doc(id).update({ allowComments: next });
+      logAudit('announcement', id, 'update', `Comments ${next ? 'reopened' : 'closed'} on "${n.title}"`);
+      loadNotices();
+    } catch(err) {
+      alert("Error updating announcement: " + err.message);
+    }
+  };
+
+  window.postComment = async function(e, id) {
+    e.preventDefault();
+    const n = noticesList.find(item => item.id === id);
+    if (!n || !commentsAllowed(n) || !canComment()) return false;
+    const input = document.getElementById(`comment-input-${id}`);
+    const text = (input ? input.value : '').trim();
+    if (!text) return false;
+    const btn = e.target.querySelector('button[type=submit]');
+    if (btn) btn.disabled = true;
+    const role = currentUserProfile.role === 'admin' || isSuperAdmin() ? 'management' : (isBoard() ? 'board' : 'resident');
+    try {
+      await db.collection('announcements').doc(id).collection('comments').add({
+        uid: auth.currentUser.uid,
+        name: currentUserProfile.name || 'Resident',
+        role,
+        text,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      if (n.createdBy && n.createdBy !== auth.currentUser.uid) {
+        sendNotification(n.createdBy, `New comment on "${n.title}"`, `${currentUserProfile.name || 'A resident'}: ${text.length > 120 ? text.slice(0, 117) + '...' : text}`, 'info');
+      }
+      loadNotices();
+    } catch(err) {
+      if (btn) btn.disabled = false;
+      alert("Error posting comment: " + err.message);
+    }
+    return false;
+  };
+
+  window.deleteComment = async function(noticeId, commentId) {
+    const n = noticesList.find(item => item.id === noticeId);
+    const c = (noticeComments[noticeId] || []).find(item => item.id === commentId);
+    if (!canDeleteComment(n, c)) return;
+    if (!confirm('Delete this comment?')) return;
+    try {
+      await db.collection('announcements').doc(noticeId).collection('comments').doc(commentId).delete();
+      loadNotices();
+    } catch(err) {
+      alert("Error deleting comment: " + err.message);
+    }
+  };
 
   function renderNoticesList() {
     const listEl = document.getElementById('notices-list');
@@ -1742,8 +1873,12 @@
           <span class="badge notice">Notice</span>
         </div>
         <div style="font-size:13.5px; color:var(--text); line-height:1.5; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
-        <div style="font-size:11px; color:var(--text-faint); margin-top:10px;">${postedByLabel(n)}</div>
-        ${canDeletePost(n) ? `<button class="btn sm danger" style="margin-top:12px;" onclick="deleteNotice('${n.id}')">Delete</button>` : ''}
+        <div style="font-size:11px; color:var(--text-faint); margin-top:10px;">${postedByLabel(n)}${n.createdAt ? ' · ' + escapeHtml(formatDate(n.createdAt)) : ''}</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          ${renderCommentThread(n)}
+          ${canDeletePost(n) && !openCommentThreads.has(n.id) ? `<button class="btn sm danger" style="margin-top:12px;" onclick="deleteNotice('${n.id}')">Delete</button>` : ''}
+        </div>
+        ${canDeletePost(n) && openCommentThreads.has(n.id) ? `<button class="btn sm danger" style="margin-top:12px;" onclick="deleteNotice('${n.id}')">Delete announcement</button>` : ''}
       </div>
     `).join('');
   }
@@ -1756,6 +1891,10 @@
         <input type="text" id="notice-title" placeholder="Notice Title" required />
         <label>Content / Circular</label>
         <textarea id="notice-content" placeholder="Write announcement details..." required></textarea>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+          <input type="checkbox" id="notice-allow-comments" checked style="width:auto; margin:0;" />
+          <span>Allow residents to comment</span>
+        </label>
         <button type="submit" class="btn primary block" style="margin-top:16px;">Publish & Broadcast</button>
       </form>
     `;
@@ -1765,11 +1904,13 @@
       e.preventDefault();
       const title = document.getElementById('notice-title').value.trim();
       const content = document.getElementById('notice-content').value.trim();
+      const allowComments = document.getElementById('notice-allow-comments').checked;
 
       try {
         await db.collection('announcements').add({
           title,
           content,
+          allowComments,
           ...publisherFields(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
