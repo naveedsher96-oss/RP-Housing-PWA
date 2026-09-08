@@ -155,6 +155,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---------- account transfers (Bills account <-> Funds) ----------
+    // Immutable ledger entries written by admin only; residents may read them
+    // so account balances stay transparent. Undo = an opposite transfer.
+    match /transfers/{id} {
+      allow read: if signedIn();
+      allow create: if isAdmin()
+        && request.resource.data.get('fromType', '') in ['bills', 'fund']
+        && request.resource.data.get('toType', '') in ['bills', 'fund']
+        && (request.resource.data.fromType != request.resource.data.toType
+            || request.resource.data.get('fromFundId', '') != request.resource.data.get('toFundId', ''))
+        && (request.resource.data.fromType != 'fund' || request.resource.data.get('fromFundId', '') != '')
+        && (request.resource.data.toType != 'fund' || request.resource.data.get('toFundId', '') != '')
+        && request.resource.data.get('amount', 0) is number
+        && request.resource.data.amount > 0
+        && request.resource.data.get('note', '') is string
+        && request.resource.data.note.size() >= 10;
+      allow update, delete: if false;
+    }
+
     // ---------- board decisions & votes ----------
     match /decisions/{id} {
       allow read: if isStaff() || isBoard();
