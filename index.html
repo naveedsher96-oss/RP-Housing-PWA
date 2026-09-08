@@ -3772,6 +3772,18 @@
       if (m) m.value += Number(x.amount || 0);
     });
 
+    const spendCats = {};
+    d.expenses.forEach(x => { const k = x.category || 'Other'; spendCats[k] = (spendCats[k] || 0) + Number(x.amount || 0); });
+    const spendSegs = Object.entries(spendCats).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 7);
+
+    const spendSources = {};
+    d.expenses.forEach(x => { const k = expenseSourceLabel(x); spendSources[k] = (spendSources[k] || 0) + Number(x.amount || 0); });
+    const sourceSegs = Object.entries(spendSources).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 7);
+
+    const recentExpenses = [...d.expenses]
+      .sort((a, b) => String(b.expenseDate || '').localeCompare(String(a.expenseDate || '')) || ((toDate(b.createdAt) || 0) - (toDate(a.createdAt) || 0)))
+      .slice(0, 10);
+
     const stat = (label, value, color) => `
       <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px;">
         <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">${label}</div>
@@ -3790,6 +3802,29 @@
       <div class="card" style="cursor:default; margin-bottom:14px;">
         <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Monthly Expenses — last 6 months</div>
         ${svgBars(months)}
+      </div>
+
+      <div class="card" style="cursor:default; margin-bottom:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Where the Money Went — by Category</div>
+        ${svgDonut(spendSegs, 'Spent', 'PKR ' + Math.round(spentTotal / 1000) + 'k')}
+      </div>
+
+      <div class="card" style="cursor:default; margin-bottom:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Paid From — Bills Account vs Funds</div>
+        ${svgDonut(sourceSegs, 'Spent', 'PKR ' + Math.round(spentTotal / 1000) + 'k')}
+      </div>
+
+      <div class="card" style="cursor:default; margin-bottom:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:4px;">Recent Spending</div>
+        <div style="font-size:11.5px; color:var(--text-faint); margin-bottom:10px;">Every expense recorded by management, newest first.</div>
+        ${recentExpenses.length ? recentExpenses.map(x => `
+          <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-size:12.5px;">
+            <div style="min-width:0;">
+              <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(x.description || x.category || 'Expense')}</div>
+              <div style="font-size:11px; color:var(--text-faint); margin-top:2px;">${escapeHtml(x.category || 'Other')} · ${escapeHtml(expenseSourceLabel(x))}${x.expenseDate ? ' · ' + escapeHtml(formatDate(x.expenseDate)) : ''}</div>
+            </div>
+            <div style="font-family:var(--font-mono); font-weight:600; color:var(--danger); white-space:nowrap;">−${formatMoney(x.amount)}</div>
+          </div>`).join('') : '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:12px 0;">No expenses recorded yet.</div>'}
       </div>
 
       <div class="card" style="cursor:default;">
