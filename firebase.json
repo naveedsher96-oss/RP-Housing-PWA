@@ -4,5 +4,23 @@
   },
   "functions": {
     "source": "functions"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "README",
+      ".git/**",
+      ".gitignore",
+      ".nojekyll",
+      "**/node_modules/**",
+      "functions/**",
+      ".agents/**"
+    ],
+    "headers": [
+      { "source": "/.well-known/assetlinks.json", "headers": [ { "key": "Content-Type", "value": "application/json" } ] },
+      { "source": "**/*.@(html|js|json)", "headers": [ { "key": "Cache-Control", "value": "no-cache" } ] }
+    ]
   }
 }
