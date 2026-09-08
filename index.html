@@ -1304,7 +1304,10 @@
       return `
         <div class="section-title">
           ${isAdmin ? 'Maintenance Bills' : 'My Bills'}
-          ${isAdmin ? '<button class="btn sm primary" onclick="openIssueBillModal()">+ Issue Bill</button>' : ''}
+          ${isAdmin ? `<div style="display:flex; gap:8px; flex-shrink:0;">
+            <button class="btn sm secondary" style="white-space:nowrap;" onclick="openTransferModal('bills')" title="Transfer to Fund">⇄ Transfer</button>
+            <button class="btn sm primary" style="white-space:nowrap;" onclick="openIssueBillModal()">+ Issue Bill</button>
+          </div>` : ''}
         </div>
         <div class="section-sub">${isAdmin ? 'Issue and track maintenance billing per house.' : 'Maintenance charges issued to your house by management.'}</div>
         <div id="bills-summary"></div>
@@ -1323,7 +1326,10 @@
       return `
         <div class="section-title">
           Community Funds
-          ${isAdmin ? '<button class="btn sm primary" onclick="openCreateFundModal()">+ Start Fund</button>' : ''}
+          ${isAdmin ? `<div style="display:flex; gap:8px; flex-shrink:0;">
+            <button class="btn sm secondary" style="white-space:nowrap;" onclick="openTransferModal('fund')" title="Transfer to Bills Account">⇄ Transfer</button>
+            <button class="btn sm primary" style="white-space:nowrap;" onclick="openCreateFundModal()">+ Start Fund</button>
+          </div>` : ''}
         </div>
         <div class="section-sub">${isAdmin ? 'Raise and track maintenance & development funds.' : 'Society fundraisers you can contribute to.'}</div>
         <div id="funds-summary"></div>
@@ -2501,10 +2507,7 @@
     const transfers = accountTransfers(billsAccountData.transfers, 'bills');
     el.innerHTML = `
       <div class="filter-bar">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <label>Bills Account</label>
-          <button class="btn sm secondary" onclick="openTransferModal('bills')">⇄ Transfer to Fund</button>
-        </div>
+        <label>Bills Account</label>
         <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:8px;">
           <span style="font-size:13px; color:var(--text-muted);">Balance</span>
           <span class="amount" style="color:${balanceColor(acct.balance)};">${formatMoney(acct.balance)}</span>
@@ -3217,10 +3220,7 @@
             <span><span style="color:var(--text-faint);">Balance:</span> <span style="font-family:var(--font-mono); color:${balanceColor(acct.balance)}; font-weight:600;">${formatMoney(acct.balance)}</span></span>
           </div>
           <div style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${contributors} contributor(s) · Started ${escapeHtml(formatDate(f.createdAt))}${f.deadline ? ' · Deadline ' + escapeHtml(formatDate(f.deadline)) : ''}${isAdmin && pendingCount ? ` · <span style="color:var(--info);">${pendingCount} awaiting verification</span>` : ''}${!isAdmin && myPending ? ' · <span style="color:var(--info);">Your contribution is under review</span>' : ''}</div>
-          ${isAdmin ? `<div style="display:flex; gap:8px; margin-top:10px;">
-            <button class="btn sm secondary" onclick="event.stopPropagation(); openTransferModal('fund', '${f.id}')">Transfer to Bills Account</button>
-            <button class="btn sm danger" onclick="event.stopPropagation(); archiveFund('${f.id}')">Remove</button>
-          </div>` : ''}
+          ${isAdmin ? `<button class="btn sm danger" style="margin-top:10px;" onclick="event.stopPropagation(); archiveFund('${f.id}')">Remove</button>` : ''}
         </div>
       `;
     }).join('');
@@ -3338,7 +3338,6 @@
         </form>
       ` : ''}
 
-      ${isAdmin ? `<button class="btn secondary block" onclick="openTransferModal('fund', '${f.id}')" style="margin-bottom:10px;">⇄ Transfer to Bills Account</button>` : ''}
       ${isAdmin && status === 'active' ? `
         <button class="btn secondary block" onclick="openRecordContributionModal('${f.id}')" style="margin-bottom:10px;">+ Record Cash / Offline Contribution</button>
         <button class="btn danger block" onclick="closeFund('${f.id}')" style="margin-bottom:16px;">Close This Fund</button>
@@ -4095,10 +4094,12 @@
     if (document.getElementById('dashboard-body')) loadDashboard();
   }
 
-  window.openTransferModal = async function(fromType, fromFundId) {
+  // direction 'bills': Bills account -> chosen Fund; direction 'fund': chosen Fund -> Bills account.
+  window.openTransferModal = async function(direction) {
     if (currentUserProfile.role !== 'admin') return;
     const modalBody = document.getElementById('modal-body');
-    const heading = fromType === 'fund' ? 'Transfer to Bills Account' : 'Transfer to Fund';
+    const toBills = direction === 'fund';
+    const heading = toBills ? 'Transfer to Bills Account' : 'Transfer to Fund';
     modalBody.innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">${heading}</div>
       <div style="color:var(--text-muted); font-size:13.5px;">Loading account balances…</div>
@@ -4112,50 +4113,47 @@
       modalBody.innerHTML = `
         <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">${heading}</div>
         <div class="card" style="cursor:default; color:var(--danger);">Could not load account balances: ${escapeHtml(err.message || String(err))}</div>
-        <button class="btn secondary block" style="margin-top:12px;" onclick="openTransferModal('${fromType}', '${fromFundId || ''}')">Retry</button>
+        <button class="btn secondary block" style="margin-top:12px;" onclick="openTransferModal('${direction}')">Retry</button>
       `;
       return;
     }
     if (!document.getElementById('modal-view').classList.contains('active')) return;
 
     const { bills, funds, contribs, transfers } = expenseSources;
-    const accounts = [
-      { key: 'bills', type: 'bills', fundId: '', title: 'Bills account', summary: billsAccountSummary(bills, expensesList, transfers) },
-      ...funds.map(f => ({
-        key: 'fund:' + f.id, type: 'fund', fundId: f.id, title: f.title || 'Fund', closed: (f.status || 'active') !== 'active',
-        summary: fundSummary(f.id, contribs, expensesList, transfers)
-      }))
-    ];
+    const billsAcct = { type: 'bills', fundId: '', title: 'Bills account', summary: billsAccountSummary(bills, expensesList, transfers) };
+    const fundAccts = funds.map(f => ({
+      type: 'fund', fundId: f.id, title: f.title || 'Fund', closed: (f.status || 'active') !== 'active',
+      summary: fundSummary(f.id, contribs, expensesList, transfers)
+    })).sort((a, b) => Number(a.closed) - Number(b.closed) || a.title.localeCompare(b.title));
     const label = a => (a.type === 'fund' ? `Fund: ${a.title}${a.closed ? ' (closed)' : ''}` : a.title);
-    const fromKey = fromType === 'fund' ? 'fund:' + fromFundId : 'bills';
-    const from = accounts.find(a => a.key === fromKey);
-    if (!from) {
-      modalBody.innerHTML = `<div class="card" style="cursor:default; color:var(--danger);">Selected fund not found. Please reload and try again.</div>`;
-      return;
-    }
-    // Default destination is the other side (Bills ↔ Fund); any other account may be chosen.
-    const destinations = accounts.filter(a => a.key !== from.key);
-    if (!destinations.length) {
+    const optionText = a => `${label(a)} — balance ${formatMoney(a.summary.balance)}`;
+
+    if (!fundAccts.length) {
       modalBody.innerHTML = `
         <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">${heading}</div>
         <div class="card" style="cursor:default; color:var(--text-muted);">No community funds exist yet. Start one in the Funds tab first.</div>
       `;
       return;
     }
-    const defaultTo = destinations.find(a => a.type !== from.type) || destinations[0];
+    const fundOptions = fundAccts.map((a, i) => `<option value="${a.fundId}" ${i === 0 ? 'selected' : ''}>${escapeHtml(optionText(a))}</option>`).join('');
+    const pickedFund = () => fundAccts.find(a => a.fundId === document.getElementById('tr-fund').value);
+    const getFrom = () => toBills ? pickedFund() : billsAcct;
+    const getTo = () => toBills ? billsAcct : pickedFund();
 
     modalBody.innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">${heading}</div>
       <form id="transfer-form">
         <label>From</label>
-        <input type="text" value="${escapeHtml(label(from))} — balance ${formatMoney(from.summary.balance)}" disabled />
+        ${toBills
+          ? `<select id="tr-fund" required>${fundOptions}</select>`
+          : `<input type="text" value="${escapeHtml(optionText(billsAcct))}" disabled />`}
         <label>To</label>
-        <select id="tr-to" required>
-          ${destinations.map(a => `<option value="${a.key}" ${a.key === defaultTo.key ? 'selected' : ''}>${escapeHtml(label(a))} — balance ${formatMoney(a.summary.balance)}</option>`).join('')}
-        </select>
+        ${toBills
+          ? `<input type="text" value="${escapeHtml(optionText(billsAcct))}" disabled />`
+          : `<select id="tr-fund" required>${fundOptions}</select>`}
         <label>Amount (PKR)</label>
-        <input type="number" id="tr-amount" placeholder="e.g. 5000" required min="1" max="${Math.max(0, from.summary.balance)}" />
-        <div style="font-size:11.5px; color:var(--text-faint); margin:-6px 0 10px;">Available in ${escapeHtml(label(from))}: ${formatMoney(from.summary.balance)}</div>
+        <input type="number" id="tr-amount" placeholder="e.g. 5000" required min="1" />
+        <div id="tr-available" style="font-size:11.5px; color:var(--text-faint); margin:-6px 0 10px;"></div>
         <label>Reason / Note (required)</label>
         <textarea id="tr-note" placeholder="Why is this money being moved, who approved it, any reference..." required minlength="10"></textarea>
         <label>Transfer Date</label>
@@ -4165,13 +4163,21 @@
       </form>
     `;
 
+    const showAvailable = () => {
+      const from = getFrom();
+      document.getElementById('tr-available').textContent = `Available in ${label(from)}: ${formatMoney(from.summary.balance)}`;
+      document.getElementById('tr-amount').max = Math.max(0, from.summary.balance);
+    };
+    showAvailable();
+    document.getElementById('tr-fund').addEventListener('change', showAvailable);
+
     document.getElementById('transfer-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const to = accounts.find(a => a.key === document.getElementById('tr-to').value);
+      const from = getFrom(), to = getTo();
       const amount = Number(document.getElementById('tr-amount').value);
       const note = document.getElementById('tr-note').value.trim();
       const transferDate = document.getElementById('tr-date').value;
-      if (!to || to.key === from.key) { alert("Please choose a different destination account."); return; }
+      if (!from || !to) { alert("Please choose a fund."); return; }
       if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
       if (note.length < 10) { alert("Please write a detailed note for this transfer (at least 10 characters)."); return; }
       if (amount > from.summary.balance) {
