@@ -683,7 +683,7 @@
     appEl.innerHTML = `
       <div class="onboard-wrap">
         <div class="onboard-title">Membership Suspended</div>
-        <div class="onboard-sub">Your society membership is currently suspended by the management/Board.</div>
+        <div class="onboard-sub">Your society membership is currently suspended by the management.</div>
         <div class="card" style="text-align:center; padding:20px; cursor:default;">
           <div style="font-size:36px; margin-bottom:10px;">⛔</div>
           <div style="font-size:14px; color:var(--text-muted);">${currentUserProfile.statusReason ? 'Reason: ' + escapeHtml(currentUserProfile.statusReason) : 'Please contact the society administration for details.'}</div>
@@ -4897,7 +4897,7 @@
         <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">CNIC: ${escapeHtml(r.cnic || 'N/A')} | Phone: ${escapeHtml(r.phone || 'N/A')}</div>
         <div style="font-size:12px; color:var(--text-muted);">Blood Group: ${escapeHtml(r.bloodGroup || 'N/A')} (${escapeHtml(r.occupancyType || 'N/A')})</div>
         ${r.suspended ? '<div style="font-size:12px; color:var(--danger); margin-top:4px;">Suspended' + (r.statusReason ? ': ' + escapeHtml(r.statusReason) : '') + '</div>' : ''}
-        ${currentUserProfile.role === 'admin' && r.role === 'resident' ? `
+        ${canSuspend() && r.role === 'resident' ? `
           <div style="margin-top:8px;">
             ${r.suspended
               ? `<button class="btn sm secondary" onclick="unsuspendResident('${r.uid}')">Lift Suspension</button>`
@@ -4992,14 +4992,6 @@
     `).join('');
   }
 
-  async function hasPendingDecision(type, refUid) {
-    const snap = await db.collection('decisions').get();
-    return snap.docs.some(d => {
-      const x = d.data();
-      return x.type === type && x.refUid === refUid && (x.status || 'pending') === 'pending' && !x.isDeleted;
-    });
-  }
-
   window.approveUser = async function(uid) {
     const r = pendingResidents.find(item => item.uid === uid);
     try {
@@ -5023,36 +5015,27 @@
     } catch(e) { alert("Error rejecting user: " + e.message); }
   };
 
+  function canSuspend() {
+    return currentUserProfile && (currentUserProfile.role === 'admin' || isSuperAdmin());
+  }
+
   window.suspendResident = async function(uid) {
-    if (currentUserProfile.role !== 'admin') return;
+    if (!canSuspend()) return;
     const r = allResidents.find(item => item.uid === uid);
     if (!r) return;
+    const input = prompt(`Suspend ${r.name} (${r.house || 'N/A'})?\nReason (optional) — press OK to confirm:`);
+    if (input === null) return;
+    const reason = input.trim();
     try {
-      const boardCount = await getBoardMembersCount();
-      if (boardCount >= 3) {
-        if (await hasPendingDecision('suspension', uid)) { alert("A suspension for this resident is already awaiting a Board vote."); return; }
-        if (!confirm(`Send the suspension of ${r.name} to the Board for a 3-of-5 vote?`)) return;
-        await createDecision({
-          type: 'suspension',
-          refUid: uid,
-          title: `Suspension: ${r.name}`,
-          description: `Suspend the membership of ${r.name} (House ${r.house || 'N/A'}). A reason is mandatory with each vote.`
-        });
-        alert("Sent to the Board for a vote.");
-        return;
-      }
-      const reason = prompt(`Reason for suspending ${r.name} (required):`);
-      if (reason === null) return;
-      if (!reason.trim()) { alert("A reason is required for every suspension."); return; }
-      await db.collection('users').doc(uid).update({ suspended: true, membershipStatus: 'suspended', statusReason: reason.trim() });
-      logAudit('member', uid, 'update', `Membership suspended: ${r.name} — ${reason.trim()}`);
-      await sendNotification(uid, "Membership Suspended", `Your membership has been suspended. Reason: ${reason.trim()}`, "error");
+      await db.collection('users').doc(uid).update({ suspended: true, membershipStatus: 'suspended', statusReason: reason });
+      logAudit('member', uid, 'update', `Membership suspended: ${r.name}${reason ? ' — ' + reason : ''}`);
+      await sendNotification(uid, "Membership Suspended", `Your membership has been suspended by the management.${reason ? ' Reason: ' + reason : ''}`, "error");
       loadAllResidents();
     } catch(e) { alert("Error suspending resident: " + e.message); }
   };
 
   window.unsuspendResident = async function(uid) {
-    if (currentUserProfile.role !== 'admin') return;
+    if (!canSuspend()) return;
     const r = allResidents.find(item => item.uid === uid);
     if (!r || !confirm(`Lift the suspension of ${r.name}?`)) return;
     try {
