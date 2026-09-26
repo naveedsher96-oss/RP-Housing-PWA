@@ -205,12 +205,14 @@
     border-radius:var(--radius); padding:24px; max-width:480px; width:100%;
     box-shadow:var(--shadow); position:relative; max-height:85vh; overflow-y:auto;
   }
+  .modal-head{ position:sticky; top:0; height:0; z-index:5; display:flex; justify-content:flex-end; }
   .modal-close{
-    position:absolute; top:16px; right:16px; background:var(--bg-elevated-2);
+    position:relative; top:-8px; right:-8px; flex-shrink:0; background:var(--bg-elevated-2);
     color:var(--text-muted); border:1px solid var(--border); border-radius:50%;
     width:32px; height:32px; display:flex; align-items:center; justify-content:center;
-    cursor:pointer; font-size:16px; font-weight:bold;
+    cursor:pointer; font-size:16px; font-weight:bold; box-shadow:0 2px 8px rgba(0,0,0,0.35);
   }
+  .modal-close:hover{ color:var(--text); border-color:var(--accent-2); }
 
   nav.tabbar{
     position:fixed; bottom:0; left:0; right:0; z-index:40;
@@ -273,7 +275,7 @@
 <!-- Modal Container -->
 <div id="modal-view" class="modal-overlay">
   <div class="modal-card">
-    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-head"><button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button></div>
     <div id="modal-body"></div>
   </div>
 </div>
@@ -3004,6 +3006,8 @@
         <button class="btn primary block" onclick="openUploadProofModal('${b.id}')" style="margin-bottom:10px;">Upload Payment Proof (Own Bill)</button>
       ` : ''}
 
+      ${isAdmin ? `<button class="btn danger block" onclick="closeModal(); archiveBill('${b.id}')" style="margin-bottom:6px;">Remove Bill</button>` : ''}
+
       ${isAdmin ? `
         <form id="admin-bill-form">
           <label>Update Status</label>
@@ -3996,7 +4000,7 @@
     }
 
     listEl.innerHTML = expensesList.map(x => `
-      <div class="card" style="cursor:default;">
+      <div class="card" onclick="openExpenseDetailModal('${x.id}')">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
           <span style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(x.category || 'Other')}</span>
           <span class="amount" style="color:var(--danger);">${formatMoney(x.amount)}</span>
@@ -4004,10 +4008,101 @@
         <div style="font-size:13px; margin-bottom:4px; white-space:pre-wrap;">${escapeHtml(x.description || '')}</div>
         <div style="font-size:12px; margin-bottom:4px;"><span style="color:var(--text-faint);">Paid from:</span> <span style="color:${expenseSource(x) === 'fund' ? 'var(--info)' : 'var(--accent-2)'}; font-weight:600;">${escapeHtml(expenseSourceLabel(x))}</span></div>
         <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(x.expenseDate || '')} · Entered by ${escapeHtml(x.enteredBy || 'Management')}${x.decisionRef ? ' · Board ref: ' + escapeHtml(x.decisionRef) : ''}</div>
-        ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" style="margin-top:8px;" onclick="archiveExpense('${x.id}')">Remove</button>` : ''}
+        <div style="margin-top:12px; display:flex; gap:8px;">
+          <button class="btn sm secondary" onclick="event.stopPropagation(); downloadExpensePDF('${x.id}')">Receipt PDF</button>
+          ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" onclick="event.stopPropagation(); archiveExpense('${x.id}')">Remove</button>` : ''}
+        </div>
       </div>
     `).join('');
   }
+
+  function expenseRefNo(x) {
+    return 'EXP-' + String(x.id || '').slice(-6).toUpperCase();
+  }
+
+  window.openExpenseDetailModal = function(expenseId) {
+    const x = expensesList.find(item => item.id === expenseId);
+    if (!x) return;
+    const isAdmin = currentUserProfile.role === 'admin';
+    const fromFund = expenseSource(x) === 'fund';
+    const row = (label, val, style = '') => `<div style="display:flex; justify-content:space-between; gap:12px; margin-bottom:8px;"><span style="font-size:13px; color:var(--text-muted); white-space:nowrap;">${label}</span><span style="font-size:13.5px; text-align:right; ${style}">${val}</span></div>`;
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding-right:44px; margin-bottom:12px;">
+        <span class="ticket-no">${escapeHtml(expenseRefNo(x))}</span>
+        <span class="badge ${fromFund ? 'assigned' : 'notice'}">${fromFund ? 'Fund' : 'Bills account'}</span>
+      </div>
+      <div style="font-family:var(--font-display); font-size:18px; font-weight:600; color:var(--accent-2); margin-bottom:4px;">${escapeHtml(x.category || 'Other')}</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Expense dated ${escapeHtml(formatDate(x.expenseDate))}</div>
+
+      <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px;">
+        ${row('Amount', `<span class="amount" style="color:var(--danger);">${formatMoney(x.amount)}</span>`)}
+        ${row('Paid From', escapeHtml(expenseSourceLabel(x)), `color:${fromFund ? 'var(--info)' : 'var(--accent-2)'}; font-weight:600;`)}
+        ${row('Expense Date', escapeHtml(formatDate(x.expenseDate)))}
+        ${row('Recorded On', escapeHtml(formatDate(x.createdAt)))}
+        ${row('Entered By', escapeHtml(x.enteredBy || 'Management'))}
+        ${x.decisionRef ? row('Board Reference', escapeHtml(x.decisionRef)) : ''}
+      </div>
+
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700; margin-bottom:6px;">Details</div>
+      <div style="font-size:13.5px; line-height:1.55; margin-bottom:16px; white-space:pre-wrap;">${escapeHtml(x.description || 'No details recorded.')}</div>
+
+      <button class="btn secondary block" onclick="downloadExpensePDF('${x.id}')" style="margin-bottom:10px;">Download Receipt PDF</button>
+      ${isAdmin ? `<button class="btn danger block" onclick="closeModal(); archiveExpense('${x.id}')">Remove Expense</button>` : ''}
+    `;
+    document.getElementById('modal-view').classList.add('active');
+  };
+
+  window.downloadExpensePDF = function(expenseId) {
+    const x = expensesList.find(item => item.id === expenseId);
+    if (!x) return;
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Roshan Pakistan Housing Society", 105, 20, { align: "center" });
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text("Expense Receipt", 105, 28, { align: "center" });
+      doc.line(20, 35, 190, 35);
+
+      let y = 48;
+      const addRow = (label, val) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(label + ":", 25, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(val || 'N/A'), 85, y);
+        y += 10;
+      };
+
+      addRow("Reference", expenseRefNo(x));
+      addRow("Category", x.category);
+      addRow("Amount", formatMoney(x.amount));
+      addRow("Paid From", expenseSourceLabel(x));
+      addRow("Expense Date", formatDate(x.expenseDate));
+      addRow("Recorded On", formatDate(x.createdAt));
+      addRow("Entered By", x.enteredBy || 'Management');
+      if (x.decisionRef) addRow("Board Reference", x.decisionRef);
+
+      y += 5;
+      doc.setFont("helvetica", "bold");
+      doc.text("Details:", 25, y);
+      y += 8;
+      doc.setFont("helvetica", "normal");
+      doc.text(doc.splitTextToSize(x.description || 'N/A', 160), 25, y);
+
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text(`Generated ${new Date().toLocaleString()} by ${currentUserProfile.name || 'RPHS app'}`, 105, 285, { align: "center" });
+
+      doc.save(`Expense_${expenseRefNo(x)}_${String(x.expenseDate || '').replace(/[^0-9-]/g, '') || 'record'}.pdf`);
+    } catch(err) {
+      alert("Error generating PDF: " + err.message);
+    }
+  };
 
   window.openAddExpenseModal = async function() {
     if (currentUserProfile.role !== 'admin') return;
