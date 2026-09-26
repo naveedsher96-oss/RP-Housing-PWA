@@ -193,6 +193,70 @@
     border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
   }
   textarea{resize:vertical; min-height:80px;}
+  input:focus, select:focus, textarea:focus{ border-color:rgba(242,169,59,0.6); box-shadow:0 0 0 3px var(--accent-soft); }
+  select{
+    appearance:none; -webkit-appearance:none; color-scheme:dark; cursor:pointer; padding-right:40px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23FFC670' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat; background-position:right 13px center;
+  }
+  select option, select optgroup{ background:var(--bg-elevated); color:var(--text); font-family:var(--font-body); font-size:14px; padding:10px 12px; }
+  select optgroup{ color:var(--text-faint); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+  select option:checked{ background:var(--bg-elevated-3); color:var(--accent-2); }
+
+  /* Custom picker: styled, searchable replacement for a native <select> */
+  .picker{ position:relative; }
+  .picker-trigger{
+    width:100%; display:flex; align-items:center; gap:12px; text-align:left; cursor:pointer;
+    background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:10px 13px;
+    color:var(--text); font-family:inherit; transition:border-color .15s, box-shadow .15s;
+  }
+  .picker-trigger:focus-visible, .picker.open .picker-trigger{ outline:none; border-color:rgba(242,169,59,0.6); box-shadow:0 0 0 3px var(--accent-soft); }
+  .picker-avatar{
+    width:36px; height:36px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    font-size:12.5px; font-weight:800; letter-spacing:.3px; color:#251400;
+    background:linear-gradient(180deg, var(--accent-2), var(--accent));
+  }
+  .picker-avatar.all{ background:var(--info); color:#fff; font-size:15px; }
+  .picker-avatar.staff{ background:linear-gradient(180deg, #8FA7F5, var(--info)); color:#fff; }
+  .picker-avatar.cat{ background:var(--bg-elevated-3); color:var(--accent-2); font-size:16px; }
+  .picker-text{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .picker-main{ font-size:14.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .picker-sub{ font-size:11.5px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .picker-chev{ flex-shrink:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; color:var(--accent-2); transition:transform .18s; }
+  .picker.open .picker-chev{ transform:rotate(180deg); }
+  .picker-panel{
+    display:none; margin-top:6px; background:var(--bg-elevated-2); border:1px solid var(--border);
+    border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.4);
+  }
+  .picker.open .picker-panel{ display:block; animation:pickerIn .16s ease-out; }
+  @keyframes pickerIn{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+  .picker-search-wrap{ padding:10px 10px 6px; }
+  .picker-search{
+    width:100%; background:var(--bg); border:1px solid var(--border); border-radius:9px; color:var(--text);
+    padding:10px 12px 10px 36px; font-family:inherit; font-size:14px; outline:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239AA0C3' stroke-width='2.2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><line x1='20' y1='20' x2='16.5' y2='16.5'/></svg>");
+    background-repeat:no-repeat; background-position:12px center;
+  }
+  .picker-list{ max-height:280px; overflow-y:auto; padding:4px 6px 8px; }
+  .picker-group{
+    display:flex; justify-content:space-between; align-items:center; padding:10px 10px 4px;
+    font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--text-faint);
+  }
+  .picker-opt{
+    width:100%; display:flex; align-items:center; gap:12px; text-align:left; cursor:pointer;
+    background:none; border:none; border-radius:9px; padding:9px 10px; color:var(--text); font-family:inherit;
+  }
+  .picker-opt:hover, .picker-opt:focus-visible{ background:var(--bg-elevated-3); outline:none; }
+  .picker-opt.selected{ background:var(--accent-soft); }
+  .picker-opt .picker-avatar{ width:34px; height:34px; font-size:12px; }
+  .picker-opt .picker-main{ font-size:14px; font-weight:600; }
+  .picker-check{ flex-shrink:0; width:20px; color:var(--accent-2); font-weight:800; opacity:0; }
+  .picker-opt.selected .picker-check{ opacity:1; }
+  .picker-tag{
+    flex-shrink:0; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px;
+    padding:3px 7px; border-radius:6px; background:var(--info-soft); color:var(--info);
+  }
+  .picker-empty{ text-align:center; color:var(--text-muted); font-size:13px; padding:18px 10px; }
 
   .modal-overlay{
     position:fixed; top:0; left:0; right:0; bottom:0; z-index:100;
@@ -2863,6 +2927,119 @@
     }
   };
 
+  // --- CUSTOM PICKER (styled replacement for <select>) ---
+  // pickerHtml() renders a hidden input (#id, holds the value) plus a trigger
+  // and an inline searchable options panel; read the value from #id as usual.
+  // option: { value, label, sub, initials, avatarClass, tag, group }
+  const pickerRegistry = {};
+
+  function initialsOf(name) {
+    const parts = String(name || '').replace(/\(.*?\)/g, '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  }
+
+  function pickerAvatarHtml(o) {
+    return `<span class="picker-avatar ${o.avatarClass || ''}">${escapeHtml(o.initials || initialsOf(o.label))}</span>`;
+  }
+
+  function pickerTriggerInner(o, placeholder) {
+    if (!o) return `<span class="picker-avatar cat">?</span><span class="picker-text"><span class="picker-main" style="color:var(--text-faint); font-weight:600;">${escapeHtml(placeholder)}</span></span>`;
+    return `${pickerAvatarHtml(o)}<span class="picker-text"><span class="picker-main">${escapeHtml(o.label)}</span>${o.sub ? `<span class="picker-sub">${escapeHtml(o.sub)}</span>` : ''}</span>`;
+  }
+
+  function pickerOptionsHtml(id, options, selected, query) {
+    const q = String(query || '').trim().toLowerCase();
+    const visible = q ? options.filter(o => `${o.label} ${o.sub || ''} ${o.tag || ''}`.toLowerCase().includes(q)) : options;
+    if (!visible.length) return `<div class="picker-empty">No matches for “${escapeHtml(query)}”</div>`;
+    let lastGroup = null;
+    return visible.map(o => {
+      let head = '';
+      if (o.group && o.group !== lastGroup) {
+        lastGroup = o.group;
+        const count = visible.filter(v => v.group === o.group).length;
+        head = `<div class="picker-group"><span>${escapeHtml(o.group)}</span><span>${count}</span></div>`;
+      }
+      return head + `
+        <button type="button" class="picker-opt ${o.value === selected ? 'selected' : ''}" data-value="${escapeHtml(o.value)}" onclick="pickerSelect('${id}', this.dataset.value)">
+          ${pickerAvatarHtml(o)}
+          <span class="picker-text"><span class="picker-main">${escapeHtml(o.label)}</span>${o.sub ? `<span class="picker-sub">${escapeHtml(o.sub)}</span>` : ''}</span>
+          ${o.tag ? `<span class="picker-tag">${escapeHtml(o.tag)}</span>` : ''}
+          <span class="picker-check">✓</span>
+        </button>`;
+    }).join('');
+  }
+
+  function pickerHtml(id, options, opts = {}) {
+    const selected = opts.value !== undefined ? opts.value : (options[0] ? options[0].value : '');
+    const placeholder = opts.placeholder || 'Select…';
+    pickerRegistry[id] = { options, selected, placeholder, searchable: opts.searchable !== false && options.length > 6, searchPlaceholder: opts.searchPlaceholder || 'Search…' };
+    const cur = options.find(o => o.value === selected);
+    const reg = pickerRegistry[id];
+    return `
+      <div class="picker" id="picker-${id}">
+        <input type="hidden" id="${id}" value="${escapeHtml(selected)}" />
+        <button type="button" class="picker-trigger" id="picker-trigger-${id}" onclick="pickerToggle('${id}')" aria-haspopup="listbox">
+          ${pickerTriggerInner(cur, placeholder)}
+          <span class="picker-chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+        </button>
+        <div class="picker-panel" role="listbox">
+          ${reg.searchable ? `<div class="picker-search-wrap"><input type="search" class="picker-search" id="picker-search-${id}" placeholder="${escapeHtml(reg.searchPlaceholder)}" autocomplete="off" oninput="pickerFilter('${id}', this.value)" /></div>` : ''}
+          <div class="picker-list" id="picker-list-${id}">${pickerOptionsHtml(id, options, selected, '')}</div>
+        </div>
+      </div>`;
+  }
+
+  window.pickerToggle = function(id) {
+    const el = document.getElementById(`picker-${id}`);
+    if (!el) return;
+    const opening = !el.classList.contains('open');
+    document.querySelectorAll('.picker.open').forEach(p => p.classList.remove('open'));
+    if (!opening) return;
+    el.classList.add('open');
+    const search = document.getElementById(`picker-search-${id}`);
+    if (search) { search.value = ''; pickerFilter(id, ''); setTimeout(() => search.focus(), 30); }
+    const sel = el.querySelector('.picker-opt.selected');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+  };
+
+  window.pickerFilter = function(id, query) {
+    const reg = pickerRegistry[id];
+    const list = document.getElementById(`picker-list-${id}`);
+    if (!reg || !list) return;
+    list.innerHTML = pickerOptionsHtml(id, reg.options, reg.selected, query);
+  };
+
+  window.pickerSelect = function(id, value) {
+    const reg = pickerRegistry[id];
+    const el = document.getElementById(`picker-${id}`);
+    if (!reg || !el) return;
+    reg.selected = value;
+    const cur = reg.options.find(o => o.value === value);
+    document.getElementById(id).value = value;
+    const trigger = document.getElementById(`picker-trigger-${id}`);
+    trigger.innerHTML = pickerTriggerInner(cur, reg.placeholder) + trigger.querySelector('.picker-chev').outerHTML;
+    el.classList.remove('open');
+    pickerFilter(id, '');
+    if (typeof reg.onChange === 'function') reg.onChange(value, cur);
+  };
+
+  function pickerOnChange(id, fn) {
+    if (pickerRegistry[id]) pickerRegistry[id].onChange = fn;
+  }
+
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.picker.open').forEach(p => { if (!p.contains(e.target)) p.classList.remove('open'); });
+  });
+
+  const BILL_CATEGORY_OPTIONS = [
+    { value: 'Monthly Maintenance', label: 'Monthly Maintenance', sub: 'Regular monthly society charge', initials: '🏠', avatarClass: 'cat' },
+    { value: 'Water Supply', label: 'Water Supply', sub: 'Water tanker / supply charges', initials: '💧', avatarClass: 'cat' },
+    { value: 'Security Surcharge', label: 'Security Surcharge', sub: 'Guards, gates and CCTV', initials: '🛡️', avatarClass: 'cat' },
+    { value: 'Repair / Damage Recovery', label: 'Repair / Damage Recovery', sub: 'Recovery of a specific repair cost', initials: '🔧', avatarClass: 'cat' },
+    { value: 'Other', label: 'Other', sub: 'Any other one-off charge', initials: '…', avatarClass: 'cat' }
+  ];
+
   window.openIssueBillModal = async function() {
     if (currentUserProfile.role !== 'admin') return;
 
@@ -2889,20 +3066,14 @@
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Issue Maintenance Bill</div>
       <form id="bill-form">
         <label>Resident / House</label>
-        <select id="bill-resident" required>
-          ${residents.map(r => `<option value="${escapeHtml(r.uid)}">${escapeHtml(r.name)} — ${escapeHtml(r.house || 'N/A')}</option>`).join('')}
-          ${staffMembers.map(r => `<option value="${escapeHtml(r.uid)}">${escapeHtml(r.name)} — ${escapeHtml(r.house || r.role)}${r.uid === auth.currentUser.uid ? ' (you)' : ''}</option>`).join('')}
-          <option value="__all__">— All approved residents (bulk issue) —</option>
-        </select>
+        ${pickerHtml('bill-resident', [
+          { value: '__all__', label: 'All approved residents', sub: `Bulk issue · ${residents.length} resident${residents.length === 1 ? '' : 's'}, one bill each`, initials: '☰', avatarClass: 'all', group: 'Bulk' },
+          ...residents.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).map(r => ({ value: r.uid, label: r.name || 'Resident', sub: r.house || 'House not set', group: 'Residents' })),
+          ...staffMembers.map(r => ({ value: r.uid, label: (r.name || 'Staff') + (r.uid === auth.currentUser.uid ? ' (you)' : ''), sub: r.house || 'House not set', tag: r.role, avatarClass: 'staff', group: 'Management' }))
+        ], { value: residents[0] ? residents[0].uid : '__all__', placeholder: 'Choose a resident', searchPlaceholder: 'Search by name or house…' })}
 
         <label>Bill Category</label>
-        <select id="bill-category" required>
-          <option value="Monthly Maintenance">Monthly Maintenance</option>
-          <option value="Water Supply">Water Supply</option>
-          <option value="Security Surcharge">Security Surcharge</option>
-          <option value="Repair / Damage Recovery">Repair / Damage Recovery</option>
-          <option value="Other">Other</option>
-        </select>
+        ${pickerHtml('bill-category', BILL_CATEGORY_OPTIONS, { searchable: false })}
 
         <label>Billing Period</label>
         <input type="text" id="bill-period" value="${escapeHtml(defaultPeriod)}" required />
@@ -3449,9 +3620,10 @@
       <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Fund: <strong>${escapeHtml(f.title)}</strong></div>
       <form id="record-contrib-form">
         <label>Resident</label>
-        <select id="record-contrib-resident" required>
-          ${residents.map(r => `<option value="${escapeHtml(r.uid)}">${escapeHtml(r.name)} — ${escapeHtml(r.house || r.role)}${r.uid === auth.currentUser.uid ? ' (you)' : ''}</option>`).join('')}
-        </select>
+        ${pickerHtml('record-contrib-resident', residents
+          .slice().sort((a, b) => (a.role === 'resident') === (b.role === 'resident') ? String(a.name || '').localeCompare(String(b.name || '')) : (a.role === 'resident' ? -1 : 1))
+          .map(r => ({ value: r.uid, label: (r.name || 'Resident') + (r.uid === auth.currentUser.uid ? ' (you)' : ''), sub: r.house || 'House not set', tag: r.role !== 'resident' ? r.role : '', avatarClass: r.role !== 'resident' ? 'staff' : '', group: r.role === 'resident' ? 'Residents' : 'Management' })),
+          { placeholder: 'Choose a resident', searchPlaceholder: 'Search by name or house…' })}
         <label>Amount (PKR)</label>
         <input type="number" id="record-contrib-amount" placeholder="e.g. 5000" required min="1" />
         <label>Payment Method</label>
@@ -4133,17 +4305,15 @@
     const fundRows = expenseSources.funds
       .map(f => ({ f, s: fundSummary(f.id, expenseSources.contribs, expensesList, expenseSources.transfers) }))
       .sort((a, b) => b.s.balance - a.s.balance);
-    const fundOptions = fundRows
-      .map(({ f, s }) => `<option value="fund:${f.id}">Fund: ${escapeHtml(f.title || 'Fund')}${(f.status || 'active') !== 'active' ? ' (closed)' : ''} — balance ${formatMoney(s.balance)}</option>`)
-      .join('');
+    const sourceOptions = [
+      { value: 'bills', label: 'Bills account', sub: `Balance ${formatMoney(billsAcct.balance)}`, initials: '₨', avatarClass: 'cat', group: 'Pooled bill payments' },
+      ...fundRows.map(({ f, s }) => ({ value: `fund:${f.id}`, label: f.title || 'Fund', sub: `Balance ${formatMoney(s.balance)}`, tag: (f.status || 'active') !== 'active' ? 'closed' : '', initials: '◈', avatarClass: 'staff', group: 'Community funds' }))
+    ];
     modalBody.innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Add Expense</div>
       <form id="expense-form">
         <label>Pay From</label>
-        <select id="exp-source" required>
-          <option value="bills">Bills account — balance ${formatMoney(billsAcct.balance)}</option>
-          ${fundOptions}
-        </select>
+        ${pickerHtml('exp-source', sourceOptions, { searchPlaceholder: 'Search funds…' })}
         <div style="font-size:11.5px; color:var(--text-faint); margin:-6px 0 10px;">
           Bills account = ${formatMoney(billsAcct.collected)} from ${expenseSources.bills.filter(b => b.status === 'paid').length} paid bill(s) minus ${formatMoney(billsAcct.spent)} spent${billsAcct.transferredIn || billsAcct.transferredOut ? `, ${billsAcct.transferredIn >= billsAcct.transferredOut ? 'plus' : 'minus'} ${formatMoney(Math.abs(billsAcct.transferredIn - billsAcct.transferredOut))} net transfers` : ''}.
           ${fundRows.length ? `${fundRows.length} fund(s) listed — each shows verified contributions minus spending from that fund.` : 'No community funds found — start one in the Funds tab to spend from it.'}
