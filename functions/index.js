@@ -18,6 +18,30 @@ function formatMoney(n) {
   return "PKR " + Number(n || 0).toLocaleString("en-PK");
 }
 
+// Mirrors inferNotifCategory() in index.html for notifications created without
+// an explicit category. Emergency alerts can never be muted.
+function notifCategory(data) {
+  if (data.category) return String(data.category);
+  const t = String(data.title || "").toLowerCase();
+  if (/emergency/.test(t)) return "emergency";
+  if (/bill|payment|maintenance|proof/.test(t)) return "bills";
+  if (/contribution|fund/.test(t)) return "funds";
+  if (/poll/.test(t)) return "polls";
+  if (/announcement|comment/.test(t)) return "notices";
+  if (/complaint|ticket/.test(t)) return "complaints";
+  if (/volunteer/.test(t)) return "volunteers";
+  if (/membership|account|suspension|approved/.test(t)) return "membership";
+  return "general";
+}
+
+async function isPushMuted(uid, data) {
+  const category = notifCategory(data);
+  if (category === "emergency") return false;
+  const userDoc = await admin.firestore().collection("users").doc(uid).get();
+  const muted = userDoc.exists ? userDoc.data().mutedCategories : null;
+  return Array.isArray(muted) && muted.includes(category);
+}
+
 // Today's date as YYYY-MM-DD in Pakistan time (matches the app's dueDate strings).
 function todayKey() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -345,6 +369,7 @@ exports.sendPushOnNotification = onDocumentCreated(
     const uid = event.params.uid;
     const tokenDoc = await admin.firestore().collection("fcm_tokens").doc(uid).get();
     if (!tokenDoc.exists) return;
+    if (await isPushMuted(uid, data)) return;
 
     const token = tokenDoc.data().token;
     if (!token) return;
