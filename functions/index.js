@@ -1,4 +1,4 @@
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
@@ -10,6 +10,9 @@ const TIME_ZONE = "Asia/Karachi";
 const REMINDER_INTERVAL_DAYS = 7;
 const PRE_DUE_REMINDER_DAYS = 3;
 const MAINTENANCE_DUE_DAY = 20;
+const RECURRING_ISSUE_DAY = 1;
+const RECURRING_SETTINGS_PATH = "settings/recurringBill";
+const RECURRING_ISSUER = "Auto (recurring)";
 
 function formatMoney(n) {
   return "PKR " + Number(n || 0).toLocaleString("en-PK");
@@ -162,6 +165,172 @@ exports.sendMonthlyMaintenanceNotice = onSchedule(
     }
     if (ops) await batch.commit();
     console.log(`${today}: monthly maintenance notice sent to ${sent} member(s)`);
+  }
+);
+
+// ---------- recurring monthly bills ----------
+// settings/recurringBill: { enabled, amount, category, dueDay, notes,
+//   runRequest?: { month: "YYYY-MM", dueDate: "YYYY-MM-DD", by, at }, lastRun }
+// A bill is issued to every approved, non-suspended, non-exempt member who
+// lives in the society (role resident, or any staff with a house set) and does
+// not already have a bill for that month — paid or unpaid, auto or manual.
+
+function pad2(n) { return String(n).padStart(2, "0"); }
+
+function lastDayOfMonth(monthKey) {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+function isBillable(u) {
+  return u.approved === true && u.suspended !== true && u.billExempt !== true &&
+    (u.role === "resident" || (typeof u.house === "string" && u.house.trim() !== ""));
+}
+
+async function getRecurringSettings(db) {
+  const snap = await db.doc(RECURRING_SETTINGS_PATH).get();
+  const s = snap.exists ? snap.data() : {};
+  return {
+    ref: snap.ref,
+    enabled: s.enabled === true,
+    amount: Number(s.amount || 0),
+    category: s.category || "Monthly Maintenance",
+    dueDay: Math.min(Math.max(Number(s.dueDay) || MAINTENANCE_DUE_DAY, 1), 28),
+    notes: s.notes || "",
+    runRequest: s.runRequest || null,
+  };
+}
+
+// uids that already hold a non-archived bill of the recurring category for the
+// month: matched by the recurringMonth stamp, the period label, or a due date
+// inside that month. Other categories (e.g. a one-off repair) don't count.
+async function uidsBilledForMonth(db, monthKey, period, category) {
+  const cat = String(category || "").trim().toLowerCase();
+  const start = `${monthKey}-01`;
+  const end = `${monthKey}-${pad2(lastDayOfMonth(monthKey))}`;
+  const [byDue, byPeriod, byStamp] = await Promise.all([
+    db.collection("bills").where("dueDate", ">=", start).where("dueDate", "<=", end).get(),
+    db.collection("bills").where("period", "==", period).get(),
+    db.collection("bills").where("recurringMonth", "==", monthKey).get(),
+  ]);
+  const uids = new Set();
+  [...byDue.docs, ...byPeriod.docs, ...byStamp.docs].forEach((d) => {
+    const b = d.data();
+    if (b.isDeleted || !b.uid || b.status === "cancelled") return;
+    const sameCat = String(b.category || "").trim().toLowerCase() === cat;
+    if (sameCat || b.recurringMonth === monthKey) uids.add(b.uid);
+  });
+  return uids;
+}
+
+async function issueRecurringBills(db, settings, monthKey, dueDate, trigger) {
+  const period = monthLabel(`${monthKey}-01`);
+  const [users, already] = await Promise.all([
+    db.collection("users").where("approved", "==", true).get(),
+    uidsBilledForMonth(db, monthKey, period, settings.category),
+  ]);
+
+  const targets = [];
+  let skippedBilled = 0;
+  let skippedExempt = 0;
+  users.docs.forEach((d) => {
+    const u = d.data();
+    if (!isBillable(u)) { if (u.approved === true && u.suspended !== true && u.billExempt === true) skippedExempt++; return; }
+    if (already.has(d.id)) { skippedBilled++; return; }
+    targets.push({ uid: d.id, ...u });
+  });
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  let batch = db.batch();
+  let ops = 0;
+  const flush = async () => { if (ops) { await batch.commit(); batch = db.batch(); ops = 0; } };
+  for (const r of targets) {
+    const billNo = "BILL-" + Math.floor(100000 + Math.random() * 900000);
+    batch.set(db.collection("bills").doc(), {
+      billNo,
+      uid: r.uid,
+      name: r.name || "",
+      house: r.house || "",
+      category: settings.category,
+      period,
+      amount: settings.amount,
+      currency: "PKR",
+      dueDate,
+      notes: settings.notes,
+      status: "unpaid",
+      issuedBy: RECURRING_ISSUER,
+      recurring: true,
+      recurringMonth: monthKey,
+      createdAt: now,
+    });
+    batch.set(db.collection("users").doc(r.uid).collection("notifications").doc(), notificationDoc(
+      `New Maintenance Bill (${billNo})`,
+      `${settings.category} for ${period}: ${formatMoney(settings.amount)}. Due by ${dueDate}.`,
+      "info"
+    ));
+    ops += 2;
+    if (ops >= 400) await flush();
+  }
+
+  const summary = `${period}: ${targets.length} recurring bill(s) of ${formatMoney(settings.amount)} issued, ` +
+    `${skippedBilled} already billed, ${skippedExempt} exempt (${trigger})`;
+  batch.set(db.collection("audit_log").doc(), {
+    entityType: "bill", entityId: monthKey, action: "create", details: summary,
+    performedBy: RECURRING_ISSUER, performedByUid: "", role: "system", timestamp: now,
+  });
+  ops++;
+  users.docs.forEach((d) => {
+    if (d.data().role === "admin" && d.data().suspended !== true) {
+      batch.set(d.ref.collection("notifications").doc(), notificationDoc(
+        `Recurring bills issued — ${period}`,
+        `${targets.length} bill(s) of ${formatMoney(settings.amount)} issued (due ${dueDate}); ${skippedBilled} member(s) already billed, ${skippedExempt} exempt.`,
+        "info"
+      ));
+      ops++;
+    }
+  });
+  batch.set(settings.ref, {
+    lastRun: { at: now, month: monthKey, period, dueDate, issued: targets.length, skippedBilled, skippedExempt, trigger },
+  }, { merge: true });
+  ops++;
+  await flush();
+  console.log(summary);
+  return { issued: targets.length, skippedBilled, skippedExempt };
+}
+
+// Runs on the RECURRING_ISSUE_DAY of every month.
+exports.issueMonthlyRecurringBills = onSchedule(
+  { schedule: `${RECURRING_ISSUE_DAY} of month 09:00`, timeZone: TIME_ZONE },
+  async () => {
+    const db = admin.firestore();
+    const settings = await getRecurringSettings(db);
+    const today = todayKey();
+    const monthKey = today.slice(0, 7);
+    if (!settings.enabled || !(settings.amount > 0)) {
+      console.log(`${today}: recurring bills disabled — nothing issued`);
+      return;
+    }
+    await issueRecurringBills(db, settings, monthKey, `${monthKey}-${pad2(settings.dueDay)}`, "scheduled");
+  }
+);
+
+// Admin's "Issue now" button writes settings/recurringBill.runRequest; this
+// trigger performs the run (so the logic lives in one place) and clears it.
+exports.runRecurringBillsOnRequest = onDocumentWritten(
+  RECURRING_SETTINGS_PATH,
+  async (event) => {
+    const after = event.data && event.data.after;
+    if (!after || !after.exists) return;
+    const req = after.data().runRequest;
+    if (!req || !req.month) return;
+    const db = admin.firestore();
+    const settings = await getRecurringSettings(db);
+    await settings.ref.set({ runRequest: admin.firestore.FieldValue.delete() }, { merge: true });
+    if (!(settings.amount > 0)) { console.log("Run requested but amount is not set"); return; }
+    const monthKey = String(req.month).slice(0, 7);
+    const dueDate = typeof req.dueDate === "string" && req.dueDate.length === 10
+      ? req.dueDate : `${monthKey}-${pad2(settings.dueDay)}`;
+    await issueRecurringBills(db, settings, monthKey, dueDate, `requested by ${req.by || "admin"}`);
   }
 );
 
