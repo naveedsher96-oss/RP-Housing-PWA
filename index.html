@@ -428,6 +428,8 @@
   let billsList = [];
   let billFilterStatus = 'all';
   let societySettings = null;
+  let recurringSettings = null;
+  let recurringExempt = [];
   let fundsList = [];
   let fundContribsList = [];
   let ticketFilterMonth = 'all';
@@ -1378,6 +1380,7 @@
         <div class="section-sub">${isAdmin ? 'Issue and track maintenance billing per house.' : 'Maintenance charges issued to your house by management.'}</div>
         <div id="bills-summary"></div>
         <div id="bills-account-card"></div>
+        <div id="recurring-bill-card"></div>
         <div id="bank-card"></div>
         <div class="chip-row">
           ${[['all','All'],['unpaid','Unpaid'],['overdue','Overdue'],['submitted','In Review'],['paid','Paid']].map(([f, lbl]) => `
@@ -2550,8 +2553,170 @@
     }).catch(e => { console.error("Error loading bills:", e); showLoadError('bills-list', e); });
 
     loadSocietySettings().then(renderBankCard);
-    if (currentUserProfile.role === 'admin') loadBillsAccountCard();
+    if (currentUserProfile.role === 'admin') { loadBillsAccountCard(); loadRecurringBillCard(); }
   }
+
+  // --- RECURRING MONTHLY BILL (ADMIN) ---
+  // settings/recurringBill is read by the issueMonthlyRecurringBills Cloud
+  // Function on the 1st of every month; "Issue now" writes runRequest, which the
+  // runRecurringBillsOnRequest trigger performs and clears.
+  const RECURRING_DEFAULTS = { enabled: false, amount: 500, category: 'Monthly Maintenance', dueDay: 20, notes: '' };
+
+  function loadRecurringBillCard() {
+    Promise.all([
+      db.collection('settings').doc('recurringBill').get(),
+      db.collection('users').where('billExempt', '==', true).get()
+    ]).then(([doc, exSnap]) => {
+      recurringSettings = { ...RECURRING_DEFAULTS, ...(doc.exists ? doc.data() : {}) };
+      recurringExempt = exSnap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(u => u.approved === true);
+      renderRecurringBillCard();
+    }).catch(e => { console.error("Error loading recurring bill settings:", e); showLoadError('recurring-bill-card', e); });
+  }
+
+  function ordinal(n) {
+    const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  function renderRecurringBillCard() {
+    const el = document.getElementById('recurring-bill-card');
+    if (!el || currentUserProfile.role !== 'admin' || !recurringSettings) return;
+    const s = recurringSettings;
+    const last = s.lastRun;
+    const lastAt = last ? toDate(last.at) : null;
+    const pending = !!(s.runRequest && s.runRequest.month);
+    el.innerHTML = `
+      <div class="filter-bar">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <label style="margin:0;">Recurring Monthly Bill</label>
+          <span class="badge ${s.enabled ? 'paid' : 'closed'}" style="flex-shrink:0;">${s.enabled ? 'ON' : 'OFF'}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:8px;">
+          <span style="font-size:13px; color:var(--text-muted);">${escapeHtml(s.category)}</span>
+          <span class="amount">${formatMoney(s.amount)}</span>
+        </div>
+        <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">
+          Issued on the 1st of every month to every approved resident · due on the ${ordinal(Number(s.dueDay) || 20)} · ${recurringExempt.length} exempt
+        </div>
+        <div style="font-size:11.5px; color:var(--text-faint); margin-top:2px;">
+          Members who already have a ${escapeHtml(s.category)} bill for that month (paid or unpaid) are skipped. New residents are included automatically once approved.
+        </div>
+        ${pending ? `<div style="font-size:12px; color:var(--accent-2); margin-top:8px;">Issuing ${escapeHtml(monthLabel(s.runRequest.month))} bills now… refresh in a moment.</div>` : ''}
+        ${last ? `<div style="font-size:12px; color:var(--text-muted); margin-top:8px;">Last run${lastAt ? ' ' + lastAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}: <b>${last.issued}</b> bill(s) for ${escapeHtml(last.period || '')}, ${last.skippedBilled || 0} already billed, ${last.skippedExempt || 0} exempt.</div>` : ''}
+        ${recurringExempt.length ? `
+          <details style="margin-top:8px;">
+            <summary style="font-size:12.5px; color:var(--accent-2); cursor:pointer;">Exempt members (${recurringExempt.length})</summary>
+            <div style="margin-top:6px; font-size:12.5px; line-height:1.7;">
+              ${recurringExempt.map(u => `<div>${escapeHtml(u.name || 'Member')} <span style="color:var(--text-faint);">— ${escapeHtml(u.house || 'N/A')}${u.billExemptReason ? ' · ' + escapeHtml(u.billExemptReason) : ''}</span></div>`).join('')}
+            </div>
+            <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Manage exemptions from the Residents Directory.</div>
+          </details>
+        ` : ''}
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button class="btn sm secondary block" onclick="openRecurringBillModal()">Settings</button>
+          <button class="btn sm primary block" onclick="openIssueRecurringNowModal()" ${pending || !(Number(s.amount) > 0) ? 'disabled' : ''}>Issue Now</button>
+        </div>
+      </div>
+    `;
+  }
+
+  window.openRecurringBillModal = function() {
+    if (currentUserProfile.role !== 'admin') return;
+    const s = recurringSettings || RECURRING_DEFAULTS;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Recurring Monthly Bill</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">One bill per approved resident, created automatically on the 1st of every month. Residents get a soft reminder 3 days before the due date and a notice on the due date.</div>
+      <form id="recurring-form">
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="rec-enabled" ${s.enabled ? 'checked' : ''} style="width:18px; height:18px; margin:0;" />
+          <span>Enable recurring bills</span>
+        </label>
+        <label>Amount (PKR)</label>
+        <input type="number" id="rec-amount" value="${Number(s.amount) || ''}" min="1" required />
+        <label>Bill Category</label>
+        ${pickerHtml('rec-category', BILL_CATEGORY_OPTIONS, { value: s.category, searchable: false })}
+        <label>Due Day of Month</label>
+        <input type="number" id="rec-dueday" value="${Number(s.dueDay) || 20}" min="1" max="28" required />
+        <label>Notes on each bill (optional)</label>
+        <textarea id="rec-notes" placeholder="e.g. Covers security, sweeping and street lights">${escapeHtml(s.notes || '')}</textarea>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+
+    document.getElementById('recurring-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = {
+        enabled: document.getElementById('rec-enabled').checked,
+        amount: Number(document.getElementById('rec-amount').value),
+        category: document.getElementById('rec-category').value,
+        dueDay: Number(document.getElementById('rec-dueday').value) || 20,
+        notes: document.getElementById('rec-notes').value.trim(),
+        updatedBy: currentUserProfile.name,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      if (!(data.amount > 0)) { alert("Please enter a valid amount."); return; }
+      try {
+        await db.collection('settings').doc('recurringBill').set(data, { merge: true });
+        logAudit('settings', 'recurringBill', 'update', `Recurring bill ${data.enabled ? 'enabled' : 'disabled'}: ${data.category} ${formatMoney(data.amount)}, due day ${data.dueDay}`);
+        closeModal();
+        loadRecurringBillCard();
+      } catch(err) {
+        alert("Error saving recurring bill settings: " + err.message);
+      }
+    });
+  };
+
+  window.openIssueRecurringNowModal = function() {
+    if (currentUserProfile.role !== 'admin' || !recurringSettings || !(Number(recurringSettings.amount) > 0)) return;
+    const s = recurringSettings;
+    const today = new Date();
+    const thisKey = monthKey(today);
+    const nextKey = monthKey(new Date(today.getFullYear(), today.getMonth() + 1, 1));
+    const dueFor = (key) => {
+      const due = `${key}-${String(Number(s.dueDay) || 20).padStart(2, '0')}`;
+      const todayKey = `${thisKey}-${String(today.getDate()).padStart(2, '0')}`;
+      if (due >= todayKey) return due;
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7);
+      return `${monthKey(d)}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Issue Recurring Bills Now</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Creates a ${escapeHtml(s.category)} bill of <b>${formatMoney(s.amount)}</b> for every approved resident who does not already have a bill for the chosen month. Anyone already billed or paid for that month is skipped; exempt members are skipped.</div>
+      <form id="recurring-now-form">
+        <label>Billing Month</label>
+        ${pickerHtml('rec-now-month', [
+          { value: thisKey, label: monthLabel(thisKey), sub: 'Current month', initials: '📅', avatarClass: 'cat' },
+          { value: nextKey, label: monthLabel(nextKey), sub: 'Next month (in advance)', initials: '📆', avatarClass: 'cat' }
+        ], { value: thisKey, searchable: false })}
+        <label>Due Date</label>
+        <input type="date" id="rec-now-due" value="${dueFor(thisKey)}" required />
+        <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Defaults to the ${ordinal(Number(s.dueDay) || 20)}; if that has already passed, one week from today.</div>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Issue Bills & Notify Residents</button>
+      </form>
+    `;
+    document.getElementById('modal-view').classList.add('active');
+    pickerOnChange('rec-now-month', (val) => { document.getElementById('rec-now-due').value = dueFor(val); });
+
+    document.getElementById('recurring-now-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const month = document.getElementById('rec-now-month').value;
+      const dueDate = document.getElementById('rec-now-due').value;
+      if (!dueDate) { alert("Please choose a due date."); return; }
+      if (!confirm(`Issue ${monthLabel(month)} bills of ${formatMoney(s.amount)} now, due ${dueDate}?`)) return;
+      try {
+        await db.collection('settings').doc('recurringBill').set({
+          runRequest: { month, dueDate, by: currentUserProfile.name, at: firebase.firestore.FieldValue.serverTimestamp() }
+        }, { merge: true });
+        logAudit('settings', 'recurringBill', 'update', `Recurring bills for ${monthLabel(month)} requested (due ${dueDate})`);
+        closeModal();
+        loadRecurringBillCard();
+        setTimeout(() => { loadBills(); }, 6000);
+      } catch(err) {
+        alert("Error requesting bill run: " + err.message);
+      }
+    });
+  };
 
   // Admin-only card on the Bills tab: the pooled Bills account (all paid bills)
   // with its balance, a Transfer-to-Fund action and the transfer history.
@@ -5162,11 +5327,15 @@
         <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">CNIC: ${escapeHtml(r.cnic || 'N/A')} | Phone: ${escapeHtml(r.phone || 'N/A')}</div>
         <div style="font-size:12px; color:var(--text-muted);">Blood Group: ${escapeHtml(r.bloodGroup || 'N/A')} (${escapeHtml(r.occupancyType || 'N/A')})</div>
         ${r.suspended ? '<div style="font-size:12px; color:var(--danger); margin-top:4px;">Suspended' + (r.statusReason ? ': ' + escapeHtml(r.statusReason) : '') + '</div>' : ''}
+        ${r.billExempt ? '<div style="font-size:12px; color:var(--accent-2); margin-top:4px;">Exempt from recurring bill' + (r.billExemptReason ? ': ' + escapeHtml(r.billExemptReason) : '') + '</div>' : ''}
         ${canSuspend() && r.role === 'resident' ? `
-          <div style="margin-top:8px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
             ${r.suspended
               ? `<button class="btn sm secondary" onclick="unsuspendResident('${r.uid}')">Lift Suspension</button>`
               : `<button class="btn sm danger" onclick="suspendResident('${r.uid}')">Suspend</button>`}
+            ${r.billExempt
+              ? `<button class="btn sm secondary" onclick="setBillExempt('${r.uid}', false)">Include in Recurring Bill</button>`
+              : `<button class="btn sm secondary" onclick="setBillExempt('${r.uid}', true)">Exempt from Recurring Bill</button>`}
           </div>
         ` : ''}
       </div>
@@ -5309,6 +5478,28 @@
       await sendNotification(uid, "Suspension Lifted", "Your membership suspension has been lifted. Welcome back!", "success");
       loadAllResidents();
     } catch(e) { alert("Error: " + e.message); }
+  };
+
+  // Exempt members are skipped by the 1st-of-month recurring bill; manual bills still work.
+  window.setBillExempt = async function(uid, exempt) {
+    if (!canSuspend()) return;
+    const r = allResidents.find(item => item.uid === uid);
+    if (!r) return;
+    let reason = '';
+    if (exempt) {
+      const input = prompt(`Exempt ${r.name} (${r.house || 'N/A'}) from the recurring monthly bill?\nReason (optional) — press OK to confirm:`);
+      if (input === null) return;
+      reason = input.trim();
+    } else if (!confirm(`Include ${r.name} in the recurring monthly bill again from next month?`)) {
+      return;
+    }
+    try {
+      await db.collection('users').doc(uid).update({ billExempt: exempt, billExemptReason: exempt ? reason : '' });
+      logAudit('member', uid, 'update', exempt
+        ? `Exempted from recurring bill: ${r.name}${reason ? ' — ' + reason : ''}`
+        : `Included in recurring bill again: ${r.name}`);
+      loadAllResidents();
+    } catch(e) { alert("Error updating recurring bill exemption: " + e.message); }
   };
 
 })();

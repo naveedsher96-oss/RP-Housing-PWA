@@ -51,11 +51,12 @@ service cloud.firestore {
         && request.resource.data.role == 'resident'
         && request.resource.data.approved == false;
 
-      // Self-update: cannot escalate role or self-approve/unsuspend
+      // Self-update: cannot escalate role, self-approve/unsuspend, or opt out of recurring bills
       allow update: if (isOwner(uid)
           && request.resource.data.get('role', '') == resource.data.get('role', '')
           && request.resource.data.get('approved', false) == resource.data.get('approved', false)
-          && request.resource.data.get('suspended', false) == resource.data.get('suspended', false))
+          && request.resource.data.get('suspended', false) == resource.data.get('suspended', false)
+          && request.resource.data.get('billExempt', false) == resource.data.get('billExempt', false))
         || isAdmin() || isSuperAdmin();
 
       // No hard deletes of user records (soft policy)
