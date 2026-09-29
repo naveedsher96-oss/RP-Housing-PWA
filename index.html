@@ -19,8 +19,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 
-<!-- jsPDF for Admin PDF Export -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- jsPDF is loaded on demand by ensureJsPDF() -->
 
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -120,6 +119,22 @@
     border-radius:12px; padding:12px 14px; margin-bottom:16px; display:flex;
     align-items:center; justify-content:space-between; gap:10px;
   }
+  .offline-banner{
+    background:var(--warning-soft); border:1px solid rgba(242,169,59,0.35); color:var(--accent-2);
+    border-radius:12px; padding:9px 14px; margin-bottom:14px; font-size:12.5px; font-weight:600; text-align:center;
+  }
+
+  .notif-item{background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px 10px 16px; border-radius:10px; margin-bottom:8px; position:relative; cursor:pointer;}
+  .notif-item.unread{border-color:rgba(242,169,59,0.35); background:linear-gradient(180deg, rgba(242,169,59,0.08), var(--bg-elevated-2));}
+  .notif-item.unread::before{content:''; position:absolute; left:6px; top:16px; width:6px; height:6px; border-radius:50%; background:var(--accent);}
+  .notif-item .meta{display:flex; justify-content:space-between; gap:8px; font-size:10.5px; color:var(--text-faint); margin-top:6px;}
+  .notif-cat{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-muted);}
+  .mute-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px;}
+  .mute-row:last-child{border-bottom:none;}
+  .switch{position:relative; width:40px; height:22px; border-radius:11px; background:rgba(255,255,255,0.14); border:none; cursor:pointer; transition:background .15s; flex:none;}
+  .switch::after{content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left .15s;}
+  .switch.on{background:var(--success);}
+  .switch.on::after{left:21px;}
 
   main{flex:1; padding:18px 18px 10px;}
   .section-title{
@@ -396,6 +411,8 @@
       if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
       db = firebase.firestore();
       auth = firebase.auth();
+      enableOfflineData();
+      registerAppServiceWorker();
 
       Promise.resolve(firebase.messaging.isSupported()).then(supported => {
         if (supported) {
@@ -408,6 +425,80 @@
     console.error("Firebase Init Error:", e);
     renderBootError('Could not start the app. Please check your internet connection and try again.');
   }
+
+  // --- OFFLINE & PERFORMANCE ---
+  // Firestore keeps a local copy of everything the user has read, so tabs open
+  // instantly and still work (read-only) without signal.
+  function enableOfflineData() {
+    if (!db || typeof db.enablePersistence !== 'function') return;
+    db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+      console.log('Offline data unavailable:', err && err.code ? err.code : err);
+    });
+  }
+
+  function registerAppServiceWorker() {
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+    navigator.serviceWorker.register('firebase-messaging-sw.js').catch(err => console.log('Service worker error:', err));
+  }
+
+  // Shows locally cached data straight away, then replaces it with the live
+  // result. handler(snapshot, fromCache) may run twice; an error is only thrown
+  // when nothing at all could be shown.
+  async function fetchFast(query, handler) {
+    let shown = false;
+    try {
+      const cached = await query.get({ source: 'cache' });
+      if (cached && !cached.empty) { shown = true; handler(cached, true); }
+    } catch (_) { /* no cache yet */ }
+    try {
+      const live = await query.get();
+      handler(live, false);
+    } catch (e) {
+      if (!shown) throw e;
+      console.log('Using cached data:', e && e.message ? e.message : e);
+    }
+  }
+
+  // Long lists render PAGE_SIZE cards at a time with a "Show more" button.
+  const PAGE_SIZE = 25;
+  const pageShown = {};
+  const pageRenderers = {};
+  function pageOf(key, items, rerender) {
+    pageRenderers[key] = rerender;
+    return items.slice(0, pageShown[key] || PAGE_SIZE);
+  }
+  function showMoreButton(key, total) {
+    const shown = Math.min(total, pageShown[key] || PAGE_SIZE);
+    if (shown >= total) return '';
+    return `<button class="btn secondary" style="width:100%; margin-top:6px;" onclick="showMore('${key}')">Show more (${total - shown} remaining)</button>`;
+  }
+  window.showMore = function(key) {
+    pageShown[key] = (pageShown[key] || PAGE_SIZE) + PAGE_SIZE;
+    if (pageRenderers[key]) pageRenderers[key]();
+  };
+
+  let jsPdfLoading = null;
+  function ensureJsPDF() {
+    if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf);
+    if (!jsPdfLoading) {
+      jsPdfLoading = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload = () => window.jspdf && window.jspdf.jsPDF ? resolve(window.jspdf) : reject(new Error('PDF library failed to load'));
+        s.onerror = () => { jsPdfLoading = null; reject(new Error('PDF library could not be downloaded. Check your connection and try again.')); };
+        document.head.appendChild(s);
+      });
+    }
+    return jsPdfLoading;
+  }
+
+  function renderOfflineBanner() {
+    const el = document.getElementById('offline-banner');
+    if (!el) return;
+    el.style.display = navigator.onLine === false ? 'block' : 'none';
+  }
+  window.addEventListener('online', () => { renderOfflineBanner(); if (currentUserProfile) loadData(); });
+  window.addEventListener('offline', renderOfflineBanner);
 
   // Application State Variables
   let currentUserProfile = null;
@@ -523,6 +614,8 @@
         }
       } else {
         currentUserProfile = null;
+        notifications = [];
+        notifsLoadedAt = 0;
         if (wasSignedIn) {
           authMessage = manualSignOut
             ? { type: 'success', text: 'You have been signed out successfully.' }
@@ -554,7 +647,7 @@
         body: payload.notification.body,
         icon: 'icon-192.png'
       });
-      loadNotifications();
+      loadNotifications(true);
     });
   }
 
@@ -711,6 +804,7 @@
       </header>
 
       <main style="padding-bottom:20px;">
+        <div id="offline-banner" class="offline-banner" style="display:${navigator.onLine === false ? 'block' : 'none'};">You're offline — showing saved data. Changes need a connection.</div>
         ${('Notification' in window && Notification.permission !== 'granted') ? `
           <div class="push-banner">
             <span style="font-size:12.5px; font-weight:600; color:var(--accent-2);">Enable push notifications for instant alerts!</span>
@@ -734,7 +828,7 @@
         `).join('')}
         <div class="drawer-footer">
           <button class="drawer-item" onclick="openNotificationsModal()">
-            <span class="ico">🔔</span>Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}
+            <span class="ico">🔔</span><span id="drawer-notif-label">Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}</span>
           </button>
           <button class="drawer-item" onclick="doSignOut()" style="color:var(--danger);">
             <span class="ico">🚪</span>Logout
@@ -1623,7 +1717,40 @@
   }
 
   // --- SUBCOLLECTION NOTIFICATION SYSTEM ---
-  async function sendNotification(targetUid, title, body, type = 'info') {
+  // Every notification carries a category so the centre can filter by it and
+  // residents can mute push for categories they don't care about (they still
+  // appear in the centre). Emergency broadcasts are never muted.
+  const NOTIF_CATEGORIES = [
+    ['emergency', 'Emergency', '🚨'],
+    ['bills', 'Bills & Payments', '💳'],
+    ['notices', 'Announcements', '📢'],
+    ['polls', 'Polls', '📊'],
+    ['funds', 'Community Funds', '💰'],
+    ['complaints', 'Complaints', '🛠️'],
+    ['volunteers', 'Volunteers', '🤝'],
+    ['membership', 'Membership', '👤'],
+    ['general', 'Other', '🔔']
+  ];
+  const MUTABLE_CATEGORIES = ['bills', 'notices', 'polls', 'funds', 'complaints', 'volunteers'];
+
+  function inferNotifCategory(title) {
+    const t = String(title || '').toLowerCase();
+    if (/emergency/.test(t)) return 'emergency';
+    if (/bill|payment|maintenance|proof/.test(t)) return 'bills';
+    if (/contribution|fund/.test(t)) return 'funds';
+    if (/poll/.test(t)) return 'polls';
+    if (/announcement|comment/.test(t)) return 'notices';
+    if (/complaint|ticket/.test(t)) return 'complaints';
+    if (/volunteer/.test(t)) return 'volunteers';
+    if (/membership|account|suspension|approved/.test(t)) return 'membership';
+    return 'general';
+  }
+  function notifCategory(n) { return n.category || inferNotifCategory(n.title); }
+  function notifCategoryMeta(cat) {
+    return NOTIF_CATEGORIES.find(c => c[0] === cat) || NOTIF_CATEGORIES[NOTIF_CATEGORIES.length - 1];
+  }
+
+  async function sendNotification(targetUid, title, body, type = 'info', category) {
     if (!db || !targetUid) return;
     try {
       await db.collection('users')
@@ -1634,6 +1761,7 @@
           body: body,
           text: body,
           type: type,
+          category: category || inferNotifCategory(title),
           read: false,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
@@ -1642,35 +1770,41 @@
     }
   }
 
-  async function broadcastNotification(title, body) {
+  async function broadcastNotification(title, body, category) {
     if (!db) return;
     try {
       const snap = await db.collection('users').where('approved', '==', true).get();
-      const batchPromises = snap.docs.map(userDoc => sendNotification(userDoc.id, title, body, 'notice'));
+      const batchPromises = snap.docs.map(userDoc => sendNotification(userDoc.id, title, body, 'notice', category));
       await Promise.all(batchPromises);
     } catch (e) {
       console.error("Broadcast failed:", e);
     }
   }
 
-  function loadNotifications() {
-    if (db && auth.currentUser) {
-      db.collection('users')
-        .doc(auth.currentUser.uid)
-        .collection('notifications')
-        .orderBy('createdAt', 'desc')
-        .limit(20)
-        .get()
-        .then(snapshot => {
-          notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          renderUnreadBadge();
-        })
-        .catch(err => console.error("Notifs load error:", err));
-    }
+  const NOTIF_LIMIT = 60;
+  let notifFilter = 'all';
+  let notifView = 'list'; // 'list' | 'settings'
+
+  function notificationsQuery() {
+    return db.collection('users').doc(auth.currentUser.uid).collection('notifications').orderBy('createdAt', 'desc').limit(NOTIF_LIMIT);
   }
 
+  let notifsLoadedAt = 0;
+  function loadNotifications(force) {
+    if (!db || !auth.currentUser) return;
+    if (!force && Date.now() - notifsLoadedAt < 30000) { renderUnreadBadge(); return; }
+    notifsLoadedAt = Date.now();
+    fetchFast(notificationsQuery(), snapshot => {
+      notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderUnreadBadge();
+      if (document.getElementById('notif-list')) renderNotificationsModal();
+    }).catch(err => console.error("Notifs load error:", err));
+  }
+
+  function unreadNotifCount() { return notifications.filter(n => !n.read).length; }
+
   function renderUnreadBadge() {
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const unreadCount = unreadNotifCount();
     const bellBtn = document.querySelector('.notif-bell-btn');
     if (bellBtn) {
       const existingBadge = bellBtn.querySelector('.notif-badge');
@@ -1679,31 +1813,152 @@
         bellBtn.innerHTML += `<span class="notif-badge">${unreadCount}</span>`;
       }
     }
+    const drawerItem = document.getElementById('drawer-notif-label');
+    if (drawerItem) drawerItem.textContent = 'Notifications' + (unreadCount > 0 ? ` (${unreadCount})` : '');
   }
 
-  window.openNotificationsModal = async function() {
-    document.getElementById('modal-body').innerHTML = `
-      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Notifications</div>
-      ${notifications.length ? notifications.map(n => `
-        <div style="background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px; border-radius:10px; margin-bottom:8px;">
-          ${n.title ? `<div style="font-weight:700; font-size:13px; color:var(--accent-2);">${escapeHtml(n.title)}</div>` : ''}
-          <div style="font-size:13px; color:var(--text); line-height:1.4; white-space:pre-wrap;">${escapeHtml(n.text || n.body)}</div>
-        </div>
-      `).join('') : '<div style="color:var(--text-muted); text-align:center; padding:20px;">No notifications yet.</div>'}
-    `;
-    document.getElementById('modal-view').classList.add('active');
+  function timeAgo(value) {
+    const d = toDate(value);
+    if (!d) return '';
+    const mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + ' min ago';
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + ' hr' + (hrs === 1 ? '' : 's') + ' ago';
+    const days = Math.round(hrs / 24);
+    if (days < 7) return days + ' day' + (days === 1 ? '' : 's') + ' ago';
+    return formatDate(d);
+  }
 
-    // Mark as read in batch
-    const unreadDocs = notifications.filter(n => !n.read);
-    if (unreadDocs.length && db && auth.currentUser) {
-      const batch = db.batch();
-      unreadDocs.forEach(n => {
-        const ref = db.collection('users').doc(auth.currentUser.uid).collection('notifications').doc(n.id);
-        batch.update(ref, { read: true });
-      });
-      await batch.commit().catch(e => console.error("Error marking notifs read:", e));
-      loadNotifications();
+  function mutedCategories() {
+    return Array.isArray(currentUserProfile && currentUserProfile.mutedCategories) ? currentUserProfile.mutedCategories : [];
+  }
+
+  window.openNotificationsModal = function() {
+    notifView = 'list';
+    renderNotificationsModal();
+    document.getElementById('modal-view').classList.add('active');
+    loadNotifications(true);
+  };
+
+  function renderNotificationsModal() {
+    const body = document.getElementById('modal-body');
+    if (!body) return;
+    const unread = unreadNotifCount();
+    const muted = mutedCategories();
+    const counts = {};
+    notifications.forEach(n => { const c = notifCategory(n); counts[c] = (counts[c] || 0) + 1; });
+    const list = notifFilter === 'all' ? notifications
+      : notifFilter === 'unread' ? notifications.filter(n => !n.read)
+      : notifications.filter(n => notifCategory(n) === notifFilter);
+    const page = pageOf('notifs', list, renderNotificationsModal);
+
+    const head = `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding-right:44px; margin-bottom:12px;">
+        <div>
+          <div style="font-family:var(--font-display); font-size:20px; font-weight:600;">Notifications</div>
+          <div style="font-size:12px; color:var(--text-muted);">${unread ? `${unread} unread` : 'All caught up'}${muted.length ? ` · ${muted.length} muted` : ''}</div>
+        </div>
+        <button class="btn sm ${notifView === 'settings' ? 'primary' : 'secondary'}" onclick="toggleNotifSettings()" title="Notification settings">⚙️ Settings</button>
+      </div>`;
+
+    if (notifView === 'settings') {
+      body.innerHTML = head + `
+        <div class="card" style="margin-bottom:10px;">
+          <div style="font-weight:700; font-size:13.5px; margin-bottom:4px;">Push alerts</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">Turn off a category to stop phone alerts for it. Muted items still appear here in the centre. Emergency alerts are always delivered.</div>
+          ${NOTIF_CATEGORIES.filter(c => MUTABLE_CATEGORIES.includes(c[0])).map(([key, label, ico]) => `
+            <div class="mute-row">
+              <span>${ico} ${label}</span>
+              <button class="switch ${muted.includes(key) ? '' : 'on'}" onclick="toggleNotifMute('${key}')" aria-label="Toggle ${label} alerts"></button>
+            </div>`).join('')}
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn sm secondary" style="flex:1;" onclick="clearReadNotifications()">Clear read notifications</button>
+          <button class="btn sm secondary" style="flex:1;" onclick="toggleNotifSettings()">Back to list</button>
+        </div>`;
+      return;
     }
+
+    const chips = [['all', 'All', notifications.length], ['unread', 'Unread', unread]]
+      .concat(NOTIF_CATEGORIES.filter(c => counts[c[0]]).map(c => [c[0], c[2] + ' ' + c[1], counts[c[0]]]));
+
+    body.innerHTML = head + `
+      <div class="chip-row" style="margin-bottom:10px;">
+        ${chips.map(([key, label, n]) => `<span class="chip ${notifFilter === key ? 'active' : ''}" onclick="setNotifFilter('${key}')">${label}${n ? ` · ${n}` : ''}</span>`).join('')}
+      </div>
+      ${unread ? `<button class="btn sm secondary" style="width:100%; margin-bottom:10px;" onclick="markAllNotificationsRead()">✓ Mark all as read</button>` : ''}
+      <div id="notif-list">
+        ${page.length ? page.map(n => {
+          const meta = notifCategoryMeta(notifCategory(n));
+          return `
+          <div class="notif-item ${n.read ? '' : 'unread'}" onclick="toggleNotificationRead('${n.id}')">
+            ${n.title ? `<div style="font-weight:700; font-size:13px; color:${n.read ? 'var(--text)' : 'var(--accent-2)'};">${escapeHtml(n.title)}</div>` : ''}
+            <div style="font-size:13px; color:var(--text-muted); line-height:1.4; white-space:pre-wrap;">${escapeHtml(n.text || n.body || '')}</div>
+            <div class="meta"><span class="notif-cat">${meta[2]} ${escapeHtml(meta[1])}</span><span>${timeAgo(n.createdAt)}${n.read ? '' : ' · tap to mark read'}</span></div>
+          </div>`;
+        }).join('') : `<div style="color:var(--text-muted); text-align:center; padding:20px;">${notifFilter === 'unread' ? 'No unread notifications.' : 'No notifications yet.'}</div>`}
+        ${showMoreButton('notifs', list.length)}
+      </div>`;
+  }
+
+  window.setNotifFilter = function(key) { notifFilter = key; delete pageShown['notifs']; renderNotificationsModal(); };
+  window.toggleNotifSettings = function() { notifView = notifView === 'settings' ? 'list' : 'settings'; renderNotificationsModal(); };
+
+  function notifRef(id) {
+    return db.collection('users').doc(auth.currentUser.uid).collection('notifications').doc(id);
+  }
+
+  window.toggleNotificationRead = async function(id) {
+    const n = notifications.find(item => item.id === id);
+    if (!n || !db || !auth.currentUser) return;
+    n.read = !n.read;
+    renderUnreadBadge();
+    renderNotificationsModal();
+    try { await notifRef(id).update({ read: n.read }); }
+    catch (e) { console.error("Error updating notification:", e); }
+  };
+
+  window.markAllNotificationsRead = async function() {
+    const unreadDocs = notifications.filter(n => !n.read);
+    if (!unreadDocs.length || !db || !auth.currentUser) return;
+    unreadDocs.forEach(n => { n.read = true; });
+    renderUnreadBadge();
+    renderNotificationsModal();
+    try {
+      for (let i = 0; i < unreadDocs.length; i += 400) {
+        const batch = db.batch();
+        unreadDocs.slice(i, i + 400).forEach(n => batch.update(notifRef(n.id), { read: true }));
+        await batch.commit();
+      }
+    } catch (e) { console.error("Error marking notifs read:", e); }
+  };
+
+  window.clearReadNotifications = async function() {
+    const readDocs = notifications.filter(n => n.read);
+    if (!readDocs.length) { alert("There are no read notifications to clear."); return; }
+    if (!confirm(`Delete ${readDocs.length} read notification${readDocs.length === 1 ? '' : 's'}? Unread ones are kept.`)) return;
+    notifications = notifications.filter(n => !n.read);
+    renderNotificationsModal();
+    try {
+      for (let i = 0; i < readDocs.length; i += 400) {
+        const batch = db.batch();
+        readDocs.slice(i, i + 400).forEach(n => batch.delete(notifRef(n.id)));
+        await batch.commit();
+      }
+    } catch (e) { console.error("Error clearing notifications:", e); }
+    loadNotifications(true);
+  };
+
+  window.toggleNotifMute = async function(category) {
+    if (!db || !auth.currentUser || !currentUserProfile) return;
+    const muted = mutedCategories().slice();
+    const idx = muted.indexOf(category);
+    if (idx >= 0) muted.splice(idx, 1); else muted.push(category);
+    currentUserProfile.mutedCategories = muted;
+    renderNotificationsModal();
+    try { await db.collection('users').doc(auth.currentUser.uid).update({ mutedCategories: muted }); }
+    catch (e) { console.error("Error saving notification settings:", e); alert("Could not save notification settings: " + e.message); }
   };
 
   window.closeModal = function() {
@@ -1801,8 +2056,9 @@
 
   function loadNotices() {
     if (!db) return;
-    db.collection('announcements').orderBy('createdAt', 'desc').get().then(async snapshot => {
+    fetchFast(db.collection('announcements').orderBy('createdAt', 'desc'), async (snapshot, fromCache) => {
       noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(n => !n.isDeleted);
+      if (fromCache) { renderNoticesList(); return; }
       const threads = await Promise.all(noticesList.map(n =>
         db.collection('announcements').doc(n.id).collection('comments').orderBy('createdAt', 'asc').get()
           .then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
@@ -1992,7 +2248,7 @@
           ...publisherFields(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        await broadcastNotification("New Announcement: " + title, content);
+        await broadcastNotification("New Announcement: " + title, content, 'notices');
         closeModal();
         loadNotices();
       } catch(err) {
@@ -2004,7 +2260,7 @@
   // --- POLLS ---
   function loadPolls() {
     if (!db) return;
-    db.collection('polls').orderBy('createdAt', 'desc').get().then(snapshot => {
+    fetchFast(db.collection('polls').orderBy('createdAt', 'desc'), snapshot => {
       pollsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       renderPollsList();
     }).catch(e => console.error("Error loading polls:", e));
@@ -2101,7 +2357,7 @@
           ...publisherFields(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        await broadcastNotification("New Poll Available", question);
+        await broadcastNotification("New Poll Available", question, 'polls');
         closeModal();
         loadPolls();
       } catch(err) {
@@ -2135,7 +2391,7 @@
     if (currentUserProfile.role !== 'admin') {
       query = query.where('uid', '==', auth.currentUser.uid);
     }
-    query.get().then(snapshot => {
+    fetchFast(query, snapshot => {
       ticketsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(t => !t.isDeleted);
       renderTicketsList();
     }).catch(e => { console.error("Error loading tickets:", e); showLoadError('tickets-list', e); });
@@ -2212,10 +2468,11 @@
     const statusEl = document.getElementById('ticket-filter-status');
     if (monthEl) ticketFilterMonth = monthEl.value;
     if (statusEl) ticketFilterStatus = statusEl.value;
+    delete pageShown['tickets'];
     renderTicketsList();
   };
 
-  window.downloadTicketsReportPDF = function() {
+  window.downloadTicketsReportPDF = async function() {
     const list = filteredTickets();
     if (!list.length) {
       alert("No complaints match the current filter.");
@@ -2223,7 +2480,7 @@
     }
 
     try {
-      const { jsPDF } = window.jspdf;
+      const { jsPDF } = await ensureJsPDF();
       const doc = new jsPDF();
 
       doc.setFont("helvetica", "bold");
@@ -2267,12 +2524,12 @@
     }
   };
 
-  window.downloadTicketPDF = function(ticketId) {
+  window.downloadTicketPDF = async function(ticketId) {
     const t = ticketsList.find(item => item.id === ticketId);
     if (!t) return;
 
     try {
-      const { jsPDF } = window.jspdf;
+      const { jsPDF } = await ensureJsPDF();
       const doc = new jsPDF();
 
       doc.setFont("helvetica", "bold");
@@ -2331,7 +2588,7 @@
       return;
     }
 
-    listEl.innerHTML = list.map(t => `
+    listEl.innerHTML = pageOf('tickets', list, renderTicketsList).map(t => `
       <div class="card" style="cursor:default;" onclick="openTicketDetailModal('${t.id}')">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
           <div>
@@ -2349,7 +2606,7 @@
           <button class="btn sm danger" onclick="event.stopPropagation(); archiveTicket('${t.id}')">Remove</button>
         </div>` : ''}
       </div>
-    `).join('');
+    `).join('') + showMoreButton('tickets', list.length);
   }
 
   window.openNewTicketModal = function() {
@@ -2541,7 +2798,7 @@
       ? db.collection('bills')
       : db.collection('bills').where('uid', '==', auth.currentUser.uid);
 
-    query.get().then(snapshot => {
+    fetchFast(query, snapshot => {
       billsList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(b => !b.isDeleted)
@@ -2839,6 +3096,7 @@
 
   window.setBillFilter = function(filter) {
     billFilterStatus = filter;
+    delete pageShown['bills'];
     document.querySelectorAll('.chip-row .chip').forEach(chip => {
       chip.classList.toggle('active', chip.getAttribute('data-filter') === filter);
     });
@@ -2880,7 +3138,7 @@
       return;
     }
 
-    listEl.innerHTML = list.map(b => {
+    listEl.innerHTML = pageOf('bills', list, renderBillsList).map(b => {
       const status = billStatus(b);
       return `
         <div class="card" onclick="openBillDetailModal('${b.id}')">
@@ -2914,7 +3172,7 @@
           </div>
         </div>
       `;
-    }).join('');
+    }).join('') + showMoreButton('bills', list.length);
   }
 
   window.payBill = function() {
@@ -3405,13 +3663,13 @@
     }
   };
 
-  window.downloadBillPDF = function(billId) {
+  window.downloadBillPDF = async function(billId) {
     const b = billsList.find(item => item.id === billId);
     if (!b) return;
     const status = billStatus(b);
 
     try {
-      const { jsPDF } = window.jspdf;
+      const { jsPDF } = await ensureJsPDF();
       const doc = new jsPDF();
 
       doc.setFont("helvetica", "bold");
@@ -3613,7 +3871,7 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         logAudit('fund', ref.id, 'create', `Fund "${title}" (${category}) started`);
-        await broadcastNotification(`New Fund: ${title}`, `${purpose.slice(0, 140)} — open the Funds tab to contribute.`);
+        await broadcastNotification(`New Fund: ${title}`, `${purpose.slice(0, 140)} — open the Funds tab to contribute.`, 'funds');
         closeModal();
         loadFunds();
       } catch(err) {
@@ -3894,7 +4152,7 @@
     try {
       await db.collection('funds').doc(fundId).update({ status: 'closed' });
       logAudit('fund', fundId, 'update', `Fund "${f.title}" closed — total ${formatMoney(fundVerifiedTotal(f.id))}`);
-      await broadcastNotification(`Fund Closed: ${f.title}`, `Total collected: ${formatMoney(fundVerifiedTotal(f.id))}. Thank you to everyone who contributed.`);
+      await broadcastNotification(`Fund Closed: ${f.title}`, `Total collected: ${formatMoney(fundVerifiedTotal(f.id))}. Thank you to everyone who contributed.`, 'funds');
       closeModal();
       loadFunds();
     } catch(err) {
@@ -4336,7 +4594,7 @@
       return;
     }
 
-    listEl.innerHTML = expensesList.map(x => `
+    listEl.innerHTML = pageOf('expenses', expensesList, renderExpensesList).map(x => `
       <div class="card" onclick="openExpenseDetailModal('${x.id}')">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
           <span style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(x.category || 'Other')}</span>
@@ -4350,7 +4608,7 @@
           ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" onclick="event.stopPropagation(); archiveExpense('${x.id}')">Remove</button>` : ''}
         </div>
       </div>
-    `).join('');
+    `).join('') + showMoreButton('expenses', expensesList.length);
   }
 
   function expenseRefNo(x) {
@@ -4390,12 +4648,12 @@
     document.getElementById('modal-view').classList.add('active');
   };
 
-  window.downloadExpensePDF = function(expenseId) {
+  window.downloadExpensePDF = async function(expenseId) {
     const x = expensesList.find(item => item.id === expenseId);
     if (!x) return;
 
     try {
-      const { jsPDF } = window.jspdf;
+      const { jsPDF } = await ensureJsPDF();
       const doc = new jsPDF();
 
       doc.setFont("helvetica", "bold");
@@ -4761,7 +5019,7 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         logAudit('volunteer_program', ref.id, 'create', `Program "${title}" started`);
-        await broadcastNotification(`Volunteer Program: ${title}`, `A new volunteer program has started — open the Volunteers tab to join.`);
+        await broadcastNotification(`Volunteer Program: ${title}`, `A new volunteer program has started — open the Volunteers tab to join.`, 'volunteers');
         closeModal();
         loadVolunteers();
       } catch(err) {
@@ -4955,11 +5213,11 @@
     `;
   };
 
-  window.exportReportPDF = function() {
+  window.exportReportPDF = async function() {
     if (!reportsData) return;
     const staff = isStaff();
     try {
-      const { jsPDF } = window.jspdf;
+      const { jsPDF } = await ensureJsPDF();
       const doc = new jsPDF();
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
@@ -5230,17 +5488,17 @@
   // --- AUDIT & ARCHIVE (STAFF) ---
   function loadArchiveAndAudit() {
     if (!db || !isStaff()) return;
+    const archived = c => db.collection(c).where('isDeleted', '==', true).get();
     Promise.all([
-      db.collection('bills').get(),
-      db.collection('funds').get(),
-      db.collection('tickets').get(),
-      db.collection('expenses').get(),
-      db.collection('audit_log').get()
+      archived('bills'),
+      archived('funds'),
+      archived('tickets'),
+      archived('expenses'),
+      db.collection('audit_log').orderBy('timestamp', 'desc').limit(100).get()
     ]).then(([bills, funds, tickets, expenses, audit]) => {
       archivedRecords = [];
       const collect = (snap, type, label) => snap.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(x => x.isDeleted)
         .forEach(x => archivedRecords.push({ type, label: label(x), record: x }));
       collect(bills, 'bills', b => `Bill ${b.billNo || b.id} — ${b.name || ''} ${formatMoney(b.amount)}`);
       collect(funds, 'funds', f => `Fund "${f.title || ''}"`);
@@ -5273,7 +5531,7 @@
     if (audEl) {
       audEl.innerHTML = auditList.length ? `
         <div class="card" style="cursor:default;">
-          ${auditList.map(a => `
+          ${pageOf('audit', auditList, renderArchiveAndAudit).map(a => `
             <div style="font-size:12px; padding:6px 0; border-bottom:1px solid var(--border-soft);">
               <span style="color:var(--accent-2); font-weight:700;">${escapeHtml(a.action)}</span>
               <span style="color:var(--text-muted);">${escapeHtml(a.entityType)}</span>
@@ -5281,6 +5539,7 @@
               <div style="font-size:10.5px; color:var(--text-faint);">${escapeHtml(formatDate(a.timestamp))} · ${escapeHtml(a.performedBy || '')} (${escapeHtml(a.role || '')})</div>
             </div>
           `).join('')}
+          ${showMoreButton('audit', auditList.length)}
         </div>
       ` : '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No audit entries yet.</div>';
     }
@@ -5342,12 +5601,12 @@
     `).join('');
   }
 
-  window.downloadResidentPDF = function(uid) {
+  window.downloadResidentPDF = async function(uid) {
     const r = allResidents.find(item => item.uid === uid);
     if (!r) return;
 
     try {
-      const { jsPDF } = window.jspdf;
+      const { jsPDF } = await ensureJsPDF();
       const doc = new jsPDF();
 
       doc.setFont("helvetica", "bold");
