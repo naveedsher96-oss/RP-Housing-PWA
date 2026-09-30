@@ -203,7 +203,7 @@
   .btn.block{width:100%;}
 
   label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
-  input[type=text], input[type=number], input[type=date], input[type=email], input[type=password], select, textarea{
+  input[type=text], input[type=search], input[type=number], input[type=date], input[type=email], input[type=password], select, textarea{
     width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
     border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
   }
@@ -518,6 +518,10 @@
   let ticketsList = [];
   let billsList = [];
   let billFilterStatus = 'all';
+  let billSearch = '';
+  let billFilterMonth = 'all';
+  let expenseFilter = { month: 'all', category: 'all', source: 'all' };
+  let residentSearch = '';
   let societySettings = null;
   let recurringSettings = null;
   let recurringExempt = [];
@@ -1476,6 +1480,7 @@
         <div id="bills-account-card"></div>
         <div id="recurring-bill-card"></div>
         <div id="bank-card"></div>
+        ${isStaff() ? renderBillFilterBar() : ''}
         <div class="chip-row">
           ${[['all','All'],['unpaid','Unpaid'],['overdue','Overdue'],['submitted','In Review'],['paid','Paid']].map(([f, lbl]) => `
             <button class="chip ${billFilterStatus===f?'active':''}" data-filter="${f}" onclick="setBillFilter('${f}')">${lbl}</button>
@@ -1496,6 +1501,7 @@
         </div>
         <div class="section-sub">${isAdmin ? 'Raise and track maintenance & development funds.' : 'Society fundraisers you can contribute to.'}</div>
         <div id="funds-summary"></div>
+        ${isStaff() ? '<button class="btn sm secondary block" style="margin-bottom:14px;" onclick="exportContributionsCSV()">⬇ Export Contributions (CSV)</button>' : ''}
         <div id="funds-list">Loading funds...</div>
       `;
     }
@@ -1508,6 +1514,7 @@
         </div>
         <div class="section-sub">Society expenditure records${isAdmin ? ' — entered by management' : ''}.</div>
         <div id="expenses-summary"></div>
+        ${isStaff() ? renderExpenseFilterBar() : ''}
         <div id="expenses-list">Loading expenses...</div>
       `;
     }
@@ -1596,6 +1603,13 @@
         return `
           <div class="section-title">Residents Directory</div>
           <div class="section-sub">Approved residents database and records.</div>
+          <div class="filter-bar">
+            <div style="display:flex; gap:8px;">
+              <input type="search" id="resident-search" placeholder="Search name, house, phone or CNIC" value="${escapeHtml(residentSearch)}" oninput="setResidentSearch(this.value)" style="flex:1; min-width:0;" />
+              <button class="btn sm secondary" style="white-space:nowrap;" onclick="exportResidentsCSV()">⬇ CSV</button>
+            </div>
+            <div id="resident-filter-summary" style="font-size:12px; color:var(--text-muted); margin-top:8px;"></div>
+          </div>
           <div id="residents-list">Loading residents directory...</div>
         `;
       }
@@ -2778,6 +2792,45 @@
     });
   };
 
+  // --- CSV EXPORT ---
+  function csvCell(v) {
+    const str = v === null || v === undefined ? '' : String(v);
+    return /[",\r\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+  }
+  function dateStamp(d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function isoDate(value) {
+    const d = toDate(value);
+    return d ? dateStamp(d) : '';
+  }
+  function downloadCSV(fileName, headers, rows, reportType) {
+    const lines = [headers].concat(rows).map(r => r.map(csvCell).join(','));
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    logExport(reportType, fileName);
+  }
+  function logExport(reportType, fileName) {
+    if (!db || !currentUserProfile) return;
+    db.collection('report_exports').add({
+      reportType,
+      generatedBy: currentUserProfile.name,
+      generatedByUid: auth.currentUser.uid,
+      role: currentUserProfile.role,
+      fileName,
+      generatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(e => console.error("Export log failed:", e));
+    logAudit('report', '', 'create', `Export: ${fileName}`);
+  }
+
   // --- MAINTENANCE BILLS ---
   function formatMoney(amount) {
     return 'PKR ' + Number(amount || 0).toLocaleString('en-PK');
@@ -3103,6 +3156,323 @@
     renderBillsList();
   };
 
+  function renderBillFilterBar() {
+    return `
+      <div class="filter-bar">
+        <label>Find Bills</label>
+        <div style="display:flex; gap:8px;">
+          <input type="search" id="bill-search" placeholder="Name, house or bill no." value="${escapeHtml(billSearch)}" oninput="setBillSearch(this.value)" style="flex:1.4; min-width:0;" />
+          <select onchange="setBillMonth(this.value)" style="flex:1; min-width:0;">
+            <option value="all" ${billFilterMonth==='all'?'selected':''}>All months</option>
+            ${lastTwelveMonths().map(k => `<option value="${k}" ${billFilterMonth===k?'selected':''}>${monthLabel(k)}</option>`).join('')}
+          </select>
+        </div>
+        <div id="bill-filter-summary" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn sm secondary" style="flex:1;" onclick="exportBillsCSV()">⬇ Export CSV</button>
+          <button class="btn sm secondary" style="flex:1;" id="defaulters-btn" onclick="openDefaultersModal()">⚠ Defaulters</button>
+        </div>
+      </div>
+    `;
+  }
+
+  window.setBillSearch = function(value) {
+    billSearch = String(value || '').trim().toLowerCase();
+    delete pageShown['bills'];
+    renderBillsList();
+  };
+  window.setBillMonth = function(value) {
+    billFilterMonth = value || 'all';
+    delete pageShown['bills'];
+    renderBillsList();
+  };
+
+  function billInMonth(b, key) {
+    if (key === 'all') return true;
+    if (b.period === monthLabel(key)) return true;
+    const due = toDate(b.dueDate);
+    return !!due && monthKey(due) === key;
+  }
+
+  function filteredBills() {
+    return billsList.filter(b => {
+      if (billFilterStatus !== 'all' && billStatus(b) !== billFilterStatus) return false;
+      if (!billInMonth(b, billFilterMonth)) return false;
+      if (billSearch) {
+        const hay = [b.name, b.house, b.billNo, b.category, b.period].map(v => String(v || '').toLowerCase()).join(' ');
+        if (!hay.includes(billSearch)) return false;
+      }
+      return true;
+    });
+  }
+
+  function isOutstanding(b) {
+    const st = billStatus(b);
+    return st === 'unpaid' || st === 'overdue' || st === 'submitted';
+  }
+
+  window.exportBillsCSV = function() {
+    if (!isStaff()) return;
+    const rows = filteredBills().map(b => [
+      b.billNo, b.name, b.house, b.category, b.period, Number(b.amount || 0), billStatus(b),
+      isoDate(b.createdAt), isoDate(b.dueDate), b.status === 'paid' ? isoDate(b.paidAt) : '',
+      b.paymentRef, b.paymentMethod, b.verifiedBy, b.issuedBy, b.notes
+    ]);
+    if (!rows.length) return alert("No bills to export for the current filter.");
+    downloadCSV(`RPHS_Bills_${dateStamp()}.csv`,
+      ['Bill No', 'Resident', 'House', 'Category', 'Period', 'Amount (PKR)', 'Status', 'Issued', 'Due', 'Paid On', 'Payment Ref', 'Method', 'Verified By', 'Issued By', 'Notes'],
+      rows, 'bills_csv');
+  };
+
+  // --- DEFAULTERS (STAFF) ---
+  // One row per resident with unpaid/overdue bills (proofs under review are not
+  // counted as defaulting). Phone numbers come from the residents directory.
+  function ensureResidents() {
+    if (allResidents.length) return Promise.resolve(allResidents);
+    return db.collection('users').where('approved', '==', true).get().then(snapshot => {
+      allResidents = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      return allResidents;
+    });
+  }
+
+  function defaultersList() {
+    const byKey = {};
+    billsList.forEach(b => {
+      const st = billStatus(b);
+      if (st !== 'unpaid' && st !== 'overdue') return;
+      const key = b.uid || ('house:' + (b.house || b.name || b.id));
+      const d = byKey[key] || (byKey[key] = { key, uid: b.uid || '', name: b.name || 'Unknown', house: b.house || 'N/A', bills: [], total: 0, overdue: 0, oldestDue: null });
+      d.bills.push(b);
+      d.total += Number(b.amount || 0);
+      if (st === 'overdue') d.overdue += 1;
+      const due = toDate(b.dueDate);
+      if (due && (!d.oldestDue || due < d.oldestDue)) d.oldestDue = due;
+    });
+    return Object.values(byKey).map(d => {
+      const r = allResidents.find(x => x.uid === d.uid);
+      d.phone = r && r.phone ? String(r.phone) : '';
+      d.periods = [...new Set(d.bills.map(b => b.period || formatDate(b.dueDate)))];
+      return d;
+    }).sort((a, b) => b.total - a.total || b.bills.length - a.bills.length);
+  }
+
+  function houseLabel(house) {
+    const h = String(house || 'N/A').trim();
+    return /^(house|plot|flat|shop)\b/i.test(h) || h === 'N/A' ? h : 'House ' + h;
+  }
+
+  function defaulterMessage(d) {
+    return `Dear ${d.name}, your RPHS maintenance of ${formatMoney(d.total)} for ${d.periods.join(', ')} (${houseLabel(d.house)}) is outstanding. Please pay to the society account and upload your payment proof in the RPHS app. Thank you - Management`;
+  }
+
+  function whatsappLink(phone, text) {
+    let digits = String(phone || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) digits = '92' + digits.slice(1);
+    return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+  }
+
+  window.openDefaultersModal = async function() {
+    if (!isStaff()) return;
+    document.getElementById('modal-body').innerHTML = '<div style="color:var(--text-muted); padding:10px 0;">Loading defaulters…</div>';
+    document.getElementById('modal-view').classList.add('active');
+    try { await ensureResidents(); } catch (e) { console.error("Residents load failed:", e); }
+    renderDefaultersModal();
+  };
+
+  function renderDefaultersModal() {
+    const body = document.getElementById('modal-body');
+    if (!body) return;
+    const list = defaultersList();
+    const total = list.reduce((s, d) => s + d.total, 0);
+    const overdueHouses = list.filter(d => d.overdue).length;
+    const isAdmin = currentUserProfile.role === 'admin';
+
+    body.innerHTML = `
+      <div style="padding-right:44px; margin-bottom:12px;">
+        <div style="font-family:var(--font-display); font-size:20px; font-weight:600;">Defaulters</div>
+        <div style="font-size:12.5px; color:var(--text-muted);">${list.length} house(s) owe <span style="color:var(--danger); font-weight:700;">${formatMoney(total)}</span> · ${overdueHouses} overdue</div>
+      </div>
+      ${list.length ? `
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          ${isAdmin ? `<button class="btn sm primary" style="flex:1;" onclick="remindAllDefaulters()">🔔 Remind All</button>` : ''}
+          <button class="btn sm secondary" style="flex:1;" onclick="shareDefaultersText()">📤 Share</button>
+          <button class="btn sm secondary" style="flex:1;" onclick="exportDefaultersCSV()">⬇ CSV</button>
+        </div>
+        ${list.map(d => `
+          <div class="card" style="cursor:default; padding:12px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div style="min-width:0;">
+                <div style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(d.name)}</div>
+                <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(houseLabel(d.house))}${d.phone ? ' · ' + escapeHtml(d.phone) : ''}</div>
+              </div>
+              <div style="text-align:right; flex-shrink:0;">
+                <div class="amount" style="color:var(--danger);">${formatMoney(d.total)}</div>
+                <div style="font-size:11px; color:${d.overdue ? 'var(--danger)' : 'var(--text-faint)'};">${d.bills.length} bill(s)${d.overdue ? ` · ${d.overdue} overdue` : ''}</div>
+              </div>
+            </div>
+            <div style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${escapeHtml(d.periods.join(', '))}${d.oldestDue ? ' · oldest due ' + escapeHtml(formatDate(d.oldestDue)) : ''}</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
+              ${isAdmin && d.uid ? `<button class="btn sm primary" onclick="remindDefaulter('${d.key}')">🔔 Remind</button>` : ''}
+              ${d.phone ? `<button class="btn sm secondary" onclick="whatsappDefaulter('${d.key}')">WhatsApp</button>` : ''}
+              ${d.uid ? `<button class="btn sm secondary" onclick="downloadResidentStatement('${d.uid}')">Statement</button>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      ` : '<div class="card" style="text-align:center; color:var(--success); cursor:default;">No unpaid bills — every house is paid up.</div>'}
+    `;
+  }
+
+  function reminderBody(d) {
+    return `${formatMoney(d.total)} is outstanding for ${d.periods.join(', ')}. Please pay to the society account and upload your payment proof.`;
+  }
+
+  window.remindDefaulter = async function(key) {
+    const d = defaultersList().find(x => x.key === key);
+    if (!d || !d.uid || currentUserProfile.role !== 'admin') return;
+    await sendNotification(d.uid, 'Payment Reminder', reminderBody(d), 'info', 'bills');
+    logAudit('bill', '', 'notify', `Payment reminder sent to ${d.name} (${d.house}) for ${formatMoney(d.total)}`);
+    alert(`Reminder sent to ${d.name}.`);
+  };
+
+  window.remindAllDefaulters = async function() {
+    if (currentUserProfile.role !== 'admin') return;
+    const list = defaultersList().filter(d => d.uid);
+    if (!list.length) return;
+    if (!confirm(`Send a payment reminder to ${list.length} resident(s)?`)) return;
+    await Promise.all(list.map(d => sendNotification(d.uid, 'Payment Reminder', reminderBody(d), 'info', 'bills')));
+    logAudit('bill', '', 'notify', `Payment reminders sent to ${list.length} defaulter(s), total ${formatMoney(list.reduce((s, d) => s + d.total, 0))}`);
+    alert(`Reminders sent to ${list.length} resident(s).`);
+  };
+
+  window.whatsappDefaulter = function(key) {
+    const d = defaultersList().find(x => x.key === key);
+    if (!d || !d.phone) return;
+    window.open(whatsappLink(d.phone, defaulterMessage(d)), '_blank', 'noopener');
+  };
+
+  function defaultersText() {
+    const list = defaultersList();
+    const lines = [`RPHS - Outstanding Maintenance (${formatDate(new Date())})`, ''];
+    list.forEach((d, i) => lines.push(`${i + 1}. ${d.name} - ${houseLabel(d.house)}: ${formatMoney(d.total)} (${d.periods.join(', ')})`));
+    lines.push('', `Total ${formatMoney(list.reduce((s, d) => s + d.total, 0))} from ${list.length} house(s)`);
+    return lines.join('\n');
+  }
+
+  window.shareDefaultersText = async function() {
+    const text = defaultersText();
+    if (navigator.share) {
+      try { await navigator.share({ title: 'RPHS Defaulters', text }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+  };
+
+  window.exportDefaultersCSV = function() {
+    if (!isStaff()) return;
+    const rows = defaultersList().map(d => [d.name, d.house, d.phone, d.bills.length, d.overdue, d.periods.join('; '), d.total, d.oldestDue ? dateStamp(d.oldestDue) : '']);
+    if (!rows.length) return alert("No defaulters to export.");
+    downloadCSV(`RPHS_Defaulters_${dateStamp()}.csv`,
+      ['Resident', 'House', 'Phone', 'Unpaid Bills', 'Overdue Bills', 'Periods', 'Outstanding (PKR)', 'Oldest Due'],
+      rows, 'defaulters_csv');
+  };
+
+  // --- RESIDENT STATEMENT (PDF) ---
+  // Full billing history for one house with a running balance, plus verified
+  // fund contributions. Residents can only pull their own; staff any resident.
+  window.downloadResidentStatement = async function(uid) {
+    uid = uid || auth.currentUser.uid;
+    if (uid !== auth.currentUser.uid && !isStaff()) return;
+    try {
+      const [{ jsPDF }, billsSnap, contribSnap, userDoc] = await Promise.all([
+        ensureJsPDF(),
+        db.collection('bills').where('uid', '==', uid).get(),
+        db.collection('fund_contributions').where('uid', '==', uid).get(),
+        db.collection('users').doc(uid).get()
+      ]);
+      const time = v => { const d = toDate(v); return d ? d.getTime() : 0; };
+      const bills = billsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(b => !b.isDeleted && b.status !== 'cancelled')
+        .sort((a, b) => time(a.createdAt) - time(b.createdAt));
+      const contribs = contribSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(c => !c.isDeleted && c.status === 'verified')
+        .sort((a, b) => String(a.paymentDate || isoDate(a.createdAt)).localeCompare(String(b.paymentDate || isoDate(b.createdAt))));
+      const profile = userDoc.exists ? userDoc.data() : {};
+      const name = profile.name || (bills[0] && bills[0].name) || 'Resident';
+      const house = profile.house || (bills[0] && bills[0].house) || 'N/A';
+
+      const billed = sumAmounts(bills);
+      const paid = sumAmounts(bills.filter(b => b.status === 'paid'));
+      const inReview = sumAmounts(bills.filter(b => b.status === 'submitted'));
+      const outstanding = billed - paid;
+      const contributed = sumAmounts(contribs);
+
+      const doc = new jsPDF();
+      const pageH = doc.internal.pageSize.getHeight();
+      let y = 0;
+      const header = () => {
+        doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+        doc.text("Roshan Pakistan Housing Society", 105, 16, { align: "center" });
+        doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+        doc.text("Resident Account Statement", 105, 23, { align: "center" });
+        doc.setFontSize(9);
+        doc.text(`${name}  |  ${houseLabel(house)}  |  Generated ${formatDate(new Date())} by ${currentUserProfile.name}`, 105, 29, { align: "center" });
+        doc.line(15, 33, 195, 33);
+        y = 42;
+      };
+      const room = h => { if (y + h > pageH - 14) { doc.addPage(); header(); } };
+      const heading = t => { room(16); y += 3; doc.setFont("helvetica", "bold"); doc.setFontSize(11.5); doc.text(t, 15, y); y += 7; };
+      const cols = (defs, values, bold) => {
+        room(7);
+        doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(8.5);
+        defs.forEach((c, i) => doc.text(String(values[i] === undefined || values[i] === null ? '' : values[i]).slice(0, c.max || 80), c.x, y, { align: c.align || 'left' }));
+        y += 6;
+      };
+      const rule = () => { doc.setDrawColor(200); doc.line(15, y - 4, 195, y - 4); doc.setDrawColor(0); };
+      const kv = (k, v, bold) => cols([{ x: 15 }, { x: 110, align: 'right' }], [k, v], bold);
+      header();
+
+      heading("Summary");
+      kv("Total billed", formatMoney(billed));
+      kv("Total paid", formatMoney(paid));
+      if (inReview) kv("Proof under review", formatMoney(inReview));
+      kv("Outstanding", formatMoney(outstanding), true);
+      kv("Verified fund contributions", formatMoney(contributed));
+
+      heading("Maintenance Bills");
+      const BILL_COLS = [{ x: 15, max: 12 }, { x: 34, max: 14 }, { x: 62, max: 20 }, { x: 100, max: 11 }, { x: 143, align: 'right' }, { x: 148, max: 12 }, { x: 195, align: 'right' }];
+      cols(BILL_COLS, ['Issued', 'Bill No', 'Period', 'Status', 'Amount', 'Paid On', 'Balance'], true);
+      rule();
+      let balance = 0;
+      if (!bills.length) cols([{ x: 15 }], ['No bills issued to this house yet.']);
+      bills.forEach(b => {
+        if (b.status !== 'paid') balance += Number(b.amount || 0);
+        cols(BILL_COLS, [formatDate(b.createdAt), b.billNo || '', b.period || b.category || '', billStatus(b), formatMoney(b.amount), b.status === 'paid' ? formatDate(b.paidAt) : '-', formatMoney(balance)]);
+      });
+      rule();
+      cols(BILL_COLS, ['', '', '', 'Total', formatMoney(billed), 'Outstanding', formatMoney(outstanding)], true);
+
+      heading("Fund Contributions (verified)");
+      const CONTRIB_COLS = [{ x: 15, max: 12 }, { x: 40, max: 26 }, { x: 95, max: 14 }, { x: 130, max: 22 }, { x: 195, align: 'right' }];
+      cols(CONTRIB_COLS, ['Date', 'Fund', 'Category', 'Method / Ref', 'Amount'], true);
+      rule();
+      if (!contribs.length) cols([{ x: 15 }], ['No verified contributions on record.']);
+      contribs.forEach(c => cols(CONTRIB_COLS, [c.paymentDate || formatDate(c.createdAt), c.fundTitle || 'Fund', c.category || '', [c.paymentMethod, c.paymentRef].filter(Boolean).join(' '), formatMoney(c.amount)]));
+      rule();
+      cols(CONTRIB_COLS, ['', '', '', 'Total', formatMoney(contributed)], true);
+
+      room(14);
+      y += 4;
+      doc.setFont("helvetica", "italic"); doc.setFontSize(8);
+      doc.text("Outstanding = billed - paid; bills with payment proof under review stay outstanding until management verifies them. Cancelled bills are excluded.", 15, y, { maxWidth: 180 });
+
+      const fileName = `Statement_${String(house).replace(/[^A-Za-z0-9]+/g, '_')}_${dateStamp()}.pdf`;
+      doc.save(fileName);
+      logExport('resident_statement', fileName);
+    } catch (err) {
+      alert("Error generating statement: " + err.message);
+    }
+  };
+
   function renderBillsList() {
     const listEl = document.getElementById('bills-list');
     if (!listEl) return;
@@ -3128,13 +3498,21 @@
           <div style="font-family:var(--font-mono); font-size:28px; font-weight:600; color:var(--accent-2); margin:6px 0 2px;">${formatMoney(outstanding)}</div>
           <div style="font-size:12px; color:var(--text-muted);">${billsList.filter(b => billStatus(b) === 'unpaid' || billStatus(b) === 'overdue').length} unpaid bill(s) · ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
         </div>
+        <button class="btn sm secondary block" style="margin-bottom:14px;" onclick="downloadResidentStatement()">📄 My Statement (PDF)</button>
       `;
     }
 
-    const list = billFilterStatus === 'all' ? billsList : billsList.filter(b => billStatus(b) === billFilterStatus);
+    const list = filteredBills();
+    const filterSummary = document.getElementById('bill-filter-summary');
+    if (filterSummary) filterSummary.textContent = `${list.length} of ${billsList.length} bill(s) · ${formatMoney(sumAmounts(list))} billed · ${formatMoney(sumAmounts(list.filter(isOutstanding)))} outstanding`;
+    const defaultersBtn = document.getElementById('defaulters-btn');
+    if (defaultersBtn) {
+      const n = defaultersList().length;
+      defaultersBtn.textContent = n ? `⚠ Defaulters (${n})` : '⚠ Defaulters';
+    }
 
     if (!list.length) {
-      listEl.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${billsList.length ? 'No bills match the selected filter.' : 'No maintenance bills issued yet.'}</div>`;
+      listEl.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${billsList.length ? 'No bills match the current search / filter.' : 'No maintenance bills issued yet.'}</div>`;
       return;
     }
 
@@ -3590,6 +3968,7 @@
       ${!isAdmin && status === 'submitted' ? `<div style="font-size:12.5px; color:var(--info); margin-bottom:14px;">Your payment proof has been submitted and is awaiting verification by management.</div>` : ''}
 
       <button class="btn secondary block" onclick="downloadBillPDF('${b.id}')" style="margin-bottom:10px;">${status === 'paid' ? 'Download Receipt' : 'Download Invoice'}</button>
+      ${isStaff() && b.uid ? `<button class="btn secondary block" onclick="downloadResidentStatement('${b.uid}')" style="margin-bottom:10px;">Resident Statement (PDF)</button>` : ''}
 
       ${isAdmin && status === 'submitted' ? `
         <button class="btn primary block" onclick="approveBillProof('${b.id}')" style="margin-bottom:10px;">Approve Payment — Mark Paid</button>
@@ -3731,6 +4110,18 @@
     snaps.forEach(snap => snap.docs.forEach(doc => { map[doc.id] = { id: doc.id, ...doc.data() }; }));
     return Object.values(map);
   }
+
+  window.exportContributionsCSV = function() {
+    if (!isStaff()) return;
+    const rows = fundContribsList.filter(c => !c.isDeleted).map(c => [
+      c.fundTitle, c.category, c.name, c.house, Number(c.amount || 0), c.status || 'submitted',
+      c.paymentDate || isoDate(c.createdAt), c.paymentMethod, c.paymentRef, c.verifiedBy || c.recordedBy, isoDate(c.createdAt)
+    ]);
+    if (!rows.length) return alert("No contributions to export yet. Open the Funds tab first so they load.");
+    downloadCSV(`RPHS_Contributions_${dateStamp()}.csv`,
+      ['Fund', 'Fund Category', 'Contributor', 'House', 'Amount (PKR)', 'Status', 'Payment Date', 'Method', 'Ref', 'Verified By', 'Submitted On'],
+      rows, 'contributions_csv');
+  };
 
   function loadFunds() {
     if (!db || !auth.currentUser) return;
@@ -4564,6 +4955,63 @@
       .catch(e => { console.error("Error loading expenses:", e); showLoadError('expenses-list', e); });
   }
 
+  function renderExpenseFilterBar() {
+    const f = expenseFilter;
+    const cats = [...new Set([...EXPENSE_CATEGORIES, ...expensesList.map(x => x.category || 'Other')])];
+    return `
+      <div class="filter-bar">
+        <label>Filter Expenses</label>
+        <div style="display:flex; gap:8px;">
+          <select onchange="setExpenseFilter('month', this.value)" style="flex:1; min-width:0;">
+            <option value="all" ${f.month==='all'?'selected':''}>All months</option>
+            ${lastTwelveMonths().map(k => `<option value="${k}" ${f.month===k?'selected':''}>${monthLabel(k)}</option>`).join('')}
+          </select>
+          <select onchange="setExpenseFilter('category', this.value)" style="flex:1; min-width:0;">
+            <option value="all" ${f.category==='all'?'selected':''}>All categories</option>
+            ${cats.map(c => `<option value="${escapeHtml(c)}" ${f.category===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <select onchange="setExpenseFilter('source', this.value)" style="flex:1; min-width:0;">
+            <option value="all" ${f.source==='all'?'selected':''}>Bills account + Funds</option>
+            <option value="bills" ${f.source==='bills'?'selected':''}>Bills account only</option>
+            <option value="fund" ${f.source==='fund'?'selected':''}>Funds only</option>
+          </select>
+          <button class="btn sm secondary" style="white-space:nowrap;" onclick="exportExpensesCSV()">⬇ Export CSV</button>
+        </div>
+        <div id="expense-filter-summary" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
+      </div>
+    `;
+  }
+
+  window.setExpenseFilter = function(key, value) {
+    expenseFilter[key] = value || 'all';
+    delete pageShown['expenses'];
+    renderExpensesList();
+  };
+
+  function filteredExpenses() {
+    const f = expenseFilter;
+    return expensesList.filter(x => {
+      if (f.month !== 'all' && !String(x.expenseDate || '').startsWith(f.month)) return false;
+      if (f.category !== 'all' && (x.category || 'Other') !== f.category) return false;
+      if (f.source !== 'all' && expenseSource(x) !== f.source) return false;
+      return true;
+    });
+  }
+
+  window.exportExpensesCSV = function() {
+    if (!isStaff()) return;
+    const rows = filteredExpenses().map(x => [
+      expenseRefNo(x), x.expenseDate, x.category || 'Other', x.description, Number(x.amount || 0),
+      expenseSourceLabel(x), x.enteredBy, x.decisionRef, isoDate(x.createdAt)
+    ]);
+    if (!rows.length) return alert("No expenses to export for the current filter.");
+    downloadCSV(`RPHS_Expenses_${dateStamp()}.csv`,
+      ['Ref', 'Date', 'Category', 'Description', 'Amount (PKR)', 'Paid From', 'Entered By', 'Board Ref', 'Recorded On'],
+      rows, 'expenses_csv');
+  };
+
   function renderExpensesList() {
     const listEl = document.getElementById('expenses-list');
     const sumEl = document.getElementById('expenses-summary');
@@ -4589,12 +5037,16 @@
       `;
     }
 
-    if (!expensesList.length) {
-      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No expenses recorded yet.</div>';
+    const list = filteredExpenses();
+    const filterSummary = document.getElementById('expense-filter-summary');
+    if (filterSummary) filterSummary.textContent = `${list.length} of ${expensesList.length} expense(s) · ${formatMoney(sumAmounts(list))}`;
+
+    if (!list.length) {
+      listEl.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${expensesList.length ? 'No expenses match the current filter.' : 'No expenses recorded yet.'}</div>`;
       return;
     }
 
-    listEl.innerHTML = pageOf('expenses', expensesList, renderExpensesList).map(x => `
+    listEl.innerHTML = pageOf('expenses', list, renderExpensesList).map(x => `
       <div class="card" onclick="openExpenseDetailModal('${x.id}')">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
           <span style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(x.category || 'Other')}</span>
@@ -4608,7 +5060,7 @@
           ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" onclick="event.stopPropagation(); archiveExpense('${x.id}')">Remove</button>` : ''}
         </div>
       </div>
-    `).join('') + showMoreButton('expenses', expensesList.length);
+    `).join('') + showMoreButton('expenses', list.length);
   }
 
   function expenseRefNo(x) {
@@ -5566,22 +6018,54 @@
     }).catch(e => console.error("Error loading residents:", e));
   }
 
+  window.setResidentSearch = function(value) {
+    residentSearch = String(value || '').trim().toLowerCase();
+    delete pageShown['residents'];
+    renderResidentsList();
+  };
+
+  function filteredResidents() {
+    const sorted = allResidents.slice().sort((a, b) =>
+      String(a.house || '').localeCompare(String(b.house || ''), undefined, { numeric: true, sensitivity: 'base' })
+      || String(a.name || '').localeCompare(String(b.name || '')));
+    if (!residentSearch) return sorted;
+    return sorted.filter(r => [r.name, r.house, r.phone, r.cnic, r.email, r.role].map(v => String(v || '').toLowerCase()).join(' ').includes(residentSearch));
+  }
+
+  window.exportResidentsCSV = function() {
+    if (!isStaff()) return;
+    const rows = filteredResidents().map(r => [
+      r.name, r.house, r.role, r.phone, r.cnic, r.email, r.bloodGroup, r.occupancyType, r.familyDetails,
+      r.suspended ? 'Suspended' : 'Active', r.billExempt ? 'Exempt' : 'Included', isoDate(r.createdAt)
+    ]);
+    if (!rows.length) return alert("No residents to export.");
+    downloadCSV(`RPHS_Residents_${dateStamp()}.csv`,
+      ['Name', 'House', 'Role', 'Phone', 'CNIC', 'Email', 'Blood Group', 'Occupancy', 'Family', 'Status', 'Recurring Bill', 'Registered'],
+      rows, 'residents_csv');
+  };
+
   function renderResidentsList() {
     const listEl = document.getElementById('residents-list');
     if (!listEl) return;
-    if (!allResidents.length) {
-      listEl.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No approved residents found.</div>';
+    const list = filteredResidents();
+    const filterSummary = document.getElementById('resident-filter-summary');
+    if (filterSummary) filterSummary.textContent = `${list.length} of ${allResidents.length} resident(s)${residentSearch ? ` matching "${residentSearch}"` : ''} · sorted by house`;
+    if (!list.length) {
+      listEl.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${allResidents.length ? 'No residents match your search.' : 'No approved residents found.'}</div>`;
       return;
     }
 
-    listEl.innerHTML = allResidents.map(r => `
+    listEl.innerHTML = pageOf('residents', list, renderResidentsList).map(r => `
       <div class="card" style="cursor:default;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-          <div>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;">
+          <div style="min-width:0;">
             <div style="font-weight:700; font-size:15px; color:var(--accent-2);">${escapeHtml(r.name)}</div>
             <div style="font-size:12.5px; color:var(--text-muted);">House: ${escapeHtml(r.house || 'N/A')}</div>
           </div>
-          <button class="btn sm secondary" onclick="downloadResidentPDF('${r.uid}')">PDF Card</button>
+          <div style="display:flex; gap:6px; flex-shrink:0;">
+            <button class="btn sm secondary" onclick="downloadResidentStatement('${r.uid}')">Statement</button>
+            <button class="btn sm secondary" onclick="downloadResidentPDF('${r.uid}')">PDF Card</button>
+          </div>
         </div>
         <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">CNIC: ${escapeHtml(r.cnic || 'N/A')} | Phone: ${escapeHtml(r.phone || 'N/A')}</div>
         <div style="font-size:12px; color:var(--text-muted);">Blood Group: ${escapeHtml(r.bloodGroup || 'N/A')} (${escapeHtml(r.occupancyType || 'N/A')})</div>
@@ -5598,7 +6082,7 @@
           </div>
         ` : ''}
       </div>
-    `).join('');
+    `).join('') + showMoreButton('residents', list.length);
   }
 
   window.downloadResidentPDF = async function(uid) {
