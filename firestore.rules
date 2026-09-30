@@ -207,6 +207,12 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ---------- monthly financial summaries (written by Cloud Functions only) ----------
+    match /monthly_summaries/{month} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     // ---------- report export log ----------
     match /report_exports/{id} {
       allow read: if isStaff();

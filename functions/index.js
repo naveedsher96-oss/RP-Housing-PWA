@@ -358,6 +358,266 @@ exports.runRecurringBillsOnRequest = onDocumentWritten(
   }
 );
 
+// ---------- monthly financial summary ----------
+// On the 1st, the previous month's money story is written to
+// monthly_summaries/{YYYY-MM} (structured, read by the app's Dashboard card and
+// PDF) and posted as an announcement to every member. The admin's "Generate"
+// button writes settings/monthlySummary.runRequest for any month; a re-run
+// refreshes the stored summary and the existing announcement in place instead
+// of posting a second one.
+const SUMMARY_SETTINGS_PATH = "settings/monthlySummary";
+const SUMMARY_AUTHOR = "RPHS Finance (auto)";
+const SUMMARY_APP_HINT = "Open Dashboard → Monthly Summaries for the full breakdown and PDF.";
+
+// YYYY-MM-DD of a Firestore Timestamp (in Pakistan time) or of a date string.
+function dateKeyOf(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value.slice(0, 10);
+  if (typeof value.toDate === "function") {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(value.toDate());
+  }
+  return "";
+}
+
+function inMonth(value, monthKey) {
+  return dateKeyOf(value).slice(0, 7) === monthKey;
+}
+
+function prevMonthKey(todayKey) {
+  const [y, m] = todayKey.slice(0, 7).split("-").map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${pad2(m - 1)}`;
+}
+
+const sum = (arr) => arr.reduce((s, x) => s + Number(x.amount || 0), 0);
+const live = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.isDeleted);
+
+// Mirrors expenseSource()/transferEnd() in index.html.
+function expenseSource(x) {
+  return x.source === "fund" && x.fundId ? "fund" : "bills";
+}
+function transferEnd(t, end) {
+  const type = t[end + "Type"] === "fund" ? "fund" : "bills";
+  return { type, fundId: type === "fund" ? (t[end + "FundId"] || "") : "", title: t[end + "FundTitle"] || "Fund" };
+}
+function endLabel(e) {
+  return e.type === "fund" ? `Fund: ${e.title}` : "Bills account";
+}
+function poolBalance(collected, spent, transfers, type, fundId) {
+  const hit = (e) => e.type === type && (type === "bills" || e.fundId === fundId);
+  const transferredIn = sum(transfers.filter((t) => hit(transferEnd(t, "to"))));
+  const transferredOut = sum(transfers.filter((t) => hit(transferEnd(t, "from"))));
+  return { collected, spent, transferredIn, transferredOut, balance: collected - spent + transferredIn - transferredOut };
+}
+function groupTotals(items, keyFn) {
+  const map = {};
+  items.forEach((x) => { const k = keyFn(x); map[k] = (map[k] || 0) + Number(x.amount || 0); });
+  return Object.entries(map).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+}
+
+async function buildMonthlySummary(db, monthKey) {
+  const period = monthLabel(`${monthKey}-01`);
+  const [billsSnap, contribSnap, expSnap, trSnap, fundsSnap, usersSnap] = await Promise.all([
+    db.collection("bills").get(),
+    db.collection("fund_contributions").get(),
+    db.collection("expenses").get(),
+    db.collection("transfers").get(),
+    db.collection("funds").get(),
+    db.collection("users").where("approved", "==", true).get(),
+  ]);
+  const bills = live(billsSnap).filter((b) => b.status !== "cancelled");
+  const contribs = live(contribSnap).filter((c) => c.status === "verified");
+  const expenses = live(expSnap);
+  const transfers = live(trSnap);
+  const funds = live(fundsSnap);
+  const members = usersSnap.docs.map((d) => d.data()).filter((u) => u.suspended !== true).length;
+
+  // A bill belongs to the month it is for (recurring stamp or "Month YYYY"
+  // period), otherwise to the month it was issued in.
+  const issued = bills.filter((b) => b.recurringMonth ? b.recurringMonth === monthKey
+    : /^[A-Z][a-z]+ \d{4}$/.test(b.period || "") ? b.period === period
+    : inMonth(b.createdAt, monthKey));
+  const collected = bills.filter((b) => b.status === "paid" && inMonth(b.paidAt || b.paymentDate || b.createdAt, monthKey));
+  const unpaid = bills.filter((b) => b.status === "unpaid");
+  const owingHouses = new Set(unpaid.map((b) => b.uid || b.house)).size;
+  const mContribs = contribs.filter((c) => inMonth(c.paymentDate || c.createdAt, monthKey));
+  const mExpenses = expenses.filter((x) => inMonth(x.expenseDate || x.createdAt, monthKey))
+    .sort((a, b) => String(a.expenseDate || "").localeCompare(String(b.expenseDate || "")));
+  const mTransfers = transfers.filter((t) => inMonth(t.transferDate || t.createdAt, monthKey))
+    .sort((a, b) => String(a.transferDate || "").localeCompare(String(b.transferDate || "")));
+
+  const billsPool = poolBalance(sum(bills.filter((b) => b.status === "paid")),
+    sum(expenses.filter((x) => expenseSource(x) === "bills")), transfers, "bills");
+  const fundsIn = sum(transfers.filter((t) => transferEnd(t, "to").type === "fund"));
+  const fundsOut = sum(transfers.filter((t) => transferEnd(t, "from").type === "fund"));
+  const fundsCollected = sum(contribs);
+  const fundsSpent = sum(expenses.filter((x) => expenseSource(x) === "fund"));
+  const fundsPool = { collected: fundsCollected, spent: fundsSpent, transferredIn: fundsIn, transferredOut: fundsOut,
+    balance: fundsCollected - fundsSpent + fundsIn - fundsOut };
+  const perFund = funds.map((f) => {
+    const p = poolBalance(sum(contribs.filter((c) => c.fundId === f.id)),
+      sum(expenses.filter((x) => expenseSource(x) === "fund" && x.fundId === f.id)), transfers, "fund", f.id);
+    return { fundId: f.id, title: f.title || "Fund", category: f.category || "", balance: p.balance,
+      collectedThisMonth: sum(mContribs.filter((c) => c.fundId === f.id)) };
+  }).filter((f) => f.balance !== 0 || f.collectedThisMonth !== 0).sort((a, b) => b.balance - a.balance);
+
+  const totalIn = sum(collected) + sum(mContribs);
+  const totalOut = sum(mExpenses);
+  return {
+    month: monthKey,
+    period,
+    members,
+    bills: {
+      issuedCount: issued.length, issuedAmount: sum(issued),
+      collectedCount: collected.length, collectedAmount: sum(collected),
+      outstandingCount: unpaid.length, outstandingAmount: sum(unpaid), owingHouses,
+    },
+    contributions: {
+      count: mContribs.length, amount: sum(mContribs),
+      byFund: groupTotals(mContribs, (c) => c.fundTitle || "Fund"),
+    },
+    expenses: {
+      count: mExpenses.length, amount: totalOut,
+      byCategory: groupTotals(mExpenses, (x) => x.category || "Other"),
+      bySource: groupTotals(mExpenses, (x) => expenseSource(x) === "fund" ? `Fund: ${x.fundTitle || "Community Fund"}` : "Bills account"),
+      items: mExpenses.slice(0, 150).map((x) => ({
+        date: x.expenseDate || dateKeyOf(x.createdAt), category: x.category || "Other",
+        description: x.description || "", amount: Number(x.amount || 0),
+        source: expenseSource(x) === "fund" ? `Fund: ${x.fundTitle || "Community Fund"}` : "Bills account",
+      })),
+    },
+    transfers: mTransfers.map((t) => ({
+      date: t.transferDate || dateKeyOf(t.createdAt), from: endLabel(transferEnd(t, "from")),
+      to: endLabel(transferEnd(t, "to")), amount: Number(t.amount || 0), note: t.note || "",
+    })),
+    totals: { in: totalIn, out: totalOut, net: totalIn - totalOut },
+    balances: { bills: billsPool, funds: fundsPool, perFund },
+  };
+}
+
+function summaryText(s, asOf) {
+  const L = [];
+  const money = formatMoney;
+  const list = (rows) => rows.map((r) => `• ${r.label}: ${money(r.value)}`);
+  L.push(`COLLECTED IN ${s.period.toUpperCase()}`);
+  L.push(`• Maintenance bills paid: ${money(s.bills.collectedAmount)} (${s.bills.collectedCount} bill${s.bills.collectedCount === 1 ? "" : "s"})`);
+  L.push(`• Fund contributions verified: ${money(s.contributions.amount)}${s.contributions.byFund.length ? " — " + s.contributions.byFund.map((f) => `${f.label} ${money(f.value)}`).join(", ") : ""}`);
+  L.push(`Total in: ${money(s.totals.in)}`);
+  L.push("");
+  L.push(`SPENT: ${money(s.expenses.amount)} (${s.expenses.count} expense${s.expenses.count === 1 ? "" : "s"})`);
+  L.push(...(s.expenses.byCategory.length ? list(s.expenses.byCategory) : ["• No expenses recorded this month."]));
+  if (s.expenses.bySource.length > 1) L.push(`Paid from: ${s.expenses.bySource.map((x) => `${x.label} ${money(x.value)}`).join(" · ")}`);
+  L.push(`Net for the month: ${s.totals.net >= 0 ? "+" : "−"}${money(Math.abs(s.totals.net))}`);
+  if (s.transfers.length) {
+    L.push("");
+    L.push("TRANSFERS");
+    s.transfers.forEach((t) => L.push(`• ${t.from} → ${t.to}: ${money(t.amount)}${t.note ? " (" + t.note + ")" : ""}`));
+  }
+  L.push("");
+  L.push(`BALANCES (as of ${asOf})`);
+  L.push(`• Bills account: ${money(s.balances.bills.balance)}`);
+  L.push(`• Community funds: ${money(s.balances.funds.balance)}${s.balances.perFund.length ? " — " + s.balances.perFund.map((f) => `${f.title} ${money(f.balance)}`).join(", ") : ""}`);
+  L.push("");
+  L.push(s.bills.outstandingCount
+    ? `OUTSTANDING: ${money(s.bills.outstandingAmount)} still owed on ${s.bills.outstandingCount} unpaid bill${s.bills.outstandingCount === 1 ? "" : "s"} by ${s.bills.owingHouses} house${s.bills.owingHouses === 1 ? "" : "s"}. Please clear your dues in the Bills tab.`
+    : "OUTSTANDING: none — every issued bill has been paid. Thank you!");
+  L.push("");
+  L.push(SUMMARY_APP_HINT);
+  return L.join("\n");
+}
+
+async function publishMonthlySummary(db, monthKey, trigger) {
+  const today = todayKey();
+  const asOf = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" })
+    .format(new Date(Date.parse(today)));
+  const summary = await buildMonthlySummary(db, monthKey);
+  const title = `Monthly Financial Summary — ${summary.period}`;
+  const content = summaryText(summary, asOf);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const summaryRef = db.collection("monthly_summaries").doc(monthKey);
+  const existing = await summaryRef.get();
+  const prevAnnouncementId = existing.exists ? existing.data().announcementId : null;
+  const prevAnnouncement = prevAnnouncementId ? await db.collection("announcements").doc(prevAnnouncementId).get() : null;
+
+  let announcementRef;
+  let posted = false;
+  if (prevAnnouncement && prevAnnouncement.exists) {
+    announcementRef = prevAnnouncement.ref;
+    await announcementRef.update({ title, content, summaryMonth: monthKey, updatedAt: now });
+  } else {
+    announcementRef = db.collection("announcements").doc();
+    await announcementRef.set({
+      title, content, allowComments: true, summaryMonth: monthKey,
+      createdBy: "system", createdByName: SUMMARY_AUTHOR, createdByRole: "management", createdAt: now,
+    });
+    posted = true;
+  }
+
+  await summaryRef.set({
+    ...summary, announcementId: announcementRef.id, trigger,
+    generatedAt: now, generatedOn: today, asOf,
+    ...(existing.exists ? { regeneratedCount: admin.firestore.FieldValue.increment(1) } : { regeneratedCount: 0 }),
+  }, { merge: true });
+
+  let notified = 0;
+  if (posted) {
+    const users = await db.collection("users").where("approved", "==", true).get();
+    const body = `${summary.period}: collected ${formatMoney(summary.totals.in)}, spent ${formatMoney(summary.totals.out)}. ` +
+      `Bills account ${formatMoney(summary.balances.bills.balance)}, funds ${formatMoney(summary.balances.funds.balance)}. Tap to read the full breakdown.`;
+    let batch = db.batch();
+    let ops = 0;
+    for (const u of users.docs) {
+      if (u.data().suspended === true) continue;
+      batch.set(u.ref.collection("notifications").doc(), { ...notificationDoc(title, body, "notice"), category: "notices" });
+      notified++;
+      if (++ops >= 400) { await batch.commit(); batch = db.batch(); ops = 0; }
+    }
+    if (ops) await batch.commit();
+  }
+
+  await db.collection("audit_log").add({
+    entityType: "report", entityId: monthKey, action: posted ? "create" : "update",
+    details: `Monthly financial summary for ${summary.period} ${posted ? "posted" : "refreshed"} (${trigger}); ` +
+      `in ${formatMoney(summary.totals.in)}, out ${formatMoney(summary.totals.out)}, ${notified} member(s) notified`,
+    performedBy: SUMMARY_AUTHOR, performedByUid: "", role: "system", timestamp: now,
+  });
+  console.log(`${today}: monthly summary ${monthKey} ${posted ? "posted" : "refreshed"} (${trigger}), ${notified} notified`);
+  return { posted, notified };
+}
+
+// Runs on the 1st, after the recurring bills have gone out, for the month just ended.
+exports.postMonthlyFinancialSummary = onSchedule(
+  { schedule: "1 of month 09:30", timeZone: TIME_ZONE },
+  async () => {
+    const db = admin.firestore();
+    const monthKey = prevMonthKey(todayKey());
+    const existing = await db.collection("monthly_summaries").doc(monthKey).get();
+    if (existing.exists && existing.data().announcementId) {
+      console.log(`${monthKey}: summary already published — skipping scheduled run`);
+      return;
+    }
+    await publishMonthlySummary(db, monthKey, "scheduled");
+  }
+);
+
+// Admin's "Generate" button writes settings/monthlySummary.runRequest = { month, by, at }.
+exports.runMonthlySummaryOnRequest = onDocumentWritten(
+  SUMMARY_SETTINGS_PATH,
+  async (event) => {
+    const after = event.data && event.data.after;
+    if (!after || !after.exists) return;
+    const req = after.data().runRequest;
+    if (!req || !req.month) return;
+    const db = admin.firestore();
+    await after.ref.set({ runRequest: admin.firestore.FieldValue.delete() }, { merge: true });
+    const monthKey = String(req.month).slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(monthKey)) { console.log("Summary requested for invalid month", req.month); return; }
+    const result = await publishMonthlySummary(db, monthKey, `requested by ${req.by || "admin"}`);
+    await after.ref.set({ lastRun: { month: monthKey, by: req.by || "admin", at: admin.firestore.FieldValue.serverTimestamp(), ...result } }, { merge: true });
+  }
+);
+
 // Sends a push notification to the target user's registered device whenever an
 // in-app notification document is created under users/{uid}/notifications.
 exports.sendPushOnNotification = onDocumentCreated(
