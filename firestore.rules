@@ -40,6 +40,24 @@ service cloud.firestore {
     function ownsPost() {
       return isBoard() && resource.data.get('createdBy', '') == request.auth.uid;
     }
+    // Only these fields change in this update.
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    // Super Admin may restore archived bills, funds, complaints and expenses
+    // (the Restore button in Audit & Archive) but change nothing else.
+    function superAdminRestore() {
+      return isSuperAdmin()
+        && onlyChanges(['isDeleted', 'restoredAt', 'restoredBy'])
+        && request.resource.data.isDeleted == false;
+    }
+    // Target of an in-app notification is management (admin, board, super admin).
+    function isStaffUid(uid) {
+      let u = get(/databases/$(database)/documents/users/$(uid)).data;
+      return u.get('role', '') in ['admin', 'board', 'superadmin']
+        || u.get('boardMember', false) == true
+        || u.get('superAdmin', false) == true;
+    }
 
     // ---------- users ----------
     match /users/{uid} {
@@ -62,10 +80,12 @@ service cloud.firestore {
       // No hard deletes of user records (soft policy)
       allow delete: if false;
 
-      // In-app notifications: anyone signed in may deliver one; only the owner reads/updates
+      // In-app notifications: management may notify anyone; residents may only
+      // notify management (proof uploaded, new comment, volunteer joined) or themselves.
+      // Only the owner reads/updates.
       match /notifications/{noteId} {
         allow read, update, delete: if isOwner(uid);
-        allow create: if signedIn();
+        allow create: if isStaff() || isBoard() || isOwner(uid) || (signedIn() && isStaffUid(uid));
       }
     }
 
@@ -100,14 +120,19 @@ service cloud.firestore {
       allow create: if canPublish()
         && request.resource.data.get('createdBy', '') == request.auth.uid;
       allow delete: if isAdmin() || isSuperAdmin() || ownsPost();
-      allow update: if signedIn(); // voting updates tallies
+      // Publishers may edit; everyone else may only add their own single vote.
+      allow update: if isAdmin() || isSuperAdmin() || ownsPost()
+        || (signedIn()
+            && onlyChanges(['votes'])
+            && !(request.auth.uid in resource.data.get('votes', {}))
+            && request.resource.data.votes.diff(resource.data.get('votes', {})).affectedKeys().hasOnly([request.auth.uid]));
     }
 
     // ---------- tickets (complaints) ----------
     match /tickets/{id} {
       allow read: if isStaff() || isApprovedResident() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if isApprovedResident() && request.resource.data.uid == request.auth.uid;
-      allow update: if isAdmin(); // status changes / archive
+      allow update: if isAdmin() || superAdminRestore(); // status changes / archive / restore
       allow delete: if false;    // soft delete only
     }
 
@@ -116,7 +141,7 @@ service cloud.firestore {
       allow read: if isStaff() || isApprovedResident() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if isAdmin();
       // Admin may update anything; the billed resident may only submit payment proof
-      allow update: if isAdmin()
+      allow update: if isAdmin() || superAdminRestore()
         || (signedIn()
             && resource.data.uid == request.auth.uid
             && request.resource.data.status == 'submitted'
@@ -129,7 +154,8 @@ service cloud.firestore {
     // ---------- funds ----------
     match /funds/{id} {
       allow read: if signedIn();
-      allow create, update: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() || superAdminRestore();
       allow delete: if false;
     }
 
@@ -152,7 +178,8 @@ service cloud.firestore {
     // ---------- expenses ----------
     match /expenses/{id} {
       allow read: if signedIn(); // residents see anonymized category totals in reports
-      allow create, update: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() || superAdminRestore();
       allow delete: if false;
     }
 
@@ -179,9 +206,14 @@ service cloud.firestore {
     match /decisions/{id} {
       allow read: if isStaff() || isBoard();
       allow create: if isAdmin();
-      // Board members vote; admin may maintain records. Status/votes integrity is
-      // enforced app-side; board members cannot create or delete decisions.
-      allow update: if isAdmin() || isBoard();
+      // Board members vote: they may only append one vote of their own (and set
+      // the outcome when it reaches quorum). Admin may maintain records.
+      allow update: if isAdmin()
+        || (isBoard()
+            && resource.data.get('status', 'pending') == 'pending'
+            && onlyChanges(['votes', 'status', 'finalizedAt'])
+            && request.resource.data.votes.size() == resource.data.get('votes', []).size() + 1
+            && request.resource.data.votes[request.resource.data.votes.size() - 1].uid == request.auth.uid);
       allow delete: if false;
     }
 
@@ -189,8 +221,8 @@ service cloud.firestore {
     match /volunteer_programs/{id} {
       allow read: if signedIn();
       allow create: if isAdmin();
-      // Admin manages programs; approved residents join/leave (update participants)
-      allow update: if isAdmin() || isApprovedResident();
+      // Admin manages programs; approved residents join/leave (participants only)
+      allow update: if isAdmin() || (isApprovedResident() && onlyChanges(['participants']));
       allow delete: if false;
     }
 
@@ -203,7 +235,8 @@ service cloud.firestore {
     // ---------- audit log (immutable) ----------
     match /audit_log/{id} {
       allow read: if isStaff();
-      allow create: if signedIn();
+      // Entries are written as yourself.
+      allow create: if signedIn() && request.resource.data.get('performedByUid', '') == request.auth.uid;
       allow update, delete: if false;
     }
 
