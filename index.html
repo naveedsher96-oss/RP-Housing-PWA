@@ -349,11 +349,34 @@
   .menu-list button:last-child{ border-bottom:none; }
   .menu-list button svg{ width:20px; height:20px; color:var(--accent-2); flex:none; }
   .menu-list button.danger, .menu-list button.danger svg{ color:var(--danger); }
-  .chips{ display:flex; gap:8px; overflow-x:auto; padding:2px 0 10px; scrollbar-width:none; }
-  .chips::-webkit-scrollbar{ display:none; }
-  .chip{ flex:none; background:var(--bg-elevated-2); border:1px solid var(--border); color:var(--text-muted); border-radius:999px; padding:7px 13px; font-family:inherit; font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
-  .chip.active{ background:var(--accent-soft); border-color:rgba(242,169,59,0.5); color:var(--accent-2); }
+  .chip-row{ scrollbar-width:none; }
+  .chip-row::-webkit-scrollbar{ display:none; }
+  .chip{ flex:none; font-family:inherit; }
   .chip .n{ opacity:.75; margin-left:4px; }
+
+  /* Dashboard additions */
+  .dash-hello{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 14px; }
+  .dash-hello h2{ font-family:var(--font-display); font-size:22px; font-weight:600; margin:0; min-width:0; }
+  .need-tiles{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:14px; }
+  .need-tile{ background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:12px 10px; text-align:left; color:var(--text); font-family:inherit; cursor:pointer; min-width:0; }
+  .need-tile b{ display:block; font-size:26px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .need-tile span{ display:block; font-size:13px; color:var(--text-muted); font-weight:600; margin-top:4px; line-height:1.3; }
+  .need-tile.hot{ border-color:rgba(242,169,59,0.45); }
+  .need-tile.hot b{ color:var(--accent-2); }
+  .need-tile.bad b{ color:var(--danger); }
+  .house-card{ background:linear-gradient(180deg, rgba(242,169,59,0.14), var(--bg-elevated) 70%); border:1px solid rgba(242,169,59,0.35); border-radius:var(--radius); padding:16px; margin-bottom:18px; }
+  .house-card .eyebrow{ font-size:13px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-2); }
+  .house-card .due-amt{ font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .house-card .rej{ background:var(--danger-soft); color:var(--danger); border-radius:12px; padding:10px 12px; font-size:14px; font-weight:600; margin-top:12px; line-height:1.5; }
+  .house-card.ur .eyebrow{ letter-spacing:0; text-transform:none; }
+  .dash-h{ font-family:var(--font-display); font-size:18px; font-weight:600; margin:4px 0 12px; }
+  .sum-line{ display:flex; flex-wrap:wrap; gap:4px 12px; font-size:13.5px; color:var(--text-muted); margin-top:3px; font-variant-numeric:tabular-nums; }
+  .sum-line b{ font-weight:700; }
+  .vote-bar{ display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin:10px 0 8px; }
+  .vote-bar i{ height:8px; border-radius:4px; background:var(--bg-elevated-3); }
+  .vote-bar i.y{ background:var(--success); }
+  .vote-bar i.n{ background:var(--danger); }
+  .group-h{ font-size:13px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--text-muted); margin:16px 0 8px; }
   .money, .nowrap{ white-space:nowrap; font-variant-numeric:tabular-nums; }
   .ur{ font-family:'Noto Nastaliq Urdu', var(--font-body); line-height:2; }
   .ur .money, .ur bdi{ font-family:var(--font-body); unicode-bidi:isolate; direction:ltr; line-height:1.4; }
@@ -576,6 +599,7 @@
   let ticketsList = [];
   let billsList = [];
   let billFilterStatus = 'all';
+  let billsLoaded = false;
   let billSearch = '';
   let billFilterMonth = 'all';
   let expenseFilter = { month: 'all', category: 'all', source: 'all' };
@@ -1465,19 +1489,11 @@
     const isAdmin = (currentUserProfile.role === 'admin');
 
     if (activeTab === 'dashboard' && isStaff()) {
-      return `
-        <div class="section-title">Society Dashboard</div>
-        <div class="section-sub">A live overview of the society's people, finances and activity.</div>
-        <div id="dashboard-body">Loading dashboard...</div>
-      `;
+      return `<div id="dashboard-body"><span style="color:var(--text-muted);">Loading dashboard...</span></div>`;
     }
 
     if (activeTab === 'dashboard' && currentUserProfile.role === 'resident') {
-      return `
-        <div class="section-title">Community Dashboard</div>
-        <div class="section-sub">An overview of the society's finances and activity.</div>
-        <div id="dashboard-body">Loading dashboard...</div>
-      `;
+      return `<div id="dashboard-body"><span style="color:var(--text-muted);">Loading dashboard...</span></div>`;
     }
 
     if (activeTab === 'notices') {
@@ -1604,7 +1620,7 @@
       return `
         <div class="section-title">
           ${isBoard() ? 'Board Votes' : 'Board Decisions'}
-          ${isAdmin ? '<button class="btn sm primary" onclick="openCreateDecisionModal()">+ Queue Item for Vote</button>' : ''}
+          ${isAdmin ? '<button class="btn sm primary" onclick="openCreateDecisionModal()">+ Queue item</button>' : ''}
         </div>
         <div class="section-sub">${isBoard() ? 'Endorse or oppose pending items. Decisions are final at 3 of 5 votes.' : 'Items queued for the Board\u2019s 3-of-5 vote and their outcomes.'}</div>
         <div id="decisions-list">Loading decisions...</div>
@@ -3267,6 +3283,7 @@
           const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
         });
+      billsLoaded = true;
       renderBillsList();
     }).catch(e => { console.error("Error loading bills:", e); showLoadError('bills-list', e); });
 
@@ -3683,7 +3700,7 @@
     if (!isStaff()) return;
     document.getElementById('modal-body').innerHTML = '<div style="color:var(--text-muted); padding:10px 0;">Loading defaulters…</div>';
     openModal();
-    try { await ensureResidents(); } catch (e) { console.error("Residents load failed:", e); }
+    try { await Promise.all([ensureResidents(), ensureBillsLoaded()]); } catch (e) { console.error("Defaulters load failed:", e); }
     renderDefaultersModal();
   };
 
@@ -4968,13 +4985,13 @@
     const rings = segments.map((seg, i) => {
       const frac = seg.value / total;
       const dash = frac * C;
-      const el = `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${CHART_COLORS[i % CHART_COLORS.length]}" stroke-width="18" stroke-dasharray="${dash} ${C - dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 70 70)"></circle>`;
+      const el = `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${seg.color || CHART_COLORS[i % CHART_COLORS.length]}" stroke-width="18" stroke-dasharray="${dash} ${C - dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 70 70)"></circle>`;
       offset += dash;
       return el;
     }).join('');
     const legend = segments.map((seg, i) => `
       <div style="display:flex; align-items:center; gap:7px; font-size:13px; margin-bottom:5px;">
-        <span style="width:10px; height:10px; border-radius:3px; background:${CHART_COLORS[i % CHART_COLORS.length]}; flex-shrink:0;"></span>
+        <span style="width:10px; height:10px; border-radius:3px; background:${seg.color || CHART_COLORS[i % CHART_COLORS.length]}; flex-shrink:0;"></span>
         <span style="color:var(--text-muted); flex:1;">${escapeHtml(seg.label)}</span>
         <span style="font-weight:600;">${seg.money === false ? seg.value : formatMoney(seg.value)}</span>
       </div>`).join('');
@@ -4987,6 +5004,15 @@
         </svg>
         <div style="flex:1; min-width:130px;">${legend}</div>
       </div>`;
+  }
+
+  // Maintenance Bills donut: same colours as the status pills everywhere else.
+  function billStatusSegments(paid, due, review) {
+    return [
+      { label: 'Paid', value: paid, money: false, color: '#3CC2A2' },
+      { label: 'Due / overdue', value: due, money: false, color: '#EF6B63' },
+      { label: 'In review', value: review, money: false, color: '#7D9BF5' }
+    ].filter(s => s.value > 0);
   }
 
   function svgBars(data) {
@@ -5013,11 +5039,18 @@
       db.collection('expenses').get(),
       db.collection('tickets').get(),
       db.collection('transfers').get(),
-      db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get()
-    ]).then(([usersSnap, billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap]) => {
+      db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get(),
+      db.collection('decisions').get()
+    ]).then(([usersSnap, billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap, decSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const users = usersSnap.docs.map(d => d.data());
-      const bills = billsSnap.docs.map(d => d.data()).filter(b => !b.isDeleted);
+      decisionsList = sortDecisions(decSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(x => !x.isDeleted));
+      // The Bills list is what the Defaulters sheet and proof review read.
+      billsList = billsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(b => !b.isDeleted);
+      billsLoaded = true;
+      pendingResidents = usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() }))
+        .filter(u => u.role === 'resident' && u.approved === false && u.membershipStatus !== 'rejected');
+      const users = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      const bills = billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted);
       const contribs = contribsSnap.docs.map(d => d.data()).filter(c => !c.isDeleted);
       const expenses = expSnap.docs.map(d => d.data()).filter(x => !x.isDeleted);
       const tickets = ticketsSnap.docs.map(d => d.data()).filter(t => !t.isDeleted);
@@ -5083,6 +5116,7 @@
       </div>`;
 
     el.innerHTML = `
+      ${renderStaffNeedsYou(d, { pendingApprovals, inReview: inReviewBills.length, openTickets })}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Approved Residents', residents)}
@@ -5102,11 +5136,7 @@
 
       <div class="card" style="cursor:default; margin-bottom:14px;">
         <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Maintenance Bills</div>
-        ${svgDonut([
-          { label: 'Paid', value: paidBills.length, money: false },
-          { label: 'Unpaid', value: unpaidBills.length, money: false },
-          { label: 'In Review', value: inReviewBills.length, money: false }
-        ].filter(s => s.value > 0), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
+        ${svgDonut(billStatusSegments(paidBills.length, unpaidBills.length, inReviewBills.length), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
       </div>
 
       <div class="card" style="cursor:default; margin-bottom:14px;">
@@ -5121,6 +5151,152 @@
     `;
   }
 
+  function greetingWord() {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning' : (h < 17 ? 'Good afternoon' : 'Good evening');
+  }
+  function firstName() { return String(currentUserProfile.name || '').trim().split(/\s+/)[0] || ''; }
+
+  // Houses with at least one bill past its due date (not "due soon").
+  function overdueHouseCount(bills) {
+    const keys = new Set();
+    bills.forEach(b => { if (billStatus(b) === 'overdue') keys.add(b.uid || b.house || b.name); });
+    return keys.size;
+  }
+  function openDecisionsForMe() {
+    return decisionsList.filter(x => (x.status || 'pending') === 'pending' && !(x.votes || []).some(v => v.uid === auth.currentUser.uid));
+  }
+
+  // "Needs you" tiles above the existing staff dashboard.
+  function renderStaffNeedsYou(d, n) {
+    const role = currentUserProfile.role;
+    const overdueHouses = overdueHouseCount(d.bills);
+    const openVotes = decisionsList.filter(x => (x.status || 'pending') === 'pending').length;
+    const tile = (num, label, action, tone) => `<button class="need-tile ${num ? tone || 'hot' : ''}" onclick="${action}"><b>${num}</b><span>${label}</span></button>`;
+    let tiles;
+    if (role === 'superadmin') {
+      const suspended = d.users.filter(u => u.suspended === true).length;
+      tiles = tile(n.pendingApprovals, 'Approvals waiting', "goTab('approvals')")
+        + tile(suspended, 'Suspended members', "goTab('biodata')", 'bad')
+        + tile(openVotes, 'Open board votes', "goTab('board')");
+    } else if (role === 'board') {
+      tiles = tile(openDecisionsForMe().length, 'Votes waiting for you', "goTab('board')")
+        + tile(n.openTickets, 'Open complaints', "goTab('tickets')")
+        + tile(overdueHouses, 'Houses overdue', 'openDefaultersModal()', 'bad');
+    } else {
+      tiles = tile(n.pendingApprovals, 'Approvals waiting', "goTab('approvals')")
+        + tile(n.inReview, 'Proofs to check', 'openNextProof()')
+        + tile(overdueHouses, 'Houses overdue', 'openDefaultersModal()', 'bad');
+    }
+    const mine = isBoard() ? openDecisionsForMe() : [];
+    return `
+      <div class="dash-hello"><h2>${escapeHtml(greetingWord())}, ${escapeHtml(firstName())}</h2></div>
+      <div class="need-tiles">${tiles}</div>
+      ${mine.length ? `
+        <div class="dash-h">Waiting for your vote</div>
+        ${decisionCard(mine[0])}
+        ${mine.length > 1 ? `<button class="btn sm secondary block" style="margin:-4px 0 16px;" onclick="goTab('board')">See all ${mine.length} open votes</button>` : ''}
+      ` : ''}
+    `;
+  }
+
+  window.openNextProof = async function() {
+    await ensureBillsLoaded();
+    const next = billsList.find(b => b.status === 'submitted');
+    if (!next) { toast('No proofs waiting. All caught up.'); return; }
+    openBillDetailModal(next.id);
+  };
+
+  async function ensureBillsLoaded() {
+    if (billsLoaded) return billsList;
+    const query = isStaff() ? db.collection('bills') : db.collection('bills').where('uid', '==', auth.currentUser.uid);
+    const snap = await query.get();
+    billsList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(b => !b.isDeleted);
+    billsLoaded = true;
+    return billsList;
+  }
+
+  // --- RESIDENT "MY HOUSE" CARD (English / Urdu) ---
+  const I18N = {
+    en: {
+      hello: 'Assalam-o-Alaikum', myHouse: 'My house', amountDue: 'Amount due', overdue: '{n} overdue',
+      dueBy: 'Due by {date}', inReview: '{n} proof(s) in review', allPaid: 'All paid. Thank you!',
+      rejected: 'Your {month} proof was rejected: {reason}. Please upload it again.',
+      upload: 'Upload payment proof', bank: 'Society bank details', langBtn: 'اردو'
+    },
+    ur: {
+      hello: 'السلام علیکم', myHouse: 'میرا گھر', amountDue: 'واجب الادا رقم', overdue: '{n} تاخیر شدہ',
+      dueBy: 'آخری تاریخ {date}', inReview: '{n} ثبوت زیرِ جائزہ', allPaid: 'تمام ادائیگیاں مکمل۔ شکریہ!',
+      rejected: 'آپ کا {month} کا ثبوت مسترد ہو گیا: {reason}۔ براہِ کرم دوبارہ اپ لوڈ کریں۔',
+      upload: 'ادائیگی کا ثبوت اپ لوڈ کریں', bank: 'سوسائٹی کے بینک کی تفصیلات', langBtn: 'English'
+    }
+  };
+  // t(key, vars): vars are inserted as HTML-escaped text wrapped in <bdi> so
+  // numbers, dates and names keep left-to-right order inside Urdu.
+  function t(key, vars) {
+    const dict = I18N[uiLang] || I18N.en;
+    const raw = dict[key] != null ? dict[key] : (I18N.en[key] || key);
+    return escapeHtml(raw).replace(/\{(\w+)\}/g, (m, k) => vars && vars[k] != null ? `<bdi>${escapeHtml(vars[k])}</bdi>` : m);
+  }
+
+  function renderMyHouseCard(myBills) {
+    const owing = myBills.filter(b => ['unpaid', 'overdue'].includes(billStatus(b)));
+    const total = owing.reduce((s, b) => s + Number(b.amount || 0), 0);
+    const overdueN = owing.filter(b => billStatus(b) === 'overdue').length;
+    const review = myBills.filter(b => b.status === 'submitted').length;
+    const dues = owing.map(b => toDate(b.dueDate)).filter(Boolean).sort((a, b) => a - b);
+    const rejected = owing.find(b => b.proofRejectedReason);
+    const oldest = owing.slice().sort((a, b) => (toDate(a.dueDate) || 0) - (toDate(b.dueDate) || 0))[0];
+    const ur = uiLang === 'ur';
+    return `
+      <div class="dash-hello">
+        <h2 class="${ur ? 'ur' : ''}" ${ur ? 'dir="rtl" lang="ur"' : ''}>${t('hello')}${uiLang === 'ur' ? '،' : ','} <bdi>${escapeHtml(firstName())}</bdi></h2>
+        <button class="btn sm secondary" onclick="toggleLanguage()" ${ur ? '' : 'lang="ur"'}>${t('langBtn')}</button>
+      </div>
+      <div class="house-card ${ur ? 'ur' : ''}" ${ur ? 'dir="rtl" lang="ur"' : ''}>
+        <div class="eyebrow">${t('myHouse')} · <bdi>${escapeHtml(houseLabel(currentUserProfile.house))}</bdi></div>
+        <div style="margin-top:10px; font-size:14px; color:var(--text-muted); font-weight:600;">${t('amountDue')}</div>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <bdi class="due-amt money" style="color:${total ? 'var(--text)' : 'var(--success)'};">${formatMoney(total)}</bdi>
+          ${overdueN ? `<span class="badge overdue">${t('overdue', { n: overdueN })}</span>` : ''}
+        </div>
+        <div style="font-size:14px; color:var(--text-muted); margin-top:4px;">
+          ${total ? (dues.length ? t('dueBy', { date: formatDate(dues[0]) }) : '') : t('allPaid')}
+          ${review ? `<div style="color:var(--info);">${t('inReview', { n: review })}</div>` : ''}
+        </div>
+        ${rejected ? `<div class="rej">${t('rejected', { month: rejected.period || formatDate(rejected.dueDate), reason: rejected.proofRejectedReason })}</div>` : ''}
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;">
+          ${oldest ? `<button class="btn primary block" onclick="openUploadProofModal('${oldest.id}')">${icon('upload')} ${t('upload')}</button>` : ''}
+          <button class="btn secondary block" onclick="openBankDetailsSheet()">${icon('bank')} ${t('bank')}</button>
+        </div>
+      </div>
+      <div class="dash-h">Society finances</div>
+    `;
+  }
+
+  window.openBankDetailsSheet = async function() {
+    const s = await loadSocietySettings();
+    const has = s.bankName || s.accountNumber || s.iban;
+    const row = (k, v, copy) => v ? `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-top:1px solid var(--border);">
+        <div style="min-width:0;"><div style="font-size:13px; color:var(--text-muted);">${k}</div><div style="font-weight:700; overflow-wrap:anywhere;">${escapeHtml(v)}</div></div>
+        ${copy ? `<button class="btn sm secondary" onclick="copyText('${escapeHtml(String(v).replace(/'/g, ''))}')">${icon('copy')} Copy</button>` : ''}
+      </div>` : '';
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Society bank details</div>
+      <div style="font-size:14px; color:var(--text-muted); margin-bottom:10px;">Pay your dues to this account, then upload the payment proof on your bill.</div>
+      ${has ? row('Account title', s.accountTitle) + row('IBAN', s.iban, true) + row('Account number', s.accountNumber, true) + row('Bank', s.bankName) + (s.instructions ? `<div style="font-size:14px; color:var(--text-muted); padding-top:10px; border-top:1px solid var(--border);">${escapeHtml(s.instructions)}</div>` : '')
+        : '<div class="card" style="cursor:default; color:var(--text-muted);">Management has not added the account details yet.</div>'}
+    `;
+    openModal();
+  };
+  window.copyText = function(text) {
+    const done = () => toast('Copied');
+    try {
+      navigator.clipboard.writeText(text).then(done, () => toast('Could not copy. Press and hold to copy it instead.', 'bad'));
+    } catch (_) { toast('Could not copy. Press and hold to copy it instead.', 'bad'); }
+  };
+
   function loadResidentDashboard() {
     if (!db || !auth.currentUser || currentUserProfile.role !== 'resident') return;
     Promise.all([
@@ -5132,11 +5308,14 @@
       db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get()
     ]).then(([billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const bills = billsSnap.docs.map(d => d.data()).filter(b => !b.isDeleted);
+      const bills = billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted);
       const contribs = contribsSnap.docs.map(d => d.data()).filter(c => !c.isDeleted);
       const expenses = expSnap.docs.map(d => d.data()).filter(x => !x.isDeleted);
       const tickets = ticketsSnap.docs.map(d => d.data()).filter(t => !t.isDeleted);
       const transfers = transfersSnap.docs.map(d => d.data()).filter(t => !t.isDeleted);
+      // My own bills feed the "My house" card and its Upload proof button.
+      billsList = bills.filter(b => b.uid === auth.currentUser.uid);
+      billsLoaded = true;
       renderResidentDashboard({ bills, contribs, expenses, tickets, transfers });
     }).catch(e => {
       console.error("Error loading dashboard:", e);
@@ -5192,6 +5371,7 @@
       </div>`;
 
     el.innerHTML = `
+      ${renderMyHouseCard(d.bills.filter(b => b.uid === auth.currentUser.uid))}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Open Complaints', openTickets, openTickets ? 'var(--info)' : 'var(--text)')}
@@ -5231,11 +5411,7 @@
 
       <div class="card" style="cursor:default;">
         <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Maintenance Bills</div>
-        ${svgDonut([
-          { label: 'Paid', value: paidBills.length, money: false },
-          { label: 'Unpaid', value: unpaidBills.length, money: false },
-          { label: 'In Review', value: inReviewBills.length, money: false }
-        ].filter(s => s.value > 0), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
+        ${svgDonut(billStatusSegments(paidBills.length, unpaidBills.length, inReviewBills.length), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
       </div>
     `;
   }
@@ -5258,6 +5434,15 @@
     return s;
   }
 
+  // 96500 -> "96.5k", 1250000 -> "1.25M"
+  function kAmount(n) {
+    n = Number(n || 0);
+    const a = Math.abs(n);
+    if (a >= 1e6) return (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
+    if (a >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(Math.round(n));
+  }
+
   function renderSummariesCard() {
     const isAdmin = currentUserProfile.role === 'admin';
     const rows = monthlySummaries.slice(0, 6);
@@ -5268,13 +5453,15 @@
           <div style="font-weight:700; font-size:14px;">Monthly Financial Summaries</div>
           ${isAdmin ? `<button class="btn sm secondary" onclick="openGenerateSummaryModal()">Generate</button>` : ''}
         </div>
-        <div style="font-size:13px; color:var(--text-faint); margin-bottom:8px;">Posted automatically on the 1st of every month: what came in, what was spent and the closing balances.</div>
+        <div style="font-size:13px; color:var(--text-faint); margin-bottom:8px;">Posted automatically on the 1st of every month: what came in, what was spent and the closing balances. Amounts in PKR.</div>
         ${rows.length ? rows.map(s => `
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--border);">
             <div style="min-width:0; flex:1;">
-              <div style="font-weight:600; font-size:13.5px;">${escapeHtml(s.period || monthLabel(s.month))}</div>
-              <div style="font-size:13px; color:var(--text-faint); margin-top:2px;">
-                In <span style="color:var(--success);">${formatMoney(s.totals && s.totals.in)}</span> · Out <span style="color:var(--danger);">${formatMoney(s.totals && s.totals.out)}</span> · Net <span style="color:${netColor(s.totals ? s.totals.net : 0)};">${s.totals && s.totals.net < 0 ? '−' : '+'}${formatMoney(Math.abs(s.totals ? s.totals.net : 0))}</span>
+              <div style="font-weight:800; font-size:15px;">${escapeHtml(s.period || monthLabel(s.month))}</div>
+              <div class="sum-line">
+                <span>In <b style="color:var(--success);">${kAmount(s.totals && s.totals.in)}</b></span>
+                <span>Out <b style="color:var(--danger);">${kAmount(s.totals && s.totals.out)}</b></span>
+                <span>Net <b style="color:${netColor(s.totals ? s.totals.net : 0)};">${s.totals && s.totals.net < 0 ? '−' : '+'}${kAmount(Math.abs(s.totals ? s.totals.net : 0))}</b></span>
               </div>
             </div>
             <div style="display:flex; gap:6px; flex-shrink:0;">
@@ -6359,15 +6546,56 @@
   function loadDecisions() {
     if (!db) return;
     db.collection('decisions').get().then(snapshot => {
-      decisionsList = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(d => !d.isDeleted)
-        .sort((a, b) => {
-          const da = toDate(a.createdAt), dbb = toDate(b.createdAt);
-          return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
-        });
+      decisionsList = sortDecisions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => !d.isDeleted));
       renderDecisionsList();
     }).catch(e => { console.error("Error loading decisions:", e); showLoadError('decisions-list', e); });
+  }
+
+  // Newest first, each with a short code (DEC-001 is the oldest item).
+  function sortDecisions(list) {
+    const time = x => { const d = toDate(x.createdAt); return d ? d.getTime() : 0; };
+    const asc = list.slice().sort((a, b) => time(a) - time(b));
+    asc.forEach((d, i) => { d.code = 'DEC-' + String(i + 1).padStart(3, '0'); });
+    return asc.reverse();
+  }
+
+  function decisionCard(d) {
+    const votes = d.votes || [];
+    const endorse = votes.filter(v => v.choice === 'endorse').length;
+    const oppose = votes.filter(v => v.choice === 'reject').length;
+    const need = d.requiredVotes || 3;
+    const seats = Math.max(5, votes.length);
+    const notVoted = Math.max(0, seats - votes.length);
+    const myVote = votes.find(v => v.uid === auth.currentUser.uid);
+    const status = d.status || 'pending';
+    const pill = status === 'approved' ? '<span class="badge paid">Approved</span>'
+      : status === 'rejected' ? '<span class="badge overdue">Rejected</span>'
+      : `<span class="badge pending">${Math.min(endorse, need)} of ${need} to pass</span>`;
+    const segs = votes.filter(v => v.choice === 'endorse').map(() => '<i class="y"></i>')
+      .concat(votes.filter(v => v.choice === 'reject').map(() => '<i class="n"></i>'))
+      .concat(Array(notVoted).fill('<i></i>')).slice(0, seats).join('');
+    const isAdmin = currentUserProfile.role === 'admin';
+    return `
+      <div class="card" style="cursor:default;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+          <span class="ticket-no">${escapeHtml(d.code || 'DEC')}</span>
+          <span style="display:flex; align-items:center; gap:6px;">${pill}${isAdmin ? `<button class="dots-btn" onclick="openDecisionMenu('${d.id}')" aria-label="More actions">${icon('dots')}</button>` : ''}</span>
+        </div>
+        <div style="font-weight:700; font-size:16px;">${escapeHtml(d.title || '')}</div>
+        ${d.description ? `<div style="font-size:14px; color:var(--text-muted); margin-top:4px; white-space:pre-wrap; line-height:1.5;">${escapeHtml(d.description)}</div>` : ''}
+        <div class="vote-bar" style="grid-template-columns:repeat(${seats},1fr);" aria-label="${endorse} endorse, ${oppose} oppose, ${notVoted} not voted">${segs}</div>
+        <div style="font-size:13px; color:var(--text-faint);">${endorse} endorse · ${oppose} oppose · ${notVoted} not voted · ${escapeHtml(d.uploadedBy || 'Admin')} · ${escapeHtml(formatDate(d.createdAt))}</div>
+        ${votes.length ? `<details style="margin-top:6px;"><summary style="font-size:13px; color:var(--accent-2); cursor:pointer;">Who voted</summary><div style="font-size:13px; color:var(--text-muted); margin-top:4px; line-height:1.6;">${votes.map(v => `${escapeHtml(v.name)}: ${v.choice === 'endorse' ? 'endorsed' : 'opposed'}${v.reason ? ' (' + escapeHtml(v.reason) + ')' : ''}`).join('<br/>')}</div></details>` : ''}
+        ${status === 'pending' && isBoard() && !myVote ? `
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button class="btn sm primary block" onclick="castVote('${d.id}', 'endorse')">${icon('check')} Endorse</button>
+            <button class="btn sm secondary block" onclick="castVote('${d.id}', 'reject')">Oppose…</button>
+          </div>
+        ` : ''}
+        ${myVote ? `<div style="font-size:14px; font-weight:600; color:${myVote.choice === 'endorse' ? 'var(--success)' : 'var(--danger)'}; margin-top:10px;">You ${myVote.choice === 'endorse' ? 'endorsed' : 'opposed'} this.</div>` : ''}
+        ${d.finalizedAt ? `<div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Decided ${escapeHtml(formatDate(d.finalizedAt))}</div>` : ''}
+      </div>
+    `;
   }
 
   function renderDecisionsList() {
@@ -6377,42 +6605,20 @@
       el.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted);">No items have been queued for a Board vote yet.</div>';
       return;
     }
-
-    el.innerHTML = decisionsList.map(d => {
-      const votes = d.votes || [];
-      const endorse = votes.filter(v => v.choice === 'endorse').length;
-      const oppose = votes.filter(v => v.choice === 'reject').length;
-      const myVote = votes.find(v => v.uid === auth.currentUser.uid);
-      const status = d.status || 'pending';
-      const badgeClass = status === 'approved' ? 'paid' : (status === 'rejected' ? 'overdue' : 'pending');
-      const reasonRequired = d.type === 'membership' || d.type === 'suspension';
-      return `
-        <div class="card" style="cursor:default;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-            <span style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(d.title || '')}</span>
-            <span class="badge ${badgeClass}">${escapeHtml(status)}</span>
-          </div>
-          <div style="font-size:13px; color:var(--text-muted); margin-bottom:6px;">Type: ${escapeHtml(d.type || 'opinion')} · Queued by ${escapeHtml(d.uploadedBy || '')} · ${escapeHtml(formatDate(d.createdAt))}</div>
-          <div style="font-size:13px; margin-bottom:8px; white-space:pre-wrap;">${escapeHtml(d.description || '')}</div>
-          <div style="font-size:13px; margin-bottom:6px;">
-            <span style="color:var(--success);">Endorse: ${endorse}</span> · <span style="color:var(--danger);">Oppose: ${oppose}</span> · Needs ${d.requiredVotes || 3} to finalize
-          </div>
-          ${votes.length ? `<div style="font-size:13px; color:var(--text-faint); margin-bottom:6px;">${votes.map(v => `${escapeHtml(v.name)}: ${v.choice === 'endorse' ? '✔ endorsed' : '✘ opposed'}${v.reason ? ' — ' + escapeHtml(v.reason) : ''}`).join('<br/>')}</div>` : ''}
-          ${status === 'pending' && isBoard() && !myVote ? `
-            ${reasonRequired ? `<label style="font-size:13px;">Reason (required)</label><input type="text" id="vote-reason-${d.id}" placeholder="State your reason..." />` : ''}
-            <div style="display:flex; gap:8px; margin-top:8px;">
-              <button class="btn sm primary block" onclick="castVote('${d.id}', 'endorse')">Endorse</button>
-              <button class="btn sm danger block" onclick="castVote('${d.id}', 'reject')">Oppose</button>
-            </div>
-          ` : ''}
-          ${status === 'pending' && isBoard() && myVote ? `<div style="font-size:13px; color:var(--info);">You voted: ${myVote.choice === 'endorse' ? 'Endorse' : 'Oppose'}. Waiting for quorum.</div>` : ''}
-          ${status === 'pending' && !isBoard() ? `<div style="font-size:13px; color:var(--text-faint);">Only Board members can vote on this item.</div>` : ''}
-          ${d.finalizedAt ? `<div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Finalized ${escapeHtml(formatDate(d.finalizedAt))}</div>` : ''}
-          ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" style="margin-top:8px;" onclick="archiveDecision('${d.id}')">Remove</button>` : ''}
-        </div>
-      `;
-    }).join('');
+    const open = decisionsList.filter(d => (d.status || 'pending') === 'pending');
+    const decided = decisionsList.filter(d => (d.status || 'pending') !== 'pending');
+    el.innerHTML = `
+      <div class="group-h">Open · ${open.length}</div>
+      ${open.length ? open.map(decisionCard).join('') : '<div class="card" style="cursor:default; color:var(--text-muted);">Nothing is waiting for a vote.</div>'}
+      ${decided.length ? `<div class="group-h">Decided · ${decided.length}</div>${decided.map(decisionCard).join('')}` : ''}
+    `;
   }
+
+  window.openDecisionMenu = function(id) {
+    const d = decisionsList.find(x => x.id === id);
+    if (!d) return;
+    menuSheet(d.title, [{ label: 'Remove from queue', icon: 'trash', danger: true, run: () => archiveDecision(id) }]);
+  };
 
   window.archiveDecision = async function(decisionId) {
     if (currentUserProfile.role !== 'admin') return;
@@ -6506,9 +6712,20 @@
 
     const reasonRequired = d.type === 'membership' || d.type === 'suspension';
     let reason = '';
-    const reasonEl = document.getElementById(`vote-reason-${decisionId}`);
-    if (reasonEl) reason = reasonEl.value.trim();
-    if (reasonRequired && !reason) { toast("A reason is mandatory for membership and suspension decisions."); return; }
+    if (choice === 'reject' || reasonRequired) {
+      reason = await promptSheet({
+        title: choice === 'reject' ? 'Oppose this item?' : 'Endorse this item?',
+        body: d.title || '',
+        label: reasonRequired ? 'Reason (required)' : 'Reason the Board will see' + (choice === 'reject' ? '' : ' (optional)'),
+        multiline: true,
+        required: reasonRequired || choice === 'reject',
+        okLabel: choice === 'reject' ? 'Oppose' : 'Endorse',
+        danger: choice === 'reject'
+      });
+      if (reason === null) return;
+    } else if (!(await confirmSheet({ title: 'Endorse this item?', body: d.title || '', okLabel: 'Endorse' }))) {
+      return;
+    }
 
     const newVotes = [...votes, {
       uid: auth.currentUser.uid,
@@ -6534,7 +6751,8 @@
       if (finalStatus !== 'pending') {
         await applyDecisionOutcome({ ...d, votes: newVotes }, finalStatus);
       }
-      loadDecisions();
+      toast('Vote recorded');
+      if (activeTab === 'dashboard') render(); else loadDecisions();
     } catch(err) {
       toast("Error casting vote: " + err.message);
     }
