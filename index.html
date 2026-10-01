@@ -808,7 +808,7 @@
   window.disableBiometricSignIn = function() {
     localStorage.removeItem('bioCred');
     bioDelKey();
-    alert('Fingerprint sign-in disabled on this device.');
+    toast('Fingerprint sign-in disabled on this device.');
     render();
   };
 
@@ -929,16 +929,16 @@
       if (auth.currentUser.emailVerified) {
         render();
       } else {
-        alert("Email is not verified yet. Please check your inbox.");
+        toast("Email is not verified yet. Please check your inbox.");
       }
     });
 
     document.getElementById('resend-verification-btn').addEventListener('click', async () => {
       try {
         await auth.currentUser.sendEmailVerification();
-        alert("Verification email resent!");
+        toast("Verification email resent!");
       } catch(err) {
-        alert("Error sending verification email: " + err.message);
+        toast("Error sending verification email: " + err.message);
       }
     });
 
@@ -1148,7 +1148,7 @@
 
       let fam;
       try { fam = collectFamilySection('bio-family-sect'); }
-      catch(err) { alert(err.message); return; }
+      catch(err) { toast(err.message, 'bad'); return; }
 
       try {
         await db.collection('users').doc(auth.currentUser.uid).update({
@@ -1180,7 +1180,7 @@
 
         render();
       } catch(err) {
-        alert("Error saving biodata: " + err.message);
+        toast("Error saving biodata: " + err.message);
       }
     });
   }
@@ -1395,9 +1395,9 @@
           if (bioSupported() && !bioEnrolled()) {
             setTimeout(async () => {
               try {
-                if (confirm('Enable fingerprint sign-in on this device for faster access?')) {
+                if (await confirmSheet({ title: 'Use fingerprint sign-in?', body: 'Sign in faster on this device with your fingerprint.', okLabel: 'Turn on' })) {
                   await enableBiometricSignIn(email, password);
-                  alert('Fingerprint sign-in enabled. Next time, tap "Sign in with Fingerprint".');
+                  toast('Fingerprint sign-in enabled. Next time, tap "Sign in with Fingerprint".');
                 }
               } catch(bioErr) { console.log('Biometric enrollment skipped:', bioErr); }
             }, 900);
@@ -1447,7 +1447,7 @@
             await cred.user.sendEmailVerification();
           } catch (verificationError) {
             console.error("Verification email dispatch failed:", verificationError);
-            alert("Account created! However, sending the verification email failed. Please use 'Resend Email Link' on the next screen.");
+            toast("Account created! However, sending the verification email failed. Please use 'Resend Email Link' on the next screen.");
           }
 
           render();
@@ -1858,7 +1858,7 @@
   let toastTimer = null;
   function toast(message, kind) {
     const msg = String(message == null ? '' : message);
-    const bad = kind === 'bad' || (kind == null && /^(error|failed|could not|unable|cannot|can't|invalid|not allowed|please )/i.test(msg.trim()));
+    const bad = kind === 'bad' || (kind == null && /^(error|failed|could not|unable|cannot|can't|invalid|not allowed|please |no |only |you have already|a reason|there are no)/i.test(msg.trim()));
     const old = document.querySelector('.ui-toast');
     if (old) old.remove();
     clearTimeout(toastTimer);
@@ -2308,8 +2308,8 @@
 
   window.clearReadNotifications = async function() {
     const readDocs = notifications.filter(n => n.read);
-    if (!readDocs.length) { alert("There are no read notifications to clear."); return; }
-    if (!confirm(`Delete ${readDocs.length} read notification${readDocs.length === 1 ? '' : 's'}? Unread ones are kept.`)) return;
+    if (!readDocs.length) { toast("There are no read notifications to clear."); return; }
+    if (!(await confirmSheet({ title: `Delete ${readDocs.length} read notification${readDocs.length === 1 ? '' : 's'}?`, body: 'Unread ones are kept.', okLabel: 'Delete', danger: true }))) return;
     notifications = notifications.filter(n => !n.read);
     renderNotificationsModal();
     try {
@@ -2330,7 +2330,7 @@
     currentUserProfile.mutedCategories = muted;
     renderNotificationsModal();
     try { await db.collection('users').doc(auth.currentUser.uid).update({ mutedCategories: muted }); }
-    catch (e) { console.error("Error saving notification settings:", e); alert("Could not save notification settings: " + e.message); }
+    catch (e) { console.error("Error saving notification settings:", e); toast("Could not save notification settings: " + e.message); }
   };
 
   window.closeModal = function() {
@@ -2354,7 +2354,7 @@
       closeModal();
       reload();
     } catch(err) {
-      alert("Error removing record: " + err.message);
+      toast("Error removing record: " + err.message);
     }
   }
 
@@ -2387,44 +2387,44 @@
   window.deleteNotice = async function(id) {
     const n = noticesList.find(item => item.id === id);
     if (!canDeletePost(n)) return;
-    if (!confirm(`Delete the announcement "${n ? n.title : ''}" permanently?`)) return;
+    if (!(await confirmSheet({ title: 'Delete this announcement?', body: `"${n ? n.title : ''}" will be deleted permanently.`, okLabel: 'Delete', danger: true }))) return;
     try {
       await db.collection('announcements').doc(id).delete();
       logAudit('announcement', id, 'update', `Announcement "${n ? n.title : ''}" permanently deleted`);
       loadNotices();
     } catch(err) {
-      alert("Error deleting announcement: " + err.message);
+      toast("Error deleting announcement: " + err.message);
     }
   };
 
   window.deletePoll = async function(id) {
     const p = pollsList.find(item => item.id === id);
     if (!canDeletePost(p)) return;
-    if (!confirm(`Delete the poll "${p ? p.question : ''}" permanently? All votes will be lost.`)) return;
+    if (!(await confirmSheet({ title: 'Delete this poll?', body: `"${p ? p.question : ''}" and all its votes will be deleted permanently.`, okLabel: 'Delete', danger: true }))) return;
     try {
       await db.collection('polls').doc(id).delete();
       logAudit('poll', id, 'update', `Poll "${p ? p.question : ''}" permanently deleted`);
       loadPolls();
     } catch(err) {
-      alert("Error deleting poll: " + err.message);
+      toast("Error deleting poll: " + err.message);
     }
   };
 
-  window.archiveTicket = function(id) {
+  window.archiveTicket = async function(id) {
     const t = ticketsList.find(item => item.id === id);
-    if (!confirm(`Remove complaint ${t ? t.ticketNo : ''}? It will be archived (kept for audit) and hidden from the list.`)) return;
+    if (!(await confirmSheet({ title: `Remove complaint ${t ? t.ticketNo : ''}?`, body: 'It will be archived (kept for audit) and hidden from the list.', okLabel: 'Remove', danger: true }))) return;
     archiveRecord('tickets', id, loadTickets);
   };
 
-  window.archiveBill = function(id) {
+  window.archiveBill = async function(id) {
     const b = billsList.find(item => item.id === id);
-    if (!confirm(`Remove bill ${b ? b.billNo : ''}? It will be archived (kept for audit) and hidden from the list.`)) return;
+    if (!(await confirmSheet({ title: `Cancel bill ${b ? b.billNo : ''}?`, body: 'It will be archived (kept for audit) and hidden from the list.', okLabel: 'Cancel bill', cancelLabel: 'Keep bill', danger: true }))) return;
     archiveRecord('bills', id, loadBills);
   };
 
-  window.archiveFund = function(id) {
+  window.archiveFund = async function(id) {
     const f = fundsList.find(item => item.id === id);
-    if (!confirm(`Remove the fund "${f ? f.title : ''}"? It will be archived (kept for audit) along with its contribution records.`)) return;
+    if (!(await confirmSheet({ title: 'Remove this fund?', body: `"${f ? f.title : ''}" will be archived (kept for audit) along with its contribution records.`, okLabel: 'Remove', danger: true }))) return;
     archiveRecord('funds', id, loadFunds);
   };
 
@@ -2520,7 +2520,7 @@
       logAudit('announcement', id, 'update', `Comments ${next ? 'reopened' : 'closed'} on "${n.title}"`);
       loadNotices();
     } catch(err) {
-      alert("Error updating announcement: " + err.message);
+      toast("Error updating announcement: " + err.message);
     }
   };
 
@@ -2548,7 +2548,7 @@
       loadNotices();
     } catch(err) {
       if (btn) btn.disabled = false;
-      alert("Error posting comment: " + err.message);
+      toast("Error posting comment: " + err.message);
     }
     return false;
   };
@@ -2557,12 +2557,12 @@
     const n = noticesList.find(item => item.id === noticeId);
     const c = (noticeComments[noticeId] || []).find(item => item.id === commentId);
     if (!canDeleteComment(n, c)) return;
-    if (!confirm('Delete this comment?')) return;
+    if (!(await confirmSheet({ title: 'Delete this comment?', okLabel: 'Delete', danger: true }))) return;
     try {
       await db.collection('announcements').doc(noticeId).collection('comments').doc(commentId).delete();
       loadNotices();
     } catch(err) {
-      alert("Error deleting comment: " + err.message);
+      toast("Error deleting comment: " + err.message);
     }
   };
 
@@ -2630,7 +2630,7 @@
         closeModal();
         loadNotices();
       } catch(err) {
-        alert("Error publishing notice: " + err.message);
+        toast("Error publishing notice: " + err.message);
       }
     });
   };
@@ -2739,7 +2739,7 @@
         closeModal();
         loadPolls();
       } catch(err) {
-        alert("Error creating poll: " + err.message);
+        toast("Error creating poll: " + err.message);
       }
     });
   };
@@ -2758,7 +2758,7 @@
       });
       loadPolls();
     } catch(err) {
-      alert("Error casting vote: " + err);
+      toast("Error casting vote: " + err);
     }
   };
 
@@ -2853,7 +2853,7 @@
   window.downloadTicketsReportPDF = async function() {
     const list = filteredTickets();
     if (!list.length) {
-      alert("No complaints match the current filter.");
+      toast("No complaints match the current filter.");
       return;
     }
 
@@ -2898,7 +2898,7 @@
 
       doc.save(`Complaints_Report_${ticketFilterMonth === 'all' ? 'All' : ticketFilterMonth}.pdf`);
     } catch(err) {
-      alert("Error generating report: " + err.message);
+      toast("Error generating report: " + err.message);
     }
   };
 
@@ -2944,7 +2944,7 @@
 
       doc.save(`Complaint_${(t.ticketNo || 'Record').replace(/\s+/g, '_')}.pdf`);
     } catch(err) {
-      alert("Error generating PDF: " + err.message);
+      toast("Error generating PDF: " + err.message);
     }
   };
 
@@ -3026,7 +3026,7 @@
         closeModal();
         loadTickets();
       } catch(err) {
-        alert("Error submitting ticket: " + err.message);
+        toast("Error submitting ticket: " + err.message);
       }
     });
   };
@@ -3077,7 +3077,7 @@
           closeModal();
           loadTickets();
         } catch(err) {
-          alert("Error updating ticket: " + err.message);
+          toast("Error updating ticket: " + err.message);
         }
       });
     }
@@ -3136,7 +3136,7 @@
 
       let fam;
       try { fam = collectFamilySection('edit-family-sect'); }
-      catch(err) { alert(err.message); return; }
+      catch(err) { toast(err.message, 'bad'); return; }
 
       try {
         await db.collection('users').doc(auth.currentUser.uid).update({
@@ -3151,7 +3151,7 @@
         closeModal();
         render();
       } catch(err) {
-        alert("Error updating biodata: " + err.message);
+        toast("Error updating biodata: " + err.message);
       }
     });
   };
@@ -3329,14 +3329,14 @@
         updatedBy: currentUserProfile.name,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
-      if (!(data.amount > 0)) { alert("Please enter a valid amount."); return; }
+      if (!(data.amount > 0)) { toast("Please enter a valid amount."); return; }
       try {
         await db.collection('settings').doc('recurringBill').set(data, { merge: true });
         logAudit('settings', 'recurringBill', 'update', `Recurring bill ${data.enabled ? 'enabled' : 'disabled'}: ${data.category} ${formatMoney(data.amount)}, due day ${data.dueDay}`);
         closeModal();
         loadRecurringBillCard();
       } catch(err) {
-        alert("Error saving recurring bill settings: " + err.message);
+        toast("Error saving recurring bill settings: " + err.message);
       }
     });
   };
@@ -3376,8 +3376,8 @@
       e.preventDefault();
       const month = document.getElementById('rec-now-month').value;
       const dueDate = document.getElementById('rec-now-due').value;
-      if (!dueDate) { alert("Please choose a due date."); return; }
-      if (!confirm(`Issue ${monthLabel(month)} bills of ${formatMoney(s.amount)} now, due ${dueDate}?`)) return;
+      if (!dueDate) { toast("Please choose a due date."); return; }
+      if (!(await confirmSheet({ title: `Issue ${monthLabel(month)} bills?`, body: `${formatMoney(s.amount)} per house, due ${formatDate(dueDate)}.`, okLabel: 'Issue bills' }))) return;
       try {
         await db.collection('settings').doc('recurringBill').set({
           runRequest: { month, dueDate, by: currentUserProfile.name, at: firebase.firestore.FieldValue.serverTimestamp() }
@@ -3387,7 +3387,7 @@
         loadRecurringBillCard();
         setTimeout(() => { loadBills(); }, 6000);
       } catch(err) {
-        alert("Error requesting bill run: " + err.message);
+        toast("Error requesting bill run: " + err.message);
       }
     });
   };
@@ -3506,7 +3506,7 @@
         closeModal();
         renderBankCard();
       } catch(err) {
-        alert("Error saving account details: " + err.message);
+        toast("Error saving account details: " + err.message);
       }
     });
   };
@@ -3582,7 +3582,7 @@
       isoDate(b.createdAt), isoDate(b.dueDate), b.status === 'paid' ? isoDate(b.paidAt) : '',
       b.paymentRef, b.paymentMethod, b.verifiedBy, b.issuedBy, b.notes
     ]);
-    if (!rows.length) return alert("No bills to export for the current filter.");
+    if (!rows.length) return toast("No bills to export for the current filter.");
     downloadCSV(`RPHS_Bills_${dateStamp()}.csv`,
       ['Bill No', 'Resident', 'House', 'Category', 'Period', 'Amount (PKR)', 'Status', 'Issued', 'Due', 'Paid On', 'Payment Ref', 'Method', 'Verified By', 'Issued By', 'Notes'],
       rows, 'bills_csv');
@@ -3695,17 +3695,17 @@
     if (!d || !d.uid || currentUserProfile.role !== 'admin') return;
     await sendNotification(d.uid, 'Payment Reminder', reminderBody(d), 'info', 'bills');
     logAudit('bill', '', 'notify', `Payment reminder sent to ${d.name} (${d.house}) for ${formatMoney(d.total)}`);
-    alert(`Reminder sent to ${d.name}.`);
+    toast(`Reminder sent to ${d.name}.`);
   };
 
   window.remindAllDefaulters = async function() {
     if (currentUserProfile.role !== 'admin') return;
     const list = defaultersList().filter(d => d.uid);
     if (!list.length) return;
-    if (!confirm(`Send a payment reminder to ${list.length} resident(s)?`)) return;
+    if (!(await confirmSheet({ title: `Send a reminder to ${list.length} resident${list.length === 1 ? '' : 's'}?`, body: 'They get an in-app notification about their unpaid bill.', okLabel: 'Send reminder' }))) return;
     await Promise.all(list.map(d => sendNotification(d.uid, 'Payment Reminder', reminderBody(d), 'info', 'bills')));
     logAudit('bill', '', 'notify', `Payment reminders sent to ${list.length} defaulter(s), total ${formatMoney(list.reduce((s, d) => s + d.total, 0))}`);
-    alert(`Reminders sent to ${list.length} resident(s).`);
+    toast(`Reminders sent to ${list.length} resident(s).`);
   };
 
   window.whatsappDefaulter = function(key) {
@@ -3734,7 +3734,7 @@
   window.exportDefaultersCSV = function() {
     if (!isStaff()) return;
     const rows = defaultersList().map(d => [d.name, d.house, d.phone, d.bills.length, d.overdue, d.periods.join('; '), d.total, d.oldestDue ? dateStamp(d.oldestDue) : '']);
-    if (!rows.length) return alert("No defaulters to export.");
+    if (!rows.length) return toast("No defaulters to export.");
     downloadCSV(`RPHS_Defaulters_${dateStamp()}.csv`,
       ['Resident', 'House', 'Phone', 'Unpaid Bills', 'Overdue Bills', 'Periods', 'Outstanding (PKR)', 'Oldest Due'],
       rows, 'defaulters_csv');
@@ -3833,7 +3833,7 @@
       doc.save(fileName);
       logExport('resident_statement', fileName);
     } catch (err) {
-      alert("Error generating statement: " + err.message);
+      toast("Error generating statement: " + err.message);
     }
   };
 
@@ -3918,7 +3918,7 @@
   }
 
   window.payBill = function() {
-    alert("Online payment gateway is not connected yet. Please pay to the society maintenance account and upload your payment proof on the bill.");
+    toast("Online payment gateway is not connected yet. Please pay to the society maintenance account and upload your payment proof on the bill.");
   };
 
   // --- PAYMENT PROOF (UPLOAD + VERIFY) ---
@@ -3986,7 +3986,7 @@
       for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
       window.open(URL.createObjectURL(new Blob([arr], { type: mime })), '_blank');
     } catch(err) {
-      alert("Could not open the proof file: " + err.message);
+      toast("Could not open the proof file: " + err.message);
     }
   };
 
@@ -4045,7 +4045,7 @@
         closeModal();
         loadBills();
       } catch(err) {
-        alert("Error submitting proof: " + err.message);
+        toast("Error submitting proof: " + err.message);
         submitBtn.disabled = false;
       }
     });
@@ -4054,7 +4054,7 @@
   window.approveBillProof = async function(billId) {
     const b = billsList.find(item => item.id === billId);
     if (!b || currentUserProfile.role !== 'admin') return;
-    if (!confirm(`Approve payment proof and mark ${b.billNo} (${formatMoney(b.amount)}) as paid?`)) return;
+    if (!(await confirmSheet({ title: 'Approve this payment?', body: `${b.billNo} (${formatMoney(b.amount)}) will be marked as paid.`, okLabel: 'Approve' }))) return;
 
     try {
       await db.collection('bills').doc(billId).update({
@@ -4067,16 +4067,15 @@
       closeModal();
       loadBills();
     } catch(err) {
-      alert("Error approving payment: " + err.message);
+      toast("Error approving payment: " + err.message);
     }
   };
 
   window.rejectBillProof = async function(billId) {
     const b = billsList.find(item => item.id === billId);
     if (!b || currentUserProfile.role !== 'admin') return;
-    const reason = prompt("Reason for rejecting this payment proof:");
+    const reason = await promptSheet({ title: 'Reject this proof?', body: `${b.name || ''} · ${b.billNo || ''} · ${formatMoney(b.amount)}`, label: 'Reason they will see', placeholder: 'e.g. The screenshot does not show the amount', multiline: true, required: true, okLabel: 'Reject proof', danger: true });
     if (reason === null) return;
-    if (!reason.trim()) { alert("A reason is required to reject a proof."); return; }
 
     try {
       await db.collection('bills').doc(billId).update({
@@ -4088,7 +4087,7 @@
       closeModal();
       loadBills();
     } catch(err) {
-      alert("Error rejecting proof: " + err.message);
+      toast("Error rejecting proof: " + err.message);
     }
   };
 
@@ -4267,13 +4266,13 @@
       const notes = document.getElementById('bill-notes').value.trim();
 
       if (!amount || amount <= 0) {
-        alert("Please enter a valid amount.");
+        toast("Please enter a valid amount.");
         return;
       }
 
       const targets = target === '__all__' ? residents : billables.filter(r => r.uid === target);
       if (!targets.length) {
-        alert("No resident selected.");
+        toast("No resident selected.");
         return;
       }
 
@@ -4300,7 +4299,7 @@
         closeModal();
         loadBills();
       } catch(err) {
-        alert("Error issuing bill: " + err.message);
+        toast("Error issuing bill: " + err.message);
       }
     });
   };
@@ -4382,7 +4381,7 @@
           closeModal();
           loadBills();
         } catch(err) {
-          alert("Error updating bill: " + err.message);
+          toast("Error updating bill: " + err.message);
         }
       });
     }
@@ -4391,7 +4390,7 @@
   window.markBillPaid = async function(billId) {
     const b = billsList.find(item => item.id === billId);
     if (!b || currentUserProfile.role !== 'admin') return;
-    if (!confirm(`Mark ${b.billNo} (${formatMoney(b.amount)}) as paid?`)) return;
+    if (!(await confirmSheet({ title: 'Mark as paid?', body: `${b.billNo} (${formatMoney(b.amount)})`, okLabel: 'Mark as paid' }))) return;
 
     try {
       await db.collection('bills').doc(billId).update({
@@ -4402,7 +4401,7 @@
       await sendNotification(b.uid, `Payment Received (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been recorded.`, 'success');
       loadBills();
     } catch(err) {
-      alert("Error updating bill: " + err.message);
+      toast("Error updating bill: " + err.message);
     }
   };
 
@@ -4454,7 +4453,7 @@
 
       doc.save(`${status === 'paid' ? 'Receipt' : 'Bill'}_${(b.billNo || 'Record').replace(/\s+/g, '_')}.pdf`);
     } catch(err) {
-      alert("Error generating PDF: " + err.message);
+      toast("Error generating PDF: " + err.message);
     }
   };
 
@@ -4481,7 +4480,7 @@
       c.fundTitle, c.category, c.name, c.house, Number(c.amount || 0), c.status || 'submitted',
       c.paymentDate || isoDate(c.createdAt), c.paymentMethod, c.paymentRef, c.verifiedBy || c.recordedBy, isoDate(c.createdAt)
     ]);
-    if (!rows.length) return alert("No contributions to export yet. Open the Funds tab first so they load.");
+    if (!rows.length) return toast("No contributions to export yet. Open the Funds tab first so they load.");
     downloadCSV(`RPHS_Contributions_${dateStamp()}.csv`,
       ['Fund', 'Fund Category', 'Contributor', 'House', 'Amount (PKR)', 'Status', 'Payment Date', 'Method', 'Ref', 'Verified By', 'Submitted On'],
       rows, 'contributions_csv');
@@ -4609,7 +4608,7 @@
       const target = Number(document.getElementById('fund-target').value.trim() || 0);
       const deadline = document.getElementById('fund-deadline').value;
       if (document.getElementById('fund-target').value.trim() && (!target || target <= 0)) {
-        alert("Please enter a valid target amount or leave it blank.");
+        toast("Please enter a valid target amount or leave it blank.");
         return;
       }
 
@@ -4630,7 +4629,7 @@
         closeModal();
         loadFunds();
       } catch(err) {
-        alert("Error starting fund: " + err.message);
+        toast("Error starting fund: " + err.message);
       }
     });
   };
@@ -4774,7 +4773,7 @@
           closeModal();
           loadFunds();
         } catch(err) {
-          alert("Error submitting contribution: " + err.message);
+          toast("Error submitting contribution: " + err.message);
           submitBtn.disabled = false;
         }
       });
@@ -4825,7 +4824,7 @@
       const paymentMethod = document.getElementById('record-contrib-method').value;
       const paymentDate = document.getElementById('record-contrib-date').value;
       const r = residents.find(item => item.uid === uid);
-      if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
+      if (!amount || amount <= 0) { toast("Please enter a valid amount."); return; }
 
       try {
         await db.collection('fund_contributions').add({
@@ -4853,7 +4852,7 @@
         closeModal();
         loadFunds();
       } catch(err) {
-        alert("Error recording contribution: " + err.message);
+        toast("Error recording contribution: " + err.message);
       }
     });
   };
@@ -4861,7 +4860,7 @@
   window.verifyContribution = async function(contribId) {
     const c = fundContribsList.find(item => item.id === contribId);
     if (!c || currentUserProfile.role !== 'admin') return;
-    if (!confirm(`Verify contribution of ${formatMoney(c.amount)} from ${c.name}?`)) return;
+    if (!(await confirmSheet({ title: 'Verify this contribution?', body: `${formatMoney(c.amount)} from ${c.name}`, okLabel: 'Verify' }))) return;
 
     try {
       await db.collection('fund_contributions').doc(contribId).update({
@@ -4874,16 +4873,15 @@
       closeModal();
       loadFunds();
     } catch(err) {
-      alert("Error verifying contribution: " + err.message);
+      toast("Error verifying contribution: " + err.message);
     }
   };
 
   window.rejectContribution = async function(contribId) {
     const c = fundContribsList.find(item => item.id === contribId);
     if (!c || currentUserProfile.role !== 'admin') return;
-    const reason = prompt("Reason for rejecting this contribution:");
+    const reason = await promptSheet({ title: 'Reject this contribution?', body: `${c.name || ''} · ${formatMoney(c.amount)}`, label: 'Reason they will see', multiline: true, required: true, okLabel: 'Reject', danger: true });
     if (reason === null) return;
-    if (!reason.trim()) { alert("A reason is required to reject a contribution."); return; }
 
     try {
       await db.collection('fund_contributions').doc(contribId).update({
@@ -4895,14 +4893,14 @@
       closeModal();
       loadFunds();
     } catch(err) {
-      alert("Error rejecting contribution: " + err.message);
+      toast("Error rejecting contribution: " + err.message);
     }
   };
 
   window.closeFund = async function(fundId) {
     const f = fundsList.find(item => item.id === fundId);
     if (!f || currentUserProfile.role !== 'admin') return;
-    if (!confirm(`Close "${f.title}"? Residents will no longer be able to contribute.`)) return;
+    if (!(await confirmSheet({ title: `Close "${f.title}"?`, body: 'Residents will no longer be able to contribute.', okLabel: 'Close fund', danger: true }))) return;
 
     try {
       await db.collection('funds').doc(fundId).update({ status: 'closed' });
@@ -4911,7 +4909,7 @@
       closeModal();
       loadFunds();
     } catch(err) {
-      alert("Error closing fund: " + err.message);
+      toast("Error closing fund: " + err.message);
     }
   };
 
@@ -5245,7 +5243,7 @@
 
   window.openMonthlySummaryModal = async function(month) {
     let s;
-    try { s = await getSummary(month); } catch (err) { alert(err.message); return; }
+    try { s = await getSummary(month); } catch (err) { toast(err.message, 'bad'); return; }
     const money = formatMoney;
     const b = s.bills || {}, c = s.contributions || {}, x = s.expenses || {}, bal = s.balances || {};
     const row = (k, v, color, bold) => `<div style="display:flex; justify-content:space-between; gap:10px; padding:5px 0; font-size:13px; ${bold ? 'font-weight:700;' : ''}"><span style="color:var(--text-muted);">${k}</span><span style="font-family:var(--font-mono); white-space:nowrap; ${color ? 'color:' + color + ';' : ''}">${v}</span></div>`;
@@ -5362,7 +5360,7 @@
       doc.save(fileName);
       logExport('monthly_summary', fileName);
     } catch (err) {
-      alert("Error generating summary PDF: " + err.message);
+      toast("Error generating summary PDF: " + err.message);
     }
   };
 
@@ -5372,17 +5370,17 @@
     const msg = regenerate
       ? `Regenerate the ${label} summary from the latest records? The existing announcement is updated in place; no new notification is sent.`
       : `Generate the ${label} financial summary now? It is posted as an announcement and every member is notified.`;
-    if (!confirm(msg)) return;
+    if (!(await confirmSheet({ title: regenerate ? `Regenerate ${label} summary?` : `Generate ${label} summary?`, body: msg, okLabel: regenerate ? 'Regenerate' : 'Generate' }))) return;
     try {
       await db.collection('settings').doc('monthlySummary').set({
         runRequest: { month, by: currentUserProfile.name, at: firebase.firestore.FieldValue.serverTimestamp() }
       }, { merge: true });
       logAudit('settings', 'monthlySummary', 'update', `Monthly summary for ${label} ${regenerate ? 'regeneration' : 'generation'} requested`);
       closeModal();
-      alert(`Generating the ${label} summary… it will appear in Announcements and the Dashboard in a few seconds.`);
+      toast(`Generating the ${label} summary… it will appear in Announcements and the Dashboard in a few seconds.`);
       setTimeout(() => { if (document.getElementById('dashboard-body')) { loadDashboard(); loadResidentDashboard(); } loadNotices(); }, 7000);
     } catch (err) {
-      alert("Error requesting summary: " + err.message);
+      toast("Error requesting summary: " + err.message);
     }
   };
 
@@ -5591,7 +5589,7 @@
       expenseRefNo(x), x.expenseDate, x.category || 'Other', x.description, Number(x.amount || 0),
       expenseSourceLabel(x), x.enteredBy, x.decisionRef, isoDate(x.createdAt)
     ]);
-    if (!rows.length) return alert("No expenses to export for the current filter.");
+    if (!rows.length) return toast("No expenses to export for the current filter.");
     downloadCSV(`RPHS_Expenses_${dateStamp()}.csv`,
       ['Ref', 'Date', 'Category', 'Description', 'Amount (PKR)', 'Paid From', 'Entered By', 'Board Ref', 'Recorded On'],
       rows, 'expenses_csv');
@@ -5732,7 +5730,7 @@
 
       doc.save(`Expense_${expenseRefNo(x)}_${String(x.expenseDate || '').replace(/[^0-9-]/g, '') || 'record'}.pdf`);
     } catch(err) {
-      alert("Error generating PDF: " + err.message);
+      toast("Error generating PDF: " + err.message);
     }
   };
 
@@ -5803,21 +5801,21 @@
       const expenseDate = document.getElementById('exp-date').value;
       const decisionRef = document.getElementById('exp-decision').value.trim();
       const sourceVal = document.getElementById('exp-source').value;
-      if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
-      if (description.length < 10) { alert("Please write a detailed note for this expense (at least 10 characters)."); return; }
+      if (!amount || amount <= 0) { toast("Please enter a valid amount."); return; }
+      if (description.length < 10) { toast("Please write a detailed note for this expense (at least 10 characters)."); return; }
 
       let source = 'bills', fundId = '', fundTitle = '', available = billsAcct.balance, sourceName = 'Bills account';
       if (sourceVal.startsWith('fund:')) {
         fundId = sourceVal.slice(5);
         const f = expenseSources.funds.find(item => item.id === fundId);
-        if (!f) { alert("Selected fund not found. Please reload and try again."); return; }
+        if (!f) { toast("Selected fund not found. Please reload and try again."); return; }
         source = 'fund';
         fundTitle = f.title || 'Fund';
         available = fundSummary(fundId, expenseSources.contribs, expensesList, expenseSources.transfers).balance;
         sourceName = `Fund: ${fundTitle}`;
       }
       if (amount > available) {
-        alert(`Only ${formatMoney(available)} is available in ${sourceName}. Reduce the amount or choose another source.`);
+        toast(`Only ${formatMoney(available)} is available in ${sourceName}. Reduce the amount or choose another source.`);
         return;
       }
 
@@ -5832,14 +5830,14 @@
         closeModal();
         loadExpenses();
       } catch(err) {
-        alert("Error recording expense: " + err.message);
+        toast("Error recording expense: " + err.message);
       }
     });
   };
 
-  window.archiveExpense = function(id) {
+  window.archiveExpense = async function(id) {
     const x = expensesList.find(item => item.id === id);
-    if (!confirm(`Remove this ${x ? x.category : ''} expense of ${x ? formatMoney(x.amount) : ''}? It will be archived (kept for audit).`)) return;
+    if (!(await confirmSheet({ title: 'Cancel this expense?', body: `${x ? x.category : ''} expense of ${x ? formatMoney(x.amount) : ''}. It will be archived (kept for audit).`, okLabel: 'Cancel expense', cancelLabel: 'Keep it', danger: true }))) return;
     logAudit('expense', id, 'soft_delete', x ? `${x.category} ${formatMoney(x.amount)} (${expenseSourceLabel(x)})` : '');
     archiveRecord('expenses', id, loadExpenses);
   };
@@ -5937,14 +5935,14 @@
       const amount = Number(document.getElementById('tr-amount').value);
       const note = document.getElementById('tr-note').value.trim();
       const transferDate = document.getElementById('tr-date').value;
-      if (!from || !to) { alert("Please choose a fund."); return; }
-      if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
-      if (note.length < 10) { alert("Please write a detailed note for this transfer (at least 10 characters)."); return; }
+      if (!from || !to) { toast("Please choose a fund."); return; }
+      if (!amount || amount <= 0) { toast("Please enter a valid amount."); return; }
+      if (note.length < 10) { toast("Please write a detailed note for this transfer (at least 10 characters)."); return; }
       if (amount > from.summary.balance) {
-        alert(`Only ${formatMoney(from.summary.balance)} is available in ${label(from)}. Reduce the amount.`);
+        toast(`Only ${formatMoney(from.summary.balance)} is available in ${label(from)}. Reduce the amount.`);
         return;
       }
-      if (!confirm(`Transfer ${formatMoney(amount)} from ${label(from)} to ${label(to)}?`)) return;
+      if (!(await confirmSheet({ title: `Transfer ${formatMoney(amount)}?`, body: `From ${label(from)} to ${label(to)}.`, okLabel: 'Transfer' }))) return;
 
       const submitBtn = e.target.querySelector('button[type="submit"]');
       submitBtn.disabled = true;
@@ -5962,7 +5960,7 @@
         refreshMoneyViews();
       } catch(err) {
         submitBtn.disabled = false;
-        alert("Error recording transfer: " + err.message);
+        toast("Error recording transfer: " + err.message);
       }
     });
   };
@@ -6060,7 +6058,7 @@
         closeModal();
         loadVolunteers();
       } catch(err) {
-        alert("Error starting program: " + err.message);
+        toast("Error starting program: " + err.message);
       }
     });
   };
@@ -6084,14 +6082,14 @@
       await notifyAdmins("New Volunteer", `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) joined "${p.title}".`, 'info');
       loadVolunteers();
     } catch(err) {
-      alert("Error joining program: " + err.message);
+      toast("Error joining program: " + err.message);
     }
   };
 
   window.leaveProgram = async function(id) {
     const p = volunteersList.find(item => item.id === id);
     if (!p) return;
-    if (!confirm(`Leave the program "${p.title}"?`)) return;
+    if (!(await confirmSheet({ title: 'Leave this program?', body: p.title, okLabel: 'Leave', danger: true }))) return;
     try {
       const snap = await db.collection('volunteer_programs').doc(id).get();
       const cur = (snap.exists ? (snap.data().participants || []) : []).filter(x => x.uid !== auth.currentUser.uid);
@@ -6099,26 +6097,26 @@
       logAudit('volunteer_program', id, 'update', `${currentUserProfile.name} left "${p.title}"`);
       loadVolunteers();
     } catch(err) {
-      alert("Error leaving program: " + err.message);
+      toast("Error leaving program: " + err.message);
     }
   };
 
   window.closeProgram = async function(id) {
     const p = volunteersList.find(item => item.id === id);
     if (!p || currentUserProfile.role !== 'admin') return;
-    if (!confirm(`Close the program "${p.title}"? Residents will no longer be able to join.`)) return;
+    if (!(await confirmSheet({ title: 'Close this program?', body: `"${p.title}": residents will no longer be able to join.`, okLabel: 'Close program', danger: true }))) return;
     try {
       await db.collection('volunteer_programs').doc(id).update({ status: 'closed' });
       logAudit('volunteer_program', id, 'update', `Program "${p.title}" closed with ${(p.participants || []).length} volunteers`);
       loadVolunteers();
     } catch(err) {
-      alert("Error closing program: " + err.message);
+      toast("Error closing program: " + err.message);
     }
   };
 
-  window.archiveProgram = function(id) {
+  window.archiveProgram = async function(id) {
     const p = volunteersList.find(item => item.id === id);
-    if (!confirm(`Remove the program "${p ? p.title : ''}"? It will be archived (kept for audit).`)) return;
+    if (!(await confirmSheet({ title: 'Remove this program?', body: `"${p ? p.title : ''}" will be archived (kept for audit).`, okLabel: 'Remove', danger: true }))) return;
     logAudit('volunteer_program', id, 'soft_delete', p ? `Program "${p.title}"` : '');
     archiveRecord('volunteer_programs', id, loadVolunteers);
   };
@@ -6309,7 +6307,7 @@
       }).catch(e => console.error("Export log failed:", e));
       logAudit('report', '', 'create', `PDF export: ${fileName}`);
     } catch(err) {
-      alert("Error generating report PDF: " + err.message);
+      toast("Error generating report PDF: " + err.message);
     }
   };
 
@@ -6376,7 +6374,7 @@
     if (currentUserProfile.role !== 'admin') return;
     const d = decisionsList.find(item => item.id === decisionId);
     if (!d) return;
-    if (!confirm(`Remove "${d.title || 'this item'}" from the Board queue? It will be archived.`)) return;
+    if (!(await confirmSheet({ title: 'Remove from the Board queue?', body: `"${d.title || 'this item'}" will be archived.`, okLabel: 'Remove', danger: true }))) return;
     try {
       await db.collection('decisions').doc(decisionId).update({
         isDeleted: true,
@@ -6386,7 +6384,7 @@
       logAudit('decision', decisionId, 'archive', `Removed from Board queue: ${d.title || ''}`);
       loadDecisions();
     } catch(err) {
-      alert("Error removing item: " + err.message);
+      toast("Error removing item: " + err.message);
     }
   };
 
@@ -6422,7 +6420,7 @@
         closeModal();
         loadDecisions();
       } catch(err) {
-        alert("Error queueing decision: " + err.message);
+        toast("Error queueing decision: " + err.message);
       }
     });
   };
@@ -6460,13 +6458,13 @@
     const d = decisionsList.find(item => item.id === decisionId);
     if (!d || d.status !== 'pending') return;
     const votes = d.votes || [];
-    if (votes.find(v => v.uid === auth.currentUser.uid)) { alert("You have already voted on this item."); return; }
+    if (votes.find(v => v.uid === auth.currentUser.uid)) { toast("You have already voted on this item."); return; }
 
     const reasonRequired = d.type === 'membership' || d.type === 'suspension';
     let reason = '';
     const reasonEl = document.getElementById(`vote-reason-${decisionId}`);
     if (reasonEl) reason = reasonEl.value.trim();
-    if (reasonRequired && !reason) { alert("A reason is mandatory for membership and suspension decisions."); return; }
+    if (reasonRequired && !reason) { toast("A reason is mandatory for membership and suspension decisions."); return; }
 
     const newVotes = [...votes, {
       uid: auth.currentUser.uid,
@@ -6494,7 +6492,7 @@
       }
       loadDecisions();
     } catch(err) {
-      alert("Error casting vote: " + err.message);
+      toast("Error casting vote: " + err.message);
     }
   };
 
@@ -6584,13 +6582,13 @@
 
   window.restoreRecord = async function(collection, id) {
     if (currentUserProfile.role !== 'admin') return;
-    if (!confirm("Restore this record? It will reappear in its normal list.")) return;
+    if (!(await confirmSheet({ title: 'Restore this record?', body: 'It will reappear in its normal list.', okLabel: 'Restore' }))) return;
     try {
       await db.collection(collection).doc(id).update({ isDeleted: false, restoredAt: firebase.firestore.FieldValue.serverTimestamp(), restoredBy: currentUserProfile.name });
       logAudit(collection, id, 'restore', 'Record restored from archive');
       loadArchiveAndAudit();
     } catch(err) {
-      alert("Error restoring record: " + err.message);
+      toast("Error restoring record: " + err.message);
     }
   };
 
@@ -6623,7 +6621,7 @@
       r.name, r.house, r.role, r.phone, r.cnic, r.email, r.bloodGroup, r.occupancyType, r.familyDetails,
       r.suspended ? 'Suspended' : 'Active', r.billExempt ? 'Exempt' : 'Included', isoDate(r.createdAt)
     ]);
-    if (!rows.length) return alert("No residents to export.");
+    if (!rows.length) return toast("No residents to export.");
     downloadCSV(`RPHS_Residents_${dateStamp()}.csv`,
       ['Name', 'House', 'Role', 'Phone', 'CNIC', 'Email', 'Blood Group', 'Occupancy', 'Family', 'Status', 'Recurring Bill', 'Registered'],
       rows, 'residents_csv');
@@ -6715,7 +6713,7 @@
 
       doc.save(`Resident_${(r.house || 'Biodata').replace(/\s+/g, '_')}.pdf`);
     } catch(err) {
-      alert("Error generating PDF: " + err.message);
+      toast("Error generating PDF: " + err.message);
     }
   };
 
@@ -6761,20 +6759,20 @@
       logAudit('member', uid, 'update', `Membership approved: ${r ? r.name : uid}`);
       await sendNotification(uid, "Account Approved", "Your account has been approved! You can now access your portal.", "success");
       loadPendingResidents();
-    } catch(e) { alert("Error approving user: " + e.message); }
+    } catch(e) { toast("Error approving user: " + e.message); }
   };
 
   window.rejectUser = async function(uid) {
     const r = pendingResidents.find(item => item.uid === uid);
     try {
-      const reason = prompt("Reason for rejecting (optional):");
+      const reason = await promptSheet({ title: `Decline ${r ? r.name : 'this application'}?`, body: 'They will be told their application was not approved.', label: 'Reason they will see (optional)', multiline: true, okLabel: 'Decline', danger: true });
       if (reason === null) return;
       const note = reason.trim();
       await db.collection('users').doc(uid).update({ approved: false, membershipStatus: 'rejected', statusReason: note });
       logAudit('member', uid, 'update', `Membership rejected: ${r ? r.name : uid}${note ? ' — ' + note : ''}`);
       await sendNotification(uid, "Membership Decision", `Your membership application was not approved.${note ? ' Reason: ' + note : ''}`, "error");
       loadPendingResidents();
-    } catch(e) { alert("Error rejecting user: " + e.message); }
+    } catch(e) { toast("Error rejecting user: " + e.message); }
   };
 
   function canSuspend() {
@@ -6785,7 +6783,7 @@
     if (!canSuspend()) return;
     const r = allResidents.find(item => item.uid === uid);
     if (!r) return;
-    const input = prompt(`Suspend ${r.name} (${r.house || 'N/A'})?\nReason (optional) — press OK to confirm:`);
+    const input = await promptSheet({ title: `Suspend ${r.name}?`, body: 'They will be signed out and see the reason below. You can lift it later.', label: 'Reason they will see (optional)', multiline: true, okLabel: 'Suspend membership', danger: true });
     if (input === null) return;
     const reason = input.trim();
     try {
@@ -6793,19 +6791,19 @@
       logAudit('member', uid, 'update', `Membership suspended: ${r.name}${reason ? ' — ' + reason : ''}`);
       await sendNotification(uid, "Membership Suspended", `Your membership has been suspended by the management.${reason ? ' Reason: ' + reason : ''}`, "error");
       loadAllResidents();
-    } catch(e) { alert("Error suspending resident: " + e.message); }
+    } catch(e) { toast("Error suspending resident: " + e.message); }
   };
 
   window.unsuspendResident = async function(uid) {
     if (!canSuspend()) return;
     const r = allResidents.find(item => item.uid === uid);
-    if (!r || !confirm(`Lift the suspension of ${r.name}?`)) return;
+    if (!r || !(await confirmSheet({ title: `Lift ${r.name}'s suspension?`, body: 'They can sign in and use the app again.', okLabel: 'Lift suspension' }))) return;
     try {
       await db.collection('users').doc(uid).update({ suspended: false, membershipStatus: 'approved' });
       logAudit('member', uid, 'update', `Suspension lifted: ${r.name}`);
       await sendNotification(uid, "Suspension Lifted", "Your membership suspension has been lifted. Welcome back!", "success");
       loadAllResidents();
-    } catch(e) { alert("Error: " + e.message); }
+    } catch(e) { toast("Error: " + e.message); }
   };
 
   // Exempt members are skipped by the 1st-of-month recurring bill; manual bills still work.
@@ -6815,10 +6813,10 @@
     if (!r) return;
     let reason = '';
     if (exempt) {
-      const input = prompt(`Exempt ${r.name} (${r.house || 'N/A'}) from the recurring monthly bill?\nReason (optional) — press OK to confirm:`);
+      const input = await promptSheet({ title: `Stop billing ${r.name}?`, body: 'They are left out of the recurring monthly bill until you include them again.', label: 'Reason (optional)', multiline: true, okLabel: 'Exempt from bill' });
       if (input === null) return;
       reason = input.trim();
-    } else if (!confirm(`Include ${r.name} in the recurring monthly bill again from next month?`)) {
+    } else if (!(await confirmSheet({ title: `Bill ${r.name} again?`, body: 'They are included in the recurring monthly bill from next month.', okLabel: 'Include again' }))) {
       return;
     }
     try {
@@ -6827,7 +6825,7 @@
         ? `Exempted from recurring bill: ${r.name}${reason ? ' — ' + reason : ''}`
         : `Included in recurring bill again: ${r.name}`);
       loadAllResidents();
-    } catch(e) { alert("Error updating recurring bill exemption: " + e.message); }
+    } catch(e) { toast("Error updating recurring bill exemption: " + e.message); }
   };
 
 })();
