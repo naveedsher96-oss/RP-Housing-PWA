@@ -28,7 +28,7 @@ messaging.onBackgroundMessage((payload) => {
 // offline or the network is too slow. Static assets and CDN libraries: cached
 // copy first, refreshed in the background. Firebase/Google API calls are never
 // cached (the Firestore SDK has its own offline store).
-const SHELL_CACHE = 'rphs-shell-v1';
+const SHELL_CACHE = 'rphs-shell-v2';
 const SHELL_TIMEOUT_MS = 6000;
 const SHELL_URLS = [
   './',
@@ -66,7 +66,9 @@ function isShellRequest(url) {
 
 function networkFirst(request) {
   return caches.open(SHELL_CACHE).then(cache => {
-    const fromNetwork = fetch(request).then(res => {
+    // no-cache: always ask the server, so a new release shows on the next open
+    // instead of after GitHub Pages' 10-minute browser cache runs out.
+    const fromNetwork = fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' }).then(res => {
       if (res && res.ok) cache.put(request, res.clone());
       return res;
     });
