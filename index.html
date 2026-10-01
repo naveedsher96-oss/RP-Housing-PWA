@@ -7314,6 +7314,7 @@
       await db.collection('users').doc(uid).update({ suspended: true, membershipStatus: 'suspended', statusReason: reason });
       logAudit('member', uid, 'update', `Membership suspended: ${r.name}${reason ? ' — ' + reason : ''}`);
       await sendNotification(uid, "Membership Suspended", `Your membership has been suspended by the management.${reason ? ' Reason: ' + reason : ''}`, "error");
+      toast('Membership suspended');
       loadAllResidents();
     } catch(e) { toast("Error suspending resident: " + e.message); }
   };
@@ -7326,6 +7327,7 @@
       await db.collection('users').doc(uid).update({ suspended: false, membershipStatus: 'approved' });
       logAudit('member', uid, 'update', `Suspension lifted: ${r.name}`);
       await sendNotification(uid, "Suspension Lifted", "Your membership suspension has been lifted. Welcome back!", "success");
+      toast('Suspension lifted');
       loadAllResidents();
     } catch(e) { toast("Error: " + e.message); }
   };
