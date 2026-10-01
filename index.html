@@ -598,7 +598,7 @@
   let pollsList = [];
   let ticketsList = [];
   let billsList = [];
-  let billFilterStatus = 'all';
+  let billFilterStatus = null; // null = the role's default chip (see currentBillFilter)
   let billsLoaded = false;
   let billSearch = '';
   let billFilterMonth = 'all';
@@ -1531,26 +1531,40 @@
     }
 
     if (activeTab === 'bills') {
+      const staffView = isStaff();
+      const filters = isAdmin
+        ? [['needs','Needs action'],['all','All'],['unpaid','Due'],['overdue','Overdue'],['submitted','In review'],['paid','Paid']]
+        : staffView
+          ? [['all','All'],['unpaid','Due'],['overdue','Overdue'],['submitted','In review'],['paid','Paid']]
+          : [['all','All'],['topay','To pay'],['paid','Paid']];
+      const current = currentBillFilter();
       return `
         <div class="section-title">
-          ${isAdmin ? 'Maintenance Bills' : 'My Bills'}
+          ${staffView ? 'Bills' : 'My Bills'}
           ${isAdmin ? `<div style="display:flex; gap:8px; flex-shrink:0;">
-            <button class="btn sm secondary" style="white-space:nowrap;" onclick="openTransferModal('bills')" title="Transfer to Fund">⇄ Transfer</button>
-            <button class="btn sm primary" style="white-space:nowrap;" onclick="openIssueBillModal()">+ Issue Bill</button>
+            <button class="dots-btn" style="border-color:var(--border);" onclick="openBillingSettings()" aria-label="Billing settings" title="Billing settings">${icon('cog')}</button>
+            <button class="btn sm primary" style="white-space:nowrap;" onclick="openIssueBillModal()">+ Issue</button>
           </div>` : ''}
         </div>
-        <div class="section-sub">${isAdmin ? 'Issue and track maintenance billing per house.' : 'Maintenance charges issued to your house by management.'}</div>
+        <div class="section-sub">${isAdmin ? escapeHtml(monthLabel(monthKey(new Date()))) : staffView ? 'View only. Admins issue and approve bills.' : 'Maintenance charges issued to your house by management.'}</div>
         <div id="bills-summary"></div>
-        <div id="bills-account-card"></div>
-        <div id="recurring-bill-card"></div>
-        <div id="bank-card"></div>
-        ${isStaff() ? renderBillFilterBar() : ''}
+        ${staffView ? `
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn sm secondary" style="flex:1;" id="defaulters-btn" onclick="openDefaultersModal()">Defaulters</button>
+            ${isAdmin ? `<button class="btn sm secondary" style="flex:1;" onclick="exportBillsCSV()">Export CSV</button>` : ''}
+          </div>
+          ${renderBillFilterBar()}
+        ` : ''}
         <div class="chip-row">
-          ${[['all','All'],['unpaid','Unpaid'],['overdue','Overdue'],['submitted','In Review'],['paid','Paid']].map(([f, lbl]) => `
-            <button class="chip ${billFilterStatus===f?'active':''}" data-filter="${f}" onclick="setBillFilter('${f}')">${lbl}</button>
+          ${filters.map(([f, lbl]) => `
+            <button class="chip ${current===f?'active':''}" data-filter="${f}" onclick="setBillFilter('${f}')">${lbl}<span class="n" data-count="${f}"></span></button>
           `).join('')}
         </div>
         <div id="bills-list">Loading bills...</div>
+        ${!staffView ? `
+          <button class="btn secondary block" style="margin-top:6px;" onclick="downloadResidentStatement()">${icon('file')} Download my statement (PDF)</button>
+          <div id="bank-card" style="margin-top:14px;"></div>
+        ` : ''}
       `;
     }
 
@@ -3287,8 +3301,7 @@
       renderBillsList();
     }).catch(e => { console.error("Error loading bills:", e); showLoadError('bills-list', e); });
 
-    loadSocietySettings().then(renderBankCard);
-    if (currentUserProfile.role === 'admin') { loadBillsAccountCard(); loadRecurringBillCard(); }
+    if (!isStaff()) loadSocietySettings().then(renderBankCard);
   }
 
   // --- RECURRING MONTHLY BILL (ADMIN) ---
@@ -3584,7 +3597,7 @@
   function renderBillFilterBar() {
     return `
       <div class="filter-bar">
-        <label>Find Bills</label>
+        <label for="bill-search">Find bills</label>
         <div style="display:flex; gap:8px;">
           <input type="search" id="bill-search" placeholder="Name, house or bill no." value="${escapeHtml(billSearch)}" oninput="setBillSearch(this.value)" style="flex:1.4; min-width:0;" />
           <select onchange="setBillMonth(this.value)" style="flex:1; min-width:0;">
@@ -3593,10 +3606,6 @@
           </select>
         </div>
         <div id="bill-filter-summary" style="font-size:13px; color:var(--text-muted); margin-top:10px;"></div>
-        <div style="display:flex; gap:8px; margin-top:10px;">
-          <button class="btn sm secondary" style="flex:1;" onclick="exportBillsCSV()">⬇ Export CSV</button>
-          <button class="btn sm secondary" style="flex:1;" id="defaulters-btn" onclick="openDefaultersModal()">⚠ Defaulters</button>
-        </div>
       </div>
     `;
   }
@@ -3619,9 +3628,22 @@
     return !!due && monthKey(due) === key;
   }
 
+  function currentBillFilter() {
+    if (billFilterStatus) return billFilterStatus;
+    return currentUserProfile.role === 'admin' ? 'needs' : 'all';
+  }
+  function billMatchesChip(b, f) {
+    const st = billStatus(b);
+    if (f === 'all') return true;
+    if (f === 'needs') return st === 'overdue' || st === 'submitted';
+    if (f === 'topay') return st === 'unpaid' || st === 'overdue';
+    return st === f;
+  }
+
   function filteredBills() {
+    const f = currentBillFilter();
     return billsList.filter(b => {
-      if (billFilterStatus !== 'all' && billStatus(b) !== billFilterStatus) return false;
+      if (!billMatchesChip(b, f)) return false;
       if (!billInMonth(b, billFilterMonth)) return false;
       if (billSearch) {
         const hay = [b.name, b.house, b.billNo, b.category, b.period].map(v => String(v || '').toLowerCase()).join(' ');
@@ -3708,43 +3730,55 @@
     const body = document.getElementById('modal-body');
     if (!body) return;
     const list = defaultersList();
-    const total = list.reduce((s, d) => s + d.total, 0);
-    const overdueHouses = list.filter(d => d.overdue).length;
+    const overdue = list.filter(d => d.overdue).sort(byHouse);
+    const dueSoon = list.filter(d => !d.overdue).sort(byHouse);
+    const overdueTotal = overdue.reduce((s, d) => s + d.bills.filter(b => billStatus(b) === 'overdue').reduce((a, b) => a + Number(b.amount || 0), 0), 0);
     const isAdmin = currentUserProfile.role === 'admin';
 
-    body.innerHTML = `
-      <div style="padding-right:44px; margin-bottom:12px;">
-        <div style="font-family:var(--font-display); font-size:20px; font-weight:600;">Defaulters</div>
-        <div style="font-size:13px; color:var(--text-muted);">${list.length} house(s) owe <span style="color:var(--danger); font-weight:700;">${formatMoney(total)}</span> · ${overdueHouses} overdue</div>
-      </div>
-      ${list.length ? `
-        <div style="display:flex; gap:8px; margin-bottom:12px;">
-          ${isAdmin ? `<button class="btn sm primary" style="flex:1;" onclick="remindAllDefaulters()">🔔 Remind All</button>` : ''}
-          <button class="btn sm secondary" style="flex:1;" onclick="shareDefaultersText()">📤 Share</button>
-          <button class="btn sm secondary" style="flex:1;" onclick="exportDefaultersCSV()">⬇ CSV</button>
-        </div>
-        ${list.map(d => `
-          <div class="card" style="cursor:default; padding:12px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-              <div style="min-width:0;">
-                <div style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(d.name)}</div>
-                <div style="font-size:13px; color:var(--text-muted);">${escapeHtml(houseLabel(d.house))}${d.phone ? ' · ' + escapeHtml(d.phone) : ''}</div>
-              </div>
-              <div style="text-align:right; flex-shrink:0;">
-                <div class="amount" style="color:var(--danger);">${formatMoney(d.total)}</div>
-                <div style="font-size:13px; color:${d.overdue ? 'var(--danger)' : 'var(--text-faint)'};">${d.bills.length} bill(s)${d.overdue ? ` · ${d.overdue} overdue` : ''}</div>
-              </div>
-            </div>
-            <div style="font-size:13px; color:var(--text-faint); margin-top:6px;">${escapeHtml(d.periods.join(', '))}${d.oldestDue ? ' · oldest due ' + escapeHtml(formatDate(d.oldestDue)) : ''}</div>
-            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
-              ${isAdmin && d.uid ? `<button class="btn sm primary" onclick="remindDefaulter('${d.key}')">🔔 Remind</button>` : ''}
-              ${d.phone ? `<button class="btn sm secondary" onclick="whatsappDefaulter('${d.key}')">WhatsApp</button>` : ''}
-              ${d.uid ? `<button class="btn sm secondary" onclick="downloadResidentStatement('${d.uid}')">Statement</button>` : ''}
-            </div>
+    const row = d => `
+      <div class="card" style="cursor:default; padding:12px 14px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div style="min-width:0;">
+            <div style="font-weight:700; font-size:15px;">${escapeHtml(d.name)}</div>
+            <div style="font-size:13px; color:var(--text-muted);"><span class="nowrap">${escapeHtml(houseLabel(d.house))}</span>${d.phone ? ' · <span class="nowrap">' + escapeHtml(d.phone) + '</span>' : ''}</div>
           </div>
-        `).join('')}
-      ` : '<div class="card" style="text-align:center; color:var(--success); cursor:default;">No unpaid bills — every house is paid up.</div>'}
+          <div style="text-align:right; flex-shrink:0;">
+            <div class="money" style="font-weight:800; color:${d.overdue ? 'var(--danger)' : 'var(--text)'};">${formatMoney(d.total)}</div>
+            <div style="font-size:13px; color:var(--text-faint);">${d.bills.length} bill${d.bills.length === 1 ? '' : 's'}</div>
+          </div>
+        </div>
+        <div style="font-size:13px; color:var(--text-faint); margin-top:6px;">${escapeHtml(d.periods.join(', '))}${d.oldestDue ? ' · ' + (d.overdue ? 'overdue since ' : 'due ') + escapeHtml(formatDate(d.oldestDue)) : ''}</div>
+        ${isAdmin ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
+          ${d.uid ? `<button class="btn sm secondary" onclick="remindDefaulter('${d.key}')">${icon('bell')} Remind in app</button>` : ''}
+          ${d.phone ? `<button class="btn sm secondary" onclick="whatsappDefaulter('${d.key}')">WhatsApp</button>` : ''}
+          ${d.uid ? `<button class="btn sm secondary" onclick="downloadResidentStatement('${d.uid}')">Statement</button>` : ''}
+        </div>` : ''}
+      </div>`;
+
+    body.innerHTML = `
+      <div style="margin-bottom:10px;">
+        <div style="font-family:var(--font-display); font-size:20px; font-weight:600;">Defaulters</div>
+        <div style="font-size:14px; color:var(--text-muted); line-height:1.5;">Only bills past their due date count. Bills due later this month are listed separately.</div>
+      </div>
+      ${overdue.length ? `
+        <button class="btn primary block" onclick="shareDefaultersText()">${icon('share')} Share overdue list on WhatsApp</button>
+        <details style="margin:8px 0 4px;">
+          <summary style="font-size:14px; color:var(--accent-2); cursor:pointer;">Preview the WhatsApp message</summary>
+          <pre style="white-space:pre-wrap; font-family:var(--font-body); font-size:14px; background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:12px; padding:12px; margin:8px 0 0;">${escapeHtml(defaultersText())}</pre>
+        </details>
+        <div style="display:flex; gap:8px; margin:10px 0 4px;">
+          ${isAdmin ? `<button class="btn sm secondary" style="flex:1;" onclick="remindAllDefaulters()">${icon('bell')} Remind all in app</button>` : ''}
+          <button class="btn sm secondary" style="flex:1;" onclick="exportDefaultersCSV()">Export CSV</button>
+        </div>
+      ` : ''}
+      <div class="group-h" style="color:var(--danger);">Overdue · ${overdue.length} house${overdue.length === 1 ? '' : 's'}${overdue.length ? ` · <span class="money">${formatMoney(overdueTotal)}</span>` : ''}</div>
+      ${overdue.length ? overdue.map(row).join('') : '<div class="card" style="cursor:default; color:var(--success);">No house is overdue.</div>'}
+      ${dueSoon.length ? `<div class="group-h">Due soon · ${dueSoon.length} house${dueSoon.length === 1 ? '' : 's'}</div>${dueSoon.map(row).join('')}` : ''}
     `;
+  }
+
+  function byHouse(a, b) {
+    return String(a.house || '').localeCompare(String(b.house || ''), 'en', { numeric: true, sensitivity: 'base' });
   }
 
   function reminderBody(d) {
@@ -3775,21 +3809,20 @@
     window.open(whatsappLink(d.phone, defaulterMessage(d)), '_blank', 'noopener');
   };
 
+  // Group message: names and houses only, overdue houses only, sorted by house.
   function defaultersText() {
-    const list = defaultersList();
-    const lines = [`RPHS - Outstanding Maintenance (${formatDate(new Date())})`, ''];
-    list.forEach((d, i) => lines.push(`${i + 1}. ${d.name} - ${houseLabel(d.house)}: ${formatMoney(d.total)} (${d.periods.join(', ')})`));
-    lines.push('', `Total ${formatMoney(list.reduce((s, d) => s + d.total, 0))} from ${list.length} house(s)`);
+    const list = defaultersList().filter(d => d.overdue).sort(byHouse);
+    const lines = ['*Roshan Pakistan Housing Society*', `*Maintenance Dues Pending* - ${monthLabel(monthKey(new Date()))}`, ''];
+    list.forEach((d, i) => lines.push(`${i + 1}. ${d.name} - ${houseLabel(d.house)}`));
+    lines.push('', `Total pending: ${list.length} house${list.length === 1 ? '' : 's'}`, '',
+      'Please pay to the society account and upload your payment proof in the RPHS app. If you have already paid, please ignore this message.',
+      '', '_- RPHS Management_');
     return lines.join('\n');
   }
 
-  window.shareDefaultersText = async function() {
-    const text = defaultersText();
-    if (navigator.share) {
-      try { await navigator.share({ title: 'RPHS Defaulters', text }); return; }
-      catch (e) { if (e && e.name === 'AbortError') return; }
-    }
-    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+  window.shareDefaultersText = function() {
+    if (!defaultersList().some(d => d.overdue)) { toast('No defaulters to share'); return; }
+    openWhatsAppShare(defaultersText());
   };
 
   window.exportDefaultersCSV = function() {
@@ -3898,85 +3931,166 @@
     }
   };
 
+  function initialsOf2(name) {
+    return String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+  }
+
   function renderBillsList() {
     const listEl = document.getElementById('bills-list');
     if (!listEl) return;
     const isAdmin = currentUserProfile.role === 'admin';
+    const staffView = isStaff();
 
     renderBillsAccountCard();
 
     const summaryEl = document.getElementById('bills-summary');
     if (summaryEl) {
-      const outstanding = billsList.filter(b => billStatus(b) !== 'paid' && billStatus(b) !== 'cancelled').reduce((s, b) => s + Number(b.amount || 0), 0);
-      const collected = billsList.filter(b => billStatus(b) === 'paid').reduce((s, b) => s + Number(b.amount || 0), 0);
-      const billed = billsList.filter(b => billStatus(b) !== 'cancelled').reduce((s, b) => s + Number(b.amount || 0), 0);
-
-      summaryEl.innerHTML = isAdmin ? `
-        <div class="stat-strip">
-          <div class="stat-box"><div class="k">Billed</div><div class="v">${formatMoney(billed)}</div></div>
-          <div class="stat-box"><div class="k">Collected</div><div class="v" style="color:var(--success);">${formatMoney(collected)}</div></div>
-          <div class="stat-box"><div class="k">Outstanding</div><div class="v" style="color:var(--accent-2);">${formatMoney(outstanding)}</div></div>
-        </div>
-      ` : `
-        <div class="due-card">
-          <div style="font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700;">Total Outstanding</div>
-          <div style="font-family:var(--font-mono); font-size:28px; font-weight:600; color:var(--accent-2); margin:6px 0 2px;">${formatMoney(outstanding)}</div>
-          <div style="font-size:13px; color:var(--text-muted);">${billsList.filter(b => billStatus(b) === 'unpaid' || billStatus(b) === 'overdue').length} unpaid bill(s) · ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
-        </div>
-        <button class="btn sm secondary block" style="margin-bottom:14px;" onclick="downloadResidentStatement()">📄 My Statement (PDF)</button>
-      `;
+      if (staffView) {
+        const sum = arr => arr.reduce((s, b) => s + Number(b.amount || 0), 0);
+        const collected = sum(billsList.filter(b => billStatus(b) === 'paid'));
+        const outstanding = sum(billsList.filter(b => ['unpaid', 'overdue'].includes(billStatus(b))));
+        const review = billsList.filter(b => b.status === 'submitted');
+        summaryEl.innerHTML = `
+          <div class="stat-strip">
+            <div class="stat-box"><div class="k">Collected</div><div class="v money" style="color:var(--success);">${formatMoney(collected)}</div></div>
+            <div class="stat-box"><div class="k">Outstanding</div><div class="v money" style="color:var(--danger);">${formatMoney(outstanding)}</div></div>
+            <div class="stat-box"><div class="k">In review</div><div class="v" style="color:var(--info);">${review.length} proof${review.length === 1 ? '' : 's'}</div></div>
+          </div>`;
+      } else {
+        summaryEl.innerHTML = '';
+      }
     }
+
+    // chip counts
+    document.querySelectorAll('[data-count]').forEach(el => {
+      const f = el.getAttribute('data-count');
+      const n = billsList.filter(b => billMatchesChip(b, f)).length;
+      el.textContent = f === 'all' || !n ? '' : String(n);
+    });
 
     const list = filteredBills();
     const filterSummary = document.getElementById('bill-filter-summary');
     if (filterSummary) filterSummary.textContent = `${list.length} of ${billsList.length} bill(s) · ${formatMoney(sumAmounts(list))} billed · ${formatMoney(sumAmounts(list.filter(isOutstanding)))} outstanding`;
     const defaultersBtn = document.getElementById('defaulters-btn');
     if (defaultersBtn) {
-      const n = defaultersList().length;
-      defaultersBtn.textContent = n ? `⚠ Defaulters (${n})` : '⚠ Defaulters';
+      const n = defaultersList().filter(d => d.overdue).length;
+      defaultersBtn.textContent = n ? `Defaulters (${n})` : 'Defaulters';
     }
 
     if (!list.length) {
-      listEl.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${billsList.length ? 'No bills match the current search / filter.' : 'No maintenance bills issued yet.'}</div>`;
+      const f = currentBillFilter();
+      listEl.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">${!billsList.length ? 'No maintenance bills issued yet.' : f === 'needs' ? 'Nothing needs action. No overdue bills or proofs to check.' : 'No bills match this filter.'}</div>`;
       return;
     }
 
     listEl.innerHTML = pageOf('bills', list, renderBillsList).map(b => {
       const status = billStatus(b);
+      const pill = `<span class="badge ${status}">${escapeHtml(statusLabel(status))}</span>`;
+      const month = b.period || (b.dueDate ? monthLabel(monthKey(toDate(b.dueDate))) : b.category || 'Bill');
+      const rejectedBox = !staffView && (status === 'unpaid' || status === 'overdue') && b.proofRejectedReason
+        ? `<div style="background:var(--danger-soft); color:var(--danger); border-radius:10px; padding:9px 11px; font-size:13.5px; font-weight:600; margin-top:10px;">Your proof was rejected: ${escapeHtml(b.proofRejectedReason)}. Please upload it again.</div>` : '';
+
+      if (staffView) {
+        return `
+          <div class="card" onclick="openBillDetailModal('${b.id}')" style="padding:12px 14px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span class="picker-avatar" style="flex:none;">${escapeHtml(initialsOf2(b.name))}</span>
+              <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(b.name || 'Resident')}</div>
+                <div style="font-size:13px; color:var(--text-muted);"><span class="nowrap">${escapeHtml(houseLabel(b.house))}</span> · ${escapeHtml(month)}</div>
+              </div>
+              <div style="text-align:right; flex:none;">
+                <div class="money" style="font-weight:800; font-size:15px;">${formatMoney(b.amount)}</div>
+                <div style="margin-top:3px;">${pill}</div>
+              </div>
+              ${isAdmin ? `<button class="dots-btn" onclick="event.stopPropagation(); openBillMenu('${b.id}')" aria-label="More actions">${icon('dots')}</button>` : ''}
+            </div>
+            ${isAdmin && status === 'submitted' ? `<button class="btn sm primary block" style="margin-top:10px;" onclick="event.stopPropagation(); openBillDetailModal('${b.id}')">Review</button>` : ''}
+            ${isAdmin && b.uid === auth.currentUser.uid && (status === 'unpaid' || status === 'overdue') ? `<button class="btn sm primary block" style="margin-top:10px;" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">Upload proof (your own bill)</button>` : ''}
+          </div>`;
+      }
+
       return `
         <div class="card" onclick="openBillDetailModal('${b.id}')">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-            <div>
-              <span class="ticket-no">${escapeHtml(b.billNo || 'BILL')}</span>
-              <span style="font-weight:700; font-size:15px; color:var(--accent-2); margin-left:6px;">${escapeHtml(b.category || 'Maintenance')}</span>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div style="min-width:0;">
+              <div style="font-weight:800; font-size:16px;">${escapeHtml(month)}</div>
+              <div style="font-size:13px; color:${status === 'overdue' ? 'var(--danger)' : 'var(--text-muted)'};">Due ${escapeHtml(formatDate(b.dueDate))} · ${escapeHtml(b.billNo || 'Bill')}</div>
             </div>
-            <span class="badge ${status}">${escapeHtml(statusLabel(status))}</span>
+            ${pill}
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin:10px 0 6px;">
-            <div class="amount">${formatMoney(b.amount)}</div>
-            <div style="font-size:13px; color:${status === 'overdue' ? 'var(--danger)' : 'var(--text-muted)'};">Due ${escapeHtml(formatDate(b.dueDate))}</div>
-          </div>
-          <div style="font-size:13px; color:var(--text-muted);">Period: ${escapeHtml(b.period || 'N/A')}${isAdmin ? ' | ' + escapeHtml(b.name || 'N/A') + ' — ' + escapeHtml(b.house || 'N/A') : ''}</div>
-          ${!isAdmin && status === 'unpaid' && b.proofRejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-top:8px;">Proof rejected: ${escapeHtml(b.proofRejectedReason)} — please upload again.</div>` : ''}
-          <div style="margin-top:12px; display:flex; gap:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px;">
+            <div class="amount money">${formatMoney(b.amount)}</div>
             ${status === 'paid'
-              ? `<button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Receipt PDF</button>`
+              ? `<button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">${icon('file')} Receipt</button>`
               : status === 'submitted'
-                ? (isAdmin
-                    ? `<button class="btn sm primary" onclick="event.stopPropagation(); openBillDetailModal('${b.id}')">Review Proof</button>
-                       <button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Invoice PDF</button>`
-                    : `<button class="btn sm secondary" onclick="event.stopPropagation(); openBillDetailModal('${b.id}')">Proof Under Review</button>`)
-                : (isAdmin
-                    ? `${b.uid === auth.currentUser.uid ? `<button class="btn sm primary" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">Upload Payment Proof</button>` : `<button class="btn sm primary" onclick="event.stopPropagation(); markBillPaid('${b.id}')">Mark Paid</button>`}
-                       <button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Invoice PDF</button>`
-                    : `<button class="btn sm primary" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">Upload Payment Proof</button>
-                       <button class="btn sm secondary" onclick="event.stopPropagation(); payBill('${b.id}')">Pay Now</button>`)}
-            ${isAdmin ? `<button class="btn sm danger" onclick="event.stopPropagation(); archiveBill('${b.id}')">Remove</button>` : ''}
+                ? `<span style="font-size:13px; color:var(--info); font-weight:600;">Proof sent. Being checked.</span>`
+                : `<button class="btn sm primary" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">${icon('upload')} Upload proof</button>`}
           </div>
+          ${rejectedBox}
         </div>
       `;
     }).join('') + showMoreButton('bills', list.length);
   }
+
+  // ⋯ menu on an admin bill row
+  window.openBillMenu = function(billId) {
+    const b = billsList.find(x => x.id === billId);
+    if (!b) return;
+    const status = billStatus(b);
+    menuSheet(`${b.name || 'Bill'} · ${b.period || b.billNo || ''}`, [
+      { label: 'View bill', icon: 'eye', run: () => openBillDetailModal(billId) },
+      status !== 'paid' && status !== 'cancelled' && { label: 'Send reminder on WhatsApp', icon: 'share', run: () => whatsappBillReminder(billId) },
+      (status === 'unpaid' || status === 'overdue') && b.uid !== auth.currentUser.uid && { label: 'Mark as paid', icon: 'check', run: () => markBillPaid(billId) },
+      status !== 'paid' && { label: 'Edit amount', icon: 'edit', run: () => editBillAmount(billId) },
+      { label: 'Cancel bill', icon: 'trash', danger: true, run: () => archiveBill(billId) }
+    ]);
+  };
+
+  window.whatsappBillReminder = async function(billId) {
+    const b = billsList.find(x => x.id === billId);
+    if (!b) return;
+    try { await ensureResidents(); } catch (_) {}
+    const r = allResidents.find(x => x.uid === b.uid);
+    const text = `Dear ${b.name || 'Resident'}, your RPHS maintenance of ${formatMoney(b.amount)} for ${b.period || formatDate(b.dueDate)} (${houseLabel(b.house)}) is ${billStatus(b) === 'overdue' ? 'overdue' : 'due on ' + formatDate(b.dueDate)}. Please pay to the society account and upload your payment proof in the RPHS app. Thank you - Management`;
+    if (r && r.phone) window.open(whatsappLink(r.phone, text), '_blank', 'noopener');
+    else openWhatsAppShare(text);
+  };
+
+  window.editBillAmount = async function(billId) {
+    const b = billsList.find(x => x.id === billId);
+    if (!b || currentUserProfile.role !== 'admin') return;
+    const v = await promptSheet({ title: 'Edit bill amount', body: `${b.name || ''} · ${b.period || b.billNo || ''}`, label: 'Amount (PKR)', type: 'number', value: String(b.amount || ''), required: true, okLabel: 'Save amount' });
+    if (v === null) return;
+    const amount = Math.round(Number(v));
+    if (!(amount > 0)) { toast('Please enter an amount above zero.', 'bad'); return; }
+    if (amount === Number(b.amount)) return;
+    try {
+      await db.collection('bills').doc(billId).update({ amount });
+      logAudit('bill', billId, 'update', `Amount changed ${formatMoney(b.amount)} → ${formatMoney(amount)} — ${b.billNo || ''} ${b.name || ''}`);
+      toast('Amount updated');
+      loadBills();
+    } catch (err) {
+      toast('Error updating amount: ' + err.message);
+    }
+  };
+
+  // ⚙ Billing settings: the recurring bill, bank details and Bills account
+  // cards (same renderers as before) live in one sheet.
+  window.openBillingSettings = function() {
+    if (currentUserProfile.role !== 'admin') return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Billing settings</div>
+      <div id="recurring-bill-card"><div style="color:var(--text-muted); padding:6px 0;">Loading…</div></div>
+      <div id="bank-card"></div>
+      <div id="bills-account-card"></div>
+      <button class="btn secondary block" onclick="closeModal(); openTransferModal('bills')">⇄ Transfer from the Bills account to a fund</button>
+    `;
+    openModal();
+    loadRecurringBillCard();
+    loadBillsAccountCard();
+    loadSocietySettings().then(renderBankCard);
+  };
 
   window.payBill = function() {
     toast("Online payment gateway is not connected yet. Please pay to the society maintenance account and upload your payment proof on the bill.");
@@ -4388,7 +4502,7 @@
       ${b.notes ? `<div style="font-size:13.5px; line-height:1.5; margin-bottom:16px; white-space:pre-wrap;">${escapeHtml(b.notes)}</div>` : ''}
 
       ${proofSectionHtml('bill', b)}
-      ${!isAdmin && status === 'unpaid' && b.proofRejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-bottom:14px;">Your previous proof was rejected: ${escapeHtml(b.proofRejectedReason)}. Please upload a new one.</div>` : ''}
+      ${!isAdmin && (status === 'unpaid' || status === 'overdue') && b.proofRejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-bottom:14px;">Your previous proof was rejected: ${escapeHtml(b.proofRejectedReason)}. Please upload a new one.</div>` : ''}
       ${!isAdmin && status === 'submitted' ? `<div style="font-size:13px; color:var(--info); margin-bottom:14px;">Your payment proof has been submitted and is awaiting verification by management.</div>` : ''}
 
       <button class="btn secondary block" onclick="downloadBillPDF('${b.id}')" style="margin-bottom:10px;">${status === 'paid' ? 'Download Receipt' : 'Download Invoice'}</button>
@@ -4403,7 +4517,6 @@
         <button class="btn primary block" onclick="openUploadProofModal('${b.id}')" style="margin-bottom:10px;">Upload Payment Proof (Own Bill)</button>
       ` : ''}
 
-      ${isAdmin ? `<button class="btn danger block" onclick="closeModal(); archiveBill('${b.id}')" style="margin-bottom:6px;">Remove Bill</button>` : ''}
 
       ${isAdmin ? `
         <form id="admin-bill-form">
@@ -4420,7 +4533,7 @@
 
           <button type="submit" class="btn primary block" style="margin-top:16px;">Save Bill Update</button>
         </form>
-      ` : (status === 'paid' || status === 'submitted' ? '' : `
+      ` : (status === 'paid' || status === 'submitted' || b.uid !== auth.currentUser.uid ? '' : `
         <button class="btn primary block" onclick="openUploadProofModal('${b.id}')" style="margin-bottom:10px;">Upload Payment Proof</button>
         <button class="btn secondary block" onclick="payBill('${b.id}')">Pay Now — ${formatMoney(b.amount)}</button>
         <div style="text-align:center; font-size:13px; color:var(--text-faint); margin-top:10px;">Online payment gateway to be connected. Pay to the society account and upload your proof.</div>
