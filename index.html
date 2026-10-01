@@ -303,6 +303,8 @@
   }
   @keyframes sheetUp{ from{ transform:translateY(30px); opacity:0; } to{ transform:none; opacity:1; } }
   .modal-head{ position:sticky; top:-10px; z-index:5; display:flex; align-items:center; justify-content:flex-end; gap:10px; margin:0 -20px 6px; padding:6px 14px 6px; background:var(--bg-elevated); }
+  /* Defaulters title + list-wide actions stay visible while the list scrolls. */
+  .def-top{ position:sticky; top:50px; z-index:4; background:var(--bg-elevated); margin:0 -20px 6px; padding:0 20px 10px; border-bottom:1px solid var(--border-soft); }
   .modal-head::before{ content:''; position:absolute; left:50%; top:4px; transform:translateX(-50%); width:42px; height:5px; border-radius:3px; background:var(--bg-elevated-3); }
   .modal-close{
     position:relative; flex-shrink:0; background:var(--bg-elevated-2);
@@ -3865,23 +3867,19 @@
       </div>`;
 
     body.innerHTML = `
-      <div style="margin-bottom:10px;">
+      <div class="def-top">
         <div style="font-family:var(--font-display); font-size:20px; font-weight:600;">Defaulters</div>
-        <div style="font-size:14px; color:var(--text-muted); line-height:1.5;">Only bills past their due date count. Bills due later this month are listed separately.</div>
+        ${overdue.length ? `<div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn primary" style="flex:1;" onclick="openDefaultersShareMenu()">${icon('share')} Share list</button>
+          ${isAdmin ? `<button class="btn secondary" style="flex:1;" onclick="remindAllDefaulters()">${icon('bell')} Remind all</button>` : ''}
+        </div>` : ''}
       </div>
+      <div style="font-size:14px; color:var(--text-muted); line-height:1.5; margin-bottom:6px;">Only bills past their due date count. Bills due later this month are listed separately.</div>
       ${overdue.length ? `
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="btn primary" style="flex:1 1 140px;" onclick="shareDefaultersText()">${icon('share')} WhatsApp</button>
-          <button class="btn secondary" style="flex:1 1 140px;" onclick="shareDefaultersOther()">${icon('share')} Share another way</button>
-        </div>
-        <details style="margin:8px 0 4px;">
+        <details style="margin:4px 0 4px;">
           <summary style="font-size:14px; color:var(--accent-2); cursor:pointer;">Preview the message</summary>
           <pre style="white-space:pre-wrap; font-family:var(--font-body); font-size:14px; background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:12px; padding:12px; margin:8px 0 0;">${escapeHtml(defaultersText())}</pre>
         </details>
-        <div style="display:flex; gap:8px; margin:10px 0 4px;">
-          ${isAdmin ? `<button class="btn sm secondary" style="flex:1;" onclick="remindAllDefaulters()">${icon('bell')} Remind all in app</button>` : ''}
-          <button class="btn sm secondary" style="flex:1;" onclick="exportDefaultersCSV()">Export CSV</button>
-        </div>
       ` : ''}
       <div class="group-h" style="color:var(--danger);">Overdue · ${overdue.length} house${overdue.length === 1 ? '' : 's'}${overdue.length ? ` · <span class="money">${formatMoney(overdueTotal)}</span>` : ''}</div>
       ${overdue.length ? overdue.map(row).join('') : '<div class="card" style="cursor:default; color:var(--success);">No house is overdue.</div>'}
@@ -3935,6 +3933,15 @@
   window.shareDefaultersText = function() {
     if (!defaultersList().some(d => d.overdue)) { toast('No defaulters to share'); return; }
     openWhatsAppShare(defaultersText());
+  };
+
+  window.openDefaultersShareMenu = function() {
+    menuSheet('Share defaulters list', [
+      { icon: 'share', label: 'WhatsApp', run: shareDefaultersText },
+      { icon: 'share', label: 'Other apps (SMS, email, ...)', run: shareDefaultersOther },
+      { icon: 'copy', label: 'Copy the list', run: () => navigator.clipboard.writeText(defaultersText()).then(() => toast('List copied'), () => toast('Could not copy')) },
+      { icon: 'file', label: 'Export CSV', run: exportDefaultersCSV },
+    ]);
   };
 
   // Phone share sheet (SMS, email, Telegram, ...); copies the text where there is none.
