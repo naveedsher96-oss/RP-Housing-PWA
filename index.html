@@ -1797,7 +1797,7 @@
         <div style="flex:1; min-width:0;">
           <div style="font-weight:800; font-size:16px;">${escapeHtml(currentUserProfile.name || '')}</div>
           <div style="font-size:13px; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:2px;">
-            ${currentUserProfile.house ? `<span style="white-space:nowrap;">${escapeHtml(houseLabel(currentUserProfile.house))}</span>` : ''}
+            ${currentUserProfile.house ? `<span>${houseHtml(currentUserProfile.house)}</span>` : ''}
             <span class="role-pill">${escapeHtml(roleLabel())}</span>
           </div>
         </div>
@@ -3152,7 +3152,7 @@
           <span class="badge ${t.status || 'pending'}">${escapeHtml(statusLabel(t.status))}</span>
         </div>
         <div style="font-size:13px; color:var(--text); line-height:1.4; margin-bottom:8px;">${escapeHtml(t.description)}</div>
-        <div style="font-size:13px; color:var(--text-muted);">${escapeHtml(t.name || 'Resident')} · <span class="nowrap">${escapeHtml(houseLabel(t.house))}</span></div>
+        <div style="font-size:13px; color:var(--text-muted);">${escapeHtml(t.name || 'Resident')} · ${houseHtml(t.house)}</div>
         <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Lodged: ${escapeHtml(formatDate(t.createdAt))}</div>
         ${t.department ? `<div style="font-size:13px; color:var(--info); margin-top:4px;">Assigned Dept: ${escapeHtml(t.department)}</div>` : ''}
         ${isAdmin ? `<div style="margin-top:12px; display:flex; gap:8px;">
@@ -3810,6 +3810,12 @@
     const h = String(house || 'N/A').trim();
     return /^(house|plot|flat|shop)\b/i.test(h) || h === 'N/A' ? h : 'House ' + h;
   }
+  // Short labels ("House C-247") stay on one line; long typed addresses wrap
+  // so they never run outside their card.
+  function houseHtml(house) {
+    const l = houseLabel(house);
+    return l.length <= 16 ? '<span class="nowrap">' + escapeHtml(l) + '</span>' : escapeHtml(l);
+  }
 
   function defaulterMessage(d) {
     return `Dear ${d.name}, your RPHS maintenance of ${formatMoney(d.total)} for ${d.periods.join(', ')} (${houseLabel(d.house)}) is outstanding. Please pay to the society account and upload your payment proof in the RPHS app. Thank you - Management`;
@@ -3843,7 +3849,7 @@
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
           <div style="min-width:0;">
             <div style="font-weight:700; font-size:15px;">${escapeHtml(d.name)}</div>
-            <div style="font-size:13px; color:var(--text-muted);"><span class="nowrap">${escapeHtml(houseLabel(d.house))}</span>${d.phone ? ' · <span class="nowrap">' + escapeHtml(d.phone) + '</span>' : ''}</div>
+            <div style="font-size:13px; color:var(--text-muted);">${houseHtml(d.house)}${d.phone ? ' · <span class="nowrap">' + escapeHtml(d.phone) + '</span>' : ''}</div>
           </div>
           <div style="text-align:right; flex-shrink:0;">
             <div class="money" style="font-weight:800; color:${d.overdue ? 'var(--danger)' : 'var(--text)'};">${formatMoney(d.total)}</div>
@@ -3864,9 +3870,12 @@
         <div style="font-size:14px; color:var(--text-muted); line-height:1.5;">Only bills past their due date count. Bills due later this month are listed separately.</div>
       </div>
       ${overdue.length ? `
-        <button class="btn primary block" onclick="shareDefaultersText()">${icon('share')} Share overdue list on WhatsApp</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn primary" style="flex:1 1 140px;" onclick="shareDefaultersText()">${icon('share')} WhatsApp</button>
+          <button class="btn secondary" style="flex:1 1 140px;" onclick="shareDefaultersOther()">${icon('share')} Share another way</button>
+        </div>
         <details style="margin:8px 0 4px;">
-          <summary style="font-size:14px; color:var(--accent-2); cursor:pointer;">Preview the WhatsApp message</summary>
+          <summary style="font-size:14px; color:var(--accent-2); cursor:pointer;">Preview the message</summary>
           <pre style="white-space:pre-wrap; font-family:var(--font-body); font-size:14px; background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:12px; padding:12px; margin:8px 0 0;">${escapeHtml(defaultersText())}</pre>
         </details>
         <div style="display:flex; gap:8px; margin:10px 0 4px;">
@@ -3926,6 +3935,18 @@
   window.shareDefaultersText = function() {
     if (!defaultersList().some(d => d.overdue)) { toast('No defaulters to share'); return; }
     openWhatsAppShare(defaultersText());
+  };
+
+  // Phone share sheet (SMS, email, Telegram, ...); copies the text where there is none.
+  window.shareDefaultersOther = async function() {
+    if (!defaultersList().some(d => d.overdue)) { toast('No defaulters to share'); return; }
+    const text = defaultersText();
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Maintenance dues pending', text }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(text); toast('List copied. Paste it in any app.'); }
+    catch (e) { toast('Could not open sharing on this device.'); }
   };
 
   window.exportDefaultersCSV = function() {
@@ -4100,7 +4121,7 @@
               <span class="picker-avatar" style="flex:none;">${escapeHtml(initialsOf2(b.name))}</span>
               <div style="flex:1; min-width:0;">
                 <div style="font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(b.name || 'Resident')}</div>
-                <div style="font-size:13px; color:var(--text-muted);"><span class="nowrap">${escapeHtml(houseLabel(b.house))}</span> · ${escapeHtml(month)}</div>
+                <div style="font-size:13px; color:var(--text-muted);">${houseHtml(b.house)} · ${escapeHtml(month)}</div>
               </div>
               <div style="text-align:right; flex:none;">
                 <div class="money" style="font-weight:800; font-size:15px;">${formatMoney(b.amount)}</div>
@@ -6707,7 +6728,7 @@
       ${rows.length ? rows.slice(0, 100).map(r => `
         <div class="card" style="cursor:default; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:14px; font-weight:700;">${staff ? escapeHtml(r.name) + ' · <span class="nowrap">' + escapeHtml(houseLabel(r.house)) + '</span>' : escapeHtml(r.type)}</span>
+            <span style="font-size:14px; font-weight:700;">${staff ? escapeHtml(r.name) + ' · ' + houseHtml(r.house) : escapeHtml(r.type)}</span>
             <span class="amount" style="color:var(--success);">${formatMoney(r.amount)}</span>
           </div>
           <div style="font-size:13px; color:var(--text-faint);">${escapeHtml(formatDate(r.date))}${staff ? ' · ' + escapeHtml(r.type) : ''}${r.method ? ' · ' + escapeHtml(r.method) : ''}</div>
@@ -7181,7 +7202,7 @@
           <span class="picker-avatar" style="flex:none;">${escapeHtml(initialsOf2(r.name))}</span>
           <div style="flex:1; min-width:0;">
             <div style="font-weight:700; font-size:15px;">${escapeHtml(r.name)}</div>
-            <div style="font-size:13px; color:var(--text-muted);"><span class="nowrap">${escapeHtml(houseLabel(r.house))}</span>${r.phone ? ' · <span class="nowrap">' + escapeHtml(r.phone) + '</span>' : ''}</div>
+            <div style="font-size:13px; color:var(--text-muted);">${houseHtml(r.house)}${r.phone ? ' · <span class="nowrap">' + escapeHtml(r.phone) + '</span>' : ''}</div>
           </div>
           ${r.suspended ? '<span class="badge overdue">Suspended</span>' : ''}
           ${currentUserProfile.role !== 'board' ? `<button class="dots-btn" onclick="openResidentMenu('${r.uid}')" aria-label="More actions">${icon('dots')}</button>` : ''}
@@ -7337,7 +7358,7 @@
           <span class="picker-avatar" style="flex:none;">${escapeHtml(initialsOf2(r.name))}</span>
           <div style="min-width:0;">
             <div style="font-weight:700; font-size:15px;">${escapeHtml(r.name)}</div>
-            <div style="font-size:13px; color:var(--text-muted);"><span class="nowrap">${escapeHtml(houseLabel(r.house))}</span>${r.occupancyType ? ' · ' + escapeHtml(r.occupancyType) : ''}${r.phone ? ' · <span class="nowrap">' + escapeHtml(r.phone) + '</span>' : ''}</div>
+            <div style="font-size:13px; color:var(--text-muted);">${houseHtml(r.house)}${r.occupancyType ? ' · ' + escapeHtml(r.occupancyType) : ''}${r.phone ? ' · <span class="nowrap">' + escapeHtml(r.phone) + '</span>' : ''}</div>
           </div>
         </div>
         <div style="font-size:13px; color:var(--text-faint); margin-top:6px;">${escapeHtml(r.email || '')}${r.biodataSubmitted ? '' : ' · biodata not submitted yet'}</div>
