@@ -3869,13 +3869,13 @@
     body.innerHTML = `
       <div class="def-top">
         <div style="font-family:var(--font-display); font-size:20px; font-weight:600;">Defaulters</div>
-        ${overdue.length ? `<div style="display:flex; gap:8px; margin-top:8px;">
+        ${list.length ? `<div style="display:flex; gap:8px; margin-top:8px;">
           <button class="btn primary" style="flex:1;" onclick="openDefaultersShareMenu()">${icon('share')} Share list</button>
           ${isAdmin ? `<button class="btn secondary" style="flex:1;" onclick="remindAllDefaulters()">${icon('bell')} Remind all</button>` : ''}
         </div>` : ''}
       </div>
       <div style="font-size:14px; color:var(--text-muted); line-height:1.5; margin-bottom:6px;">Only bills past their due date count. Bills due later this month are listed separately.</div>
-      ${overdue.length ? `
+      ${list.length ? `
         <details style="margin:4px 0 4px;">
           <summary style="font-size:14px; color:var(--accent-2); cursor:pointer;">Preview the message</summary>
           <pre style="white-space:pre-wrap; font-family:var(--font-body); font-size:14px; background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:12px; padding:12px; margin:8px 0 0;">${escapeHtml(defaultersText())}</pre>
@@ -3920,8 +3920,16 @@
   };
 
   // Group message: names and houses only, overdue houses only, sorted by house.
+  // Who the shared list names: overdue houses, or everyone still unpaid when
+  // nothing is past due yet (e.g. early in the month).
+  function shareTargets() {
+    const all = defaultersList();
+    const overdue = all.filter(d => d.overdue);
+    return (overdue.length ? overdue : all).sort(byHouse);
+  }
+
   function defaultersText() {
-    const list = defaultersList().filter(d => d.overdue).sort(byHouse);
+    const list = shareTargets();
     const lines = ['*Roshan Pakistan Housing Society*', `*Maintenance Dues Pending* - ${monthLabel(monthKey(new Date()))}`, ''];
     list.forEach((d, i) => lines.push(`${i + 1}. ${d.name} - ${houseLabel(d.house)}`));
     lines.push('', `Total pending: ${list.length} house${list.length === 1 ? '' : 's'}`, '',
@@ -3931,7 +3939,7 @@
   }
 
   window.shareDefaultersText = function() {
-    if (!defaultersList().some(d => d.overdue)) { toast('No defaulters to share'); return; }
+    if (!defaultersList().length) { toast('No unpaid bills to share'); return; }
     openWhatsAppShare(defaultersText());
   };
 
@@ -3946,7 +3954,7 @@
 
   // Phone share sheet (SMS, email, Telegram, ...); copies the text where there is none.
   window.shareDefaultersOther = async function() {
-    if (!defaultersList().some(d => d.overdue)) { toast('No defaulters to share'); return; }
+    if (!defaultersList().length) { toast('No unpaid bills to share'); return; }
     const text = defaultersText();
     if (navigator.share) {
       try { await navigator.share({ title: 'Maintenance dues pending', text }); return; }
