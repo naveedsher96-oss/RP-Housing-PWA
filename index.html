@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Roshan Pakistan Housing Society</title>
 <meta name="theme-color" content="#10142A" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
 <!-- Firebase Compatibility SDKs -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -51,7 +51,7 @@
     --shadow:0 8px 30px rgba(0,0,0,0.35);
     --font-display:'Fraunces', serif;
     --font-body:'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono:'JetBrains Mono', monospace;
+    --font-mono:'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
@@ -63,9 +63,13 @@
       var(--bg);
     color:var(--text);
     font-family:var(--font-body);
+    font-size:15px;
+    font-variant-numeric:tabular-nums;
     -webkit-font-smoothing:antialiased;
     min-height:100vh;
+    background-attachment:fixed;
   }
+  html.text-lg body{zoom:1.1;}
   #app{
     max-width:520px;
     margin:0 auto;
@@ -73,8 +77,9 @@
     display:flex;
     flex-direction:column;
     position:relative;
-    padding-bottom:calc(78px + env(safe-area-inset-bottom));
+    padding-bottom:calc(84px + env(safe-area-inset-bottom));
   }
+  #app.no-tabbar{padding-bottom:0;}
   a{color:inherit;}
   button{font-family:inherit;}
   ::selection{background:var(--accent-soft);}
@@ -275,21 +280,24 @@
 
   .modal-overlay{
     position:fixed; top:0; left:0; right:0; bottom:0; z-index:100;
-    background:rgba(10,12,24,0.85); backdrop-filter:blur(8px);
-    display:none; align-items:center; justify-content:center; padding:20px;
+    background:rgba(10,12,24,0.7); backdrop-filter:blur(6px);
+    display:none; align-items:flex-end; justify-content:center; padding:0;
   }
   .modal-overlay.active{ display:flex; }
   .modal-card{
-    background:var(--bg-elevated); border:1px solid var(--border);
-    border-radius:var(--radius); padding:24px; max-width:480px; width:100%;
-    box-shadow:var(--shadow); position:relative; max-height:85vh; overflow-y:auto;
+    background:var(--bg-elevated); border:1px solid var(--border); border-bottom:none;
+    border-radius:24px 24px 0 0; padding:10px 20px calc(24px + env(safe-area-inset-bottom)); max-width:520px; width:100%;
+    box-shadow:0 -10px 40px rgba(0,0,0,0.45); position:relative; max-height:90vh; overflow-y:auto;
+    animation:sheetUp .22s ease-out;
   }
-  .modal-head{ position:sticky; top:0; height:0; z-index:5; display:flex; justify-content:flex-end; }
+  @keyframes sheetUp{ from{ transform:translateY(30px); opacity:0; } to{ transform:none; opacity:1; } }
+  .modal-head{ position:sticky; top:-10px; z-index:5; display:flex; align-items:center; justify-content:flex-end; gap:10px; margin:0 -20px 6px; padding:6px 14px 6px; background:var(--bg-elevated); }
+  .modal-head::before{ content:''; position:absolute; left:50%; top:4px; transform:translateX(-50%); width:42px; height:5px; border-radius:3px; background:var(--bg-elevated-3); }
   .modal-close{
-    position:relative; top:-8px; right:-8px; flex-shrink:0; background:var(--bg-elevated-2);
+    position:relative; flex-shrink:0; background:var(--bg-elevated-2);
     color:var(--text-muted); border:1px solid var(--border); border-radius:50%;
-    width:32px; height:32px; display:flex; align-items:center; justify-content:center;
-    cursor:pointer; font-size:16px; font-weight:bold; box-shadow:0 2px 8px rgba(0,0,0,0.35);
+    width:38px; height:38px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:16px; font-weight:bold; margin-top:10px;
   }
   .modal-close:hover{ color:var(--text); border-color:var(--accent-2); }
 
@@ -297,13 +305,58 @@
     position:fixed; bottom:0; left:0; right:0; z-index:40;
     display:flex; justify-content:center;
     padding-bottom:env(safe-area-inset-bottom);
-    background:linear-gradient(0deg, rgba(16,20,42,0.98), rgba(16,20,42,0.9));
-    border-top:1px solid var(--border-soft); backdrop-filter:blur(10px);
+    background:linear-gradient(0deg, rgba(23,28,59,0.99), rgba(23,28,59,0.95));
+    border-top:1px solid var(--border); backdrop-filter:blur(10px);
   }
-  .tabbar-inner{ max-width:520px; width:100%; display:flex; justify-content:space-around; padding:8px 6px; }
-  .tab-btn{ background:none; border:none; color:var(--text-faint); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; flex:1; }
+  .tabbar-inner{ max-width:520px; width:100%; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); padding:6px 4px 8px; }
+  .tab-btn{ background:none; border:none; color:var(--text-faint); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; padding:4px 2px; min-width:0; font-family:inherit; }
+  .tab-btn .pill{ display:flex; align-items:center; justify-content:center; width:52px; height:30px; border-radius:15px; }
+  .tab-btn svg{ width:22px; height:22px; }
   .tab-btn.active{color:var(--accent-2);}
-  .tab-btn .lbl{font-size:11px; font-weight:700;}
+  .tab-btn.active .pill{background:var(--accent-soft);}
+  .tab-btn .lbl{font-size:11px; font-weight:700; line-height:1.15; text-align:center;}
+  .ico-svg{ width:20px; height:20px; flex:none; }
+  .top-back{ background:var(--bg-elevated-2); color:var(--text); border:1px solid var(--border); border-radius:12px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none; }
+  .top-back svg{ width:20px; height:20px; }
+  .more-user{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .more-user .av{ width:44px; height:44px; border-radius:50%; background:var(--bg-elevated-3); color:var(--accent-2); font-weight:800; display:flex; align-items:center; justify-content:center; flex:none; }
+  .more-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+  .more-grid button{ position:relative; background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:14px; padding:14px 4px; color:var(--text); font-family:inherit; font-weight:700; font-size:13px; line-height:1.25; display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; text-align:center; min-width:0; }
+  .more-grid button svg{ width:24px; height:24px; color:var(--accent-2); }
+  .more-grid button.active{ border-color:rgba(242,169,59,0.5); background:var(--accent-soft); }
+  .more-grid .cnt, .cnt-dot{ position:absolute; top:7px; right:7px; font-size:11.5px; font-weight:800; background:var(--danger); color:#fff; border-radius:9px; padding:1px 6px; }
+  .more-list{ margin-top:14px; border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .more-list button{ display:flex; align-items:center; gap:12px; width:100%; background:var(--bg-elevated-2); border:none; border-bottom:1px solid var(--border-soft); color:var(--text); font-family:inherit; font-size:15px; font-weight:700; padding:14px; cursor:pointer; text-align:left; }
+  .more-list button:last-child{ border-bottom:none; }
+  .more-list svg{ width:20px; height:20px; color:var(--accent-2); }
+
+  /* In-app toast and confirm / reason sheets (replace alert, confirm, prompt) */
+  .ui-toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:calc(92px + env(safe-area-inset-bottom)); z-index:300; width:calc(100% - 32px); max-width:488px; background:#F1F2F9; color:#11152B; border-radius:14px; padding:12px 14px; font-weight:700; font-size:14.5px; display:flex; gap:10px; align-items:flex-start; box-shadow:0 10px 30px rgba(0,0,0,.4); animation:toastUp .2s ease; cursor:pointer; }
+  .ui-toast svg{ width:20px; height:20px; color:#1F9C7E; flex:none; margin-top:1px; }
+  .ui-toast.bad svg{ color:#D9473F; }
+  .ui-toast span{ white-space:pre-line; }
+  #app.no-tabbar ~ .ui-toast{ bottom:calc(24px + env(safe-area-inset-bottom)); }
+  @keyframes toastUp{ from{ opacity:0; transform:translate(-50%, 10px); } to{ opacity:1; transform:translate(-50%, 0); } }
+  #ui-sheet{ z-index:200; }
+  .ui-sheet-title{ font-family:var(--font-display); font-size:21px; font-weight:600; margin:2px 0 8px; }
+  .ui-sheet-body{ color:var(--text-muted); font-size:15px; line-height:1.5; white-space:pre-line; margin-bottom:14px; }
+  .ui-sheet-actions{ display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+  .dots-btn{ background:none; border:1px solid transparent; color:var(--text-muted); width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex:none; }
+  .dots-btn:hover{ border-color:var(--border); color:var(--text); }
+  .dots-btn svg{ width:20px; height:20px; }
+  .menu-list{ border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .menu-list button{ display:flex; align-items:center; gap:12px; width:100%; background:var(--bg-elevated-2); border:none; border-bottom:1px solid var(--border-soft); color:var(--text); font-family:inherit; font-size:15px; font-weight:700; padding:14px; cursor:pointer; text-align:left; }
+  .menu-list button:last-child{ border-bottom:none; }
+  .menu-list button svg{ width:20px; height:20px; color:var(--accent-2); flex:none; }
+  .menu-list button.danger, .menu-list button.danger svg{ color:var(--danger); }
+  .chips{ display:flex; gap:8px; overflow-x:auto; padding:2px 0 10px; scrollbar-width:none; }
+  .chips::-webkit-scrollbar{ display:none; }
+  .chip{ flex:none; background:var(--bg-elevated-2); border:1px solid var(--border); color:var(--text-muted); border-radius:999px; padding:7px 13px; font-family:inherit; font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .chip.active{ background:var(--accent-soft); border-color:rgba(242,169,59,0.5); color:var(--accent-2); }
+  .chip .n{ opacity:.75; margin-left:4px; }
+  .money, .nowrap{ white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .ur{ font-family:'Noto Nastaliq Urdu', var(--font-body); line-height:2; }
+  .ur .money, .ur bdi{ font-family:var(--font-body); unicode-bidi:isolate; direction:ltr; line-height:1.4; }
 
   .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
   .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
@@ -314,9 +367,6 @@
   .auth-msg.success{background:var(--success-soft); color:var(--success);}
   .auth-msg.info{background:var(--info-soft); color:var(--info);}
 
-  .menu-btn{background:var(--bg-elevated-2); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm); width:38px; height:38px; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
-  .drawer-overlay{position:fixed; top:0; left:0; right:0; bottom:0; z-index:90; background:rgba(10,12,24,0.6); backdrop-filter:blur(3px); opacity:0; pointer-events:none; transition:opacity .25s ease;}
-  .drawer-overlay.open{opacity:1; pointer-events:auto;}
   .drawer{position:fixed; top:0; bottom:0; left:0; z-index:95; width:260px; max-width:80vw; background:var(--bg-elevated); border-right:1px solid var(--border); transform:translateX(-105%); transition:transform .25s ease; display:flex; flex-direction:column; padding:18px 14px calc(18px + env(safe-area-inset-bottom));}
   .drawer.open{transform:translateX(0);}
   .drawer-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; padding:0 6px;}
@@ -356,6 +406,13 @@
   <div class="modal-card">
     <div class="modal-head"><button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button></div>
     <div id="modal-body"></div>
+  </div>
+</div>
+
+<div id="ui-sheet" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-head"><button class="modal-close" id="ui-sheet-close" aria-label="Close">✕</button></div>
+    <div id="ui-sheet-body"></div>
   </div>
 </div>
 
@@ -507,7 +564,8 @@
   let authMessage = null; // { type: 'error'|'success'|'info', text }
   let wasSignedIn = false;
   let manualSignOut = false;
-  let activeTab = 'notices';
+  let activeTab = 'dashboard';
+  let navStack = []; // previous tabs, for the Back button
   let notifications = [];
   let pendingResidents = [];
   let allResidents = [];
@@ -602,7 +660,6 @@
           if (userDoc.exists) {
             currentUserProfile = { uid: user.uid, email: user.email, ...userDoc.data() };
             wasSignedIn = true;
-            if (['admin', 'board'].includes(currentUserProfile.role) && activeTab === 'notices') activeTab = 'dashboard';
             saveDeviceToken();
           } else {
             currentUserProfile = null;
@@ -789,55 +846,45 @@
     const unreadCount = notifications.filter(n => !n.read).length;
     const isAdmin = currentUserProfile.role === 'admin';
 
+    appEl.classList.remove('no-tabbar');
     appEl.innerHTML = `
       <header class="topbar">
-        <button class="menu-btn" id="menu-btn" title="Menu" aria-label="Open menu">☰</button>
+        <button class="top-back" id="top-back" onclick="goBack()" aria-label="${isHomeScreen() ? 'Close app' : 'Back'}" title="${isHomeScreen() ? 'Close app' : 'Back'}">${icon(isHomeScreen() ? 'x' : 'back')}</button>
         <div class="brand-mark">
-          <img src="icon-192.png" alt="Logo" onerror="this.style.display='none'">
+          <img src="icon-192.png" alt="Roshan Pakistan Housing Society logo" onerror="this.style.display='none'">
         </div>
         <div class="brand-text">
           <div class="name">Roshan Housing Society</div>
-          <div class="sub">
-            <span>${escapeHtml(currentUserProfile.name)} ${currentUserProfile.house ? '(' + escapeHtml(currentUserProfile.house) + ')' : ''}</span>
-            <span class="role-pill">${escapeHtml(roleLabel())}</span>
-          </div>
         </div>
-        <button class="notif-bell-btn" onclick="openNotificationsModal()" title="Notifications">
-          🔔
+        <button class="notif-bell-btn" onclick="openNotificationsModal()" title="Notifications" aria-label="Notifications">
+          ${icon('bell')}
           ${unreadCount > 0 ? `<span class="notif-badge">${unreadCount}</span>` : ''}
         </button>
       </header>
 
       <main style="padding-bottom:20px;">
         <div id="offline-banner" class="offline-banner" style="display:${navigator.onLine === false ? 'block' : 'none'};">You're offline — showing saved data. Changes need a connection.</div>
-        ${('Notification' in window && Notification.permission !== 'granted') ? `
+        ${showPushBanner() ? `
           <div class="push-banner">
-            <span style="font-size:12.5px; font-weight:600; color:var(--accent-2);">Enable push notifications for instant alerts!</span>
-            <button class="btn sm primary" onclick="requestPushPermission()">Enable</button>
+            <span style="font-size:14px; font-weight:600; color:var(--accent-2);">Get alerts for bills and notices on this phone.</span>
+            <span style="display:flex; gap:6px; flex:none;">
+              <button class="btn sm primary" onclick="requestPushPermission()">Turn on</button>
+              <button class="btn sm secondary" onclick="dismissPushBanner()">Not now</button>
+            </span>
           </div>
         ` : ''}
 
         ${renderContent()}
       </main>
 
-      <div class="drawer-overlay" id="drawer-overlay"></div>
-      <nav class="drawer" id="nav-drawer" aria-label="Main navigation">
-        <div class="drawer-head">
-          <div class="drawer-title">Menu</div>
-          <button class="modal-close" id="drawer-close-btn" style="position:static;" aria-label="Close menu">✕</button>
-        </div>
-        ${drawerItemsForRole().map(([tab, ico, lbl]) => `
-          <button class="drawer-item ${activeTab===tab?'active':''}" data-tab="${tab}">
-            <span class="ico">${ico}</span>${lbl}
-          </button>
-        `).join('')}
-        <div class="drawer-footer">
-          <button class="drawer-item" onclick="openNotificationsModal()">
-            <span class="ico">🔔</span><span id="drawer-notif-label">Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}</span>
-          </button>
-          <button class="drawer-item" onclick="doSignOut()" style="color:var(--danger);">
-            <span class="ico">🚪</span>Logout
-          </button>
+      <nav class="tabbar" aria-label="Main screens">
+        <div class="tabbar-inner">
+          ${bottomTabsForRole().map(tab => {
+            const item = drawerItemsForRole().find(x => x[0] === tab);
+            if (!item) return '';
+            return `<button class="tab-btn ${activeTab === tab ? 'active' : ''}" onclick="selectTab('${tab}')"><span class="pill">${icon(item[1])}</span><span class="lbl">${item[2].replace('Announcements', 'Announce&shy;ments')}</span></button>`;
+          }).join('')}
+          <button class="tab-btn ${bottomTabsForRole().includes(activeTab) ? '' : 'active'}" onclick="openMoreSheet()"><span class="pill">${icon('grid')}</span><span class="lbl">More</span></button>
         </div>
       </nav>
     `;
@@ -1630,85 +1677,395 @@
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => window.doSignOut());
     }
+  }
 
-    document.querySelectorAll('.drawer-item[data-tab]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        activeTab = e.currentTarget.getAttribute('data-tab');
-        render();
+  // --- NAVIGATION ---
+  // Bottom bar: 4 screens per role + "More" (a sheet with a block for every
+  // tab from drawerItemsForRole()). The top-left button and the phone's Back
+  // button share goBack(): close an open sheet, else previous screen, else the
+  // Dashboard, else ask before closing the app.
+  function bottomTabsForRole() {
+    const role = currentUserProfile.role;
+    if (role === 'admin') return ['dashboard', 'bills', 'tickets', 'biodata'];
+    if (role === 'board') return ['dashboard', 'board', 'notices', 'bills'];
+    if (role === 'superadmin') return ['dashboard', 'approvals', 'biodata', 'archive'];
+    return ['dashboard', 'notices', 'bills', 'tickets'];
+  }
+
+  function isHomeScreen() { return activeTab === 'dashboard' && !navStack.length; }
+
+  // Bottom bar / More: top-level jump, so Back returns to the Dashboard.
+  window.selectTab = function(tab) {
+    navStack = [];
+    closeModal();
+    if (activeTab === tab) { window.scrollTo(0, 0); return; }
+    activeTab = tab;
+    render();
+    window.scrollTo(0, 0);
+  };
+
+  // In-page links (e.g. a dashboard tile): remembered, so Back returns here.
+  window.goTab = function(tab) {
+    closeModal();
+    if (activeTab === tab) return;
+    navStack.push(activeTab);
+    activeTab = tab;
+    render();
+    window.scrollTo(0, 0);
+  };
+
+  window.goBack = function() {
+    if (uiSheetOpen()) { closeUiSheet(null); return; }
+    const modal = document.getElementById('modal-view');
+    if (modal && modal.classList.contains('active')) { closeModal(); return; }
+    if (!currentUserProfile || !auth || !auth.currentUser) return;
+    if (navStack.length) { activeTab = navStack.pop(); render(); window.scrollTo(0, 0); return; }
+    if (activeTab !== 'dashboard') { activeTab = 'dashboard'; render(); window.scrollTo(0, 0); return; }
+    uiConfirm({ title: 'Close the app?', body: 'You will stay logged in. Open RPHS again from your home screen any time.', okLabel: 'Close app' })
+      .then(ok => { if (ok) closeApp(); });
+  };
+
+  // The phone's Back button: keep one extra history entry so Back lands in
+  // popstate instead of leaving the app; closing steps out of the app's history.
+  let closingApp = false;
+  function closeApp() {
+    closingApp = true;
+    try { window.close(); } catch (_) {}
+    history.go(-1);
+  }
+  function armBackButton() {
+    try {
+      if (!history.state || history.state.rphs !== 'guard') history.pushState({ rphs: 'guard' }, '');
+    } catch (_) {}
+  }
+  window.addEventListener('popstate', () => {
+    if (closingApp) return;
+    armBackButton();
+    if (currentUserProfile) window.goBack();
+  });
+  try { history.replaceState({ rphs: 'base' }, ''); armBackButton(); } catch (_) {}
+
+  window.openMoreSheet = function() {
+    const items = drawerItemsForRole();
+    const unread = notifications.filter(n => !n.read).length;
+    const initials = String(currentUserProfile.name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+    document.getElementById('modal-body').innerHTML = `
+      <div class="more-user">
+        <div class="av">${escapeHtml(initials)}</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:800; font-size:16px;">${escapeHtml(currentUserProfile.name || '')}</div>
+          <div style="font-size:13px; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:2px;">
+            ${currentUserProfile.house ? `<span style="white-space:nowrap;">${escapeHtml(houseLabel(currentUserProfile.house))}</span>` : ''}
+            <span class="role-pill">${escapeHtml(roleLabel())}</span>
+          </div>
+        </div>
+      </div>
+      <div class="more-grid">
+        ${items.map(([tab, ico, lbl]) => {
+          const cnt = moreBadgeCount(tab);
+          return `<button class="${activeTab === tab ? 'active' : ''}" onclick="selectTab('${tab}')">${icon(ico)}<span>${lbl.replace('Announcements', 'Announce&shy;ments')}</span>${cnt ? `<span class="cnt">${cnt}</span>` : ''}</button>`;
+        }).join('')}
+      </div>
+      <div class="more-list">
+        <button onclick="closeModal(); openNotificationsModal();">${icon('bell')}<span style="flex:1;">Notifications</span>${unread ? `<span class="badge overdue">${unread} new</span>` : ''}</button>
+        <button onclick="toggleLanguage()">${icon('lang')}<span style="flex:1;">${uiLang === 'ur' ? 'English' : 'اردو (Urdu)'}</span></button>
+        <button onclick="closeModal(); doSignOut();" style="color:var(--danger);">${icon('logout')}<span style="flex:1;">Log out</span></button>
+      </div>
+    `;
+    openModal();
+  };
+
+  // Red count badges on More blocks (only when the number is already loaded).
+  function moreBadgeCount(tab) {
+    if (tab === 'approvals') return pendingResidents.length || 0;
+    if (tab === 'board' && isBoard()) {
+      return decisionsList.filter(d => !d.isDeleted && (d.status || 'pending') === 'pending' && !(d.votes || []).some(v => v.uid === auth.currentUser.uid)).length || 0;
+    }
+    return 0;
+  }
+
+  // Push banner: shown on the Dashboard only, and hidden for 7 days on "Not now".
+  function showPushBanner() {
+    if (!('Notification' in window) || Notification.permission === 'granted' || Notification.permission === 'denied') return false;
+    if (activeTab !== 'dashboard') return false;
+    const until = Number(lsGet('rphs.pushBannerHiddenUntil') || 0);
+    return Date.now() > until;
+  }
+  window.dismissPushBanner = function() {
+    lsSet('rphs.pushBannerHiddenUntil', String(Date.now() + 7 * 86400000));
+    render();
+  };
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+
+  // --- ICONS (Lucide-style strokes) ---
+  const ICON_PATHS = {
+    home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+    bell:'<path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+    grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    megaphone:'<path d="M3 11v3a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 8a5 5 0 0 1 0 8"/>',
+    receipt:'<path d="M5 3v18l2.5-1.5L10 21l2-1.5 2 1.5 2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z"/><path d="M9 9h6M9 13h6"/>',
+    wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+    chart:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
+    pie:'<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+    users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>',
+    back:'<path d="M15 18l-6-6 6-6"/>',
+    dots:'<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>',
+    x:'<path d="M6 6l12 12M18 6 6 18"/>',
+    check:'<path d="M20 6 9 17l-5-5"/>',
+    check2:'<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+    alert:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/>',
+    upload:'<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/>',
+    share:'<path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4M12 2v13"/>',
+    cog:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+    edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+    trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"/>',
+    eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    vote:'<path d="M9 12l2 2 4-4"/><rect x="3" y="4" width="18" height="16" rx="2"/>',
+    heart:'<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/>',
+    wallet:'<path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15V7"/><circle cx="16" cy="14" r="1.3"/>',
+    cash:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+    user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    usercheck:'<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 13-3.5"/><path d="m16 18 2 2 4-4"/>',
+    lang:'<path d="M4 5h8M8 3v2M6 5c0 4 2.5 7 6 8M10 5c-.5 4-3 7-6 8"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
+    gavel:'<path d="M14 13 5 22l-2-2 9-9"/><path d="m9 8 7 7M12 5l7 7M15.5 2.5l6 6-3 3-6-6z"/>',
+    archive:'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v12h14V8M10 12h4"/>',
+    logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+    file:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+    copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+    bank:'<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>'
+  };
+  function icon(name, cls) {
+    return `<svg class="${cls || 'ico-svg'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ICON_PATHS.grid}</svg>`;
+  }
+
+  // --- MAIN SHEET ---
+  // Every screen that fills #modal-body opens it through openModal() so the
+  // sheet starts scrolled to the top and the phone's Back button closes it.
+  function openModal() {
+    const view = document.getElementById('modal-view');
+    view.classList.add('active');
+    const card = view.querySelector('.modal-card');
+    if (card) card.scrollTop = 0;
+    armBackButton();
+  }
+  window.openModal = openModal;
+  document.getElementById('modal-view').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-view') closeModal();
+  });
+
+  // --- TOAST ---
+  let toastTimer = null;
+  function toast(message, kind) {
+    const msg = String(message == null ? '' : message);
+    const bad = kind === 'bad' || (kind == null && /^(error|failed|could not|unable|cannot|can't|invalid|not allowed|please )/i.test(msg.trim()));
+    const old = document.querySelector('.ui-toast');
+    if (old) old.remove();
+    clearTimeout(toastTimer);
+    const el = document.createElement('div');
+    el.className = 'ui-toast' + (bad ? ' bad' : '');
+    el.setAttribute('role', bad ? 'alert' : 'status');
+    el.innerHTML = `${icon(bad ? 'alert' : 'check2')}<span>${escapeHtml(msg)}</span>`;
+    el.addEventListener('click', () => el.remove());
+    document.body.appendChild(el);
+    toastTimer = setTimeout(() => el.remove(), Math.min(8000, 2600 + msg.length * 35));
+  }
+  window.toast = toast;
+
+  // --- CONFIRM / REASON SHEETS ---
+  // A second sheet (#ui-sheet) that can stack over an open #modal-view.
+  let uiSheetResolve = null;
+  function closeUiSheet(result) {
+    const view = document.getElementById('ui-sheet');
+    if (!view.classList.contains('active')) return;
+    view.classList.remove('active');
+    const done = uiSheetResolve;
+    uiSheetResolve = null;
+    if (done) done(result);
+  }
+  function openUiSheet(html, onReady) {
+    if (uiSheetResolve) closeUiSheet(null);
+    const view = document.getElementById('ui-sheet');
+    document.getElementById('ui-sheet-body').innerHTML = html;
+    view.classList.add('active');
+    view.querySelector('.modal-card').scrollTop = 0;
+    armBackButton();
+    return new Promise(resolve => { uiSheetResolve = resolve; if (onReady) onReady(view); });
+  }
+  document.getElementById('ui-sheet').addEventListener('click', (e) => {
+    if (e.target.id === 'ui-sheet') closeUiSheet(null);
+  });
+  document.getElementById('ui-sheet-close').addEventListener('click', () => closeUiSheet(null));
+  function uiSheetOpen() { return document.getElementById('ui-sheet').classList.contains('active'); }
+
+  // confirmSheet('Delete this?') or confirmSheet({ title, body, okLabel, danger }) -> Promise<boolean>
+  function confirmSheet(opts) {
+    if (typeof opts === 'string') opts = { body: opts };
+    const o = Object.assign({ title: 'Are you sure?', body: '', okLabel: 'OK', cancelLabel: 'Cancel', danger: false }, opts);
+    return openUiSheet(`
+      <div class="ui-sheet-title">${escapeHtml(o.title)}</div>
+      ${o.body ? `<div class="ui-sheet-body">${escapeHtml(o.body)}</div>` : ''}
+      <div class="ui-sheet-actions">
+        <button class="btn ${o.danger ? 'danger' : 'primary'} block" data-ui="ok">${escapeHtml(o.okLabel)}</button>
+        <button class="btn secondary block" data-ui="cancel">${escapeHtml(o.cancelLabel)}</button>
+      </div>
+    `, view => {
+      view.querySelector('[data-ui="ok"]').onclick = () => closeUiSheet(true);
+      view.querySelector('[data-ui="cancel"]').onclick = () => closeUiSheet(false);
+    }).then(r => r === true);
+  }
+  window.confirmSheet = confirmSheet;
+  const uiConfirm = confirmSheet;
+
+  // promptSheet({ title, body, label, placeholder, value, okLabel, danger, required, multiline, type })
+  // -> Promise<string|null> (null when cancelled).
+  function promptSheet(opts) {
+    if (typeof opts === 'string') opts = { title: opts };
+    const o = Object.assign({ title: '', body: '', label: '', placeholder: '', value: '', okLabel: 'Save', cancelLabel: 'Cancel', danger: false, required: false, multiline: false, type: 'text' }, opts);
+    const field = o.multiline
+      ? `<textarea id="ui-sheet-input" placeholder="${escapeHtml(o.placeholder)}">${escapeHtml(o.value)}</textarea>`
+      : `<input id="ui-sheet-input" type="${escapeHtml(o.type)}" ${o.type === 'number' ? 'inputmode="decimal"' : ''} placeholder="${escapeHtml(o.placeholder)}" value="${escapeHtml(o.value)}" />`;
+    return openUiSheet(`
+      ${o.title ? `<div class="ui-sheet-title">${escapeHtml(o.title)}</div>` : ''}
+      ${o.body ? `<div class="ui-sheet-body">${escapeHtml(o.body)}</div>` : ''}
+      <form id="ui-sheet-form">
+        ${o.label ? `<label for="ui-sheet-input">${escapeHtml(o.label)}</label>` : ''}
+        ${field}
+        <div id="ui-sheet-err" style="display:none; color:var(--danger); font-size:13.5px; font-weight:600; margin-top:6px;"></div>
+        <div class="ui-sheet-actions">
+          <button type="submit" class="btn ${o.danger ? 'danger' : 'primary'} block">${escapeHtml(o.okLabel)}</button>
+          <button type="button" class="btn secondary block" data-ui="cancel">${escapeHtml(o.cancelLabel)}</button>
+        </div>
+      </form>
+    `, view => {
+      const input = view.querySelector('#ui-sheet-input');
+      view.querySelector('[data-ui="cancel"]').onclick = () => closeUiSheet(null);
+      view.querySelector('#ui-sheet-form').onsubmit = (ev) => {
+        ev.preventDefault();
+        const v = input.value.trim();
+        if (o.required && !v) {
+          const err = view.querySelector('#ui-sheet-err');
+          err.textContent = 'Please fill this in.';
+          err.style.display = 'block';
+          input.focus();
+          return;
+        }
+        closeUiSheet(v);
+      };
+      setTimeout(() => { try { input.focus(); } catch (_) {} }, 60);
+    }).then(r => (typeof r === 'string' ? r : null));
+  }
+  window.promptSheet = promptSheet;
+
+  // menuSheet(title, [{ label, icon, danger, run }]) for the ⋯ buttons on cards.
+  const menuActions = [];
+  function menuSheet(title, items) {
+    menuActions.length = 0;
+    items.filter(Boolean).forEach(it => menuActions.push(it));
+    openUiSheet(`
+      ${title ? `<div class="ui-sheet-title" style="font-size:18px;">${escapeHtml(title)}</div>` : ''}
+      <div class="menu-list">
+        ${menuActions.map((it, i) => `<button class="${it.danger ? 'danger' : ''}" data-mi="${i}">${icon(it.icon || 'grid')}<span>${escapeHtml(it.label)}</span></button>`).join('')}
+      </div>
+    `, view => {
+      view.querySelectorAll('[data-mi]').forEach(btn => {
+        btn.onclick = () => {
+          const it = menuActions[Number(btn.dataset.mi)];
+          closeUiSheet(null);
+          if (it && it.run) setTimeout(() => it.run(), 30);
+        };
       });
     });
-
-    const drawer = document.getElementById('nav-drawer');
-    const overlay = document.getElementById('drawer-overlay');
-    const menuBtn = document.getElementById('menu-btn');
-    const closeBtn = document.getElementById('drawer-close-btn');
-    if (drawer && overlay && menuBtn) {
-      const openDrawer = () => { drawer.classList.add('open'); overlay.classList.add('open'); };
-      const closeDrawer = () => { drawer.classList.remove('open'); overlay.classList.remove('open'); };
-      menuBtn.addEventListener('click', openDrawer);
-      overlay.addEventListener('click', closeDrawer);
-      if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
-    }
   }
+
+  // --- LANGUAGE & TEXT SIZE (per device) ---
+  let uiLang = lsGet('rphs.lang') === 'ur' ? 'ur' : 'en';
+  function loadUrduFont() {
+    if (document.getElementById('urdu-font')) return;
+    const l = document.createElement('link');
+    l.id = 'urdu-font';
+    l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600;700&display=swap';
+    document.head.appendChild(l);
+  }
+  if (uiLang === 'ur') loadUrduFont();
+  window.toggleLanguage = function() {
+    uiLang = uiLang === 'ur' ? 'en' : 'ur';
+    lsSet('rphs.lang', uiLang);
+    if (uiLang === 'ur') loadUrduFont();
+    closeModal();
+    render();
+  };
+  function applyTextSize() {
+    document.documentElement.classList.toggle('text-lg', lsGet('rphs.textLg') === '1');
+  }
+  applyTextSize();
+  window.toggleLargeText = function() {
+    lsSet('rphs.textLg', lsGet('rphs.textLg') === '1' ? '0' : '1');
+    applyTextSize();
+    render();
+  };
+
 
   function drawerItemsForRole() {
     const role = currentUserProfile.role;
     if (role === 'superadmin') {
       return [
-        ['notices', '📢', 'Announcements'],
-        ['polls', '🗳️', 'Polls'],
-        ['approvals', '✅', 'Approvals'],
-        ['board', '🏛️', 'Board Decisions'],
-        ['biodata', '👥', 'Residents'],
-        ['reports', '📊', 'Reports'],
-        ['archive', '🗄️', 'Audit & Archive'],
-        ['profile', '👤', 'Profile']
+        ['dashboard', 'chart', 'Dashboard'],
+        ['notices', 'megaphone', 'Announcements'],
+        ['polls', 'vote', 'Polls'],
+        ['approvals', 'usercheck', 'Approvals'],
+        ['board', 'gavel', 'Board Decisions'],
+        ['biodata', 'users', 'Residents'],
+        ['reports', 'pie', 'Reports'],
+        ['archive', 'archive', 'Audit & Archive'],
+        ['profile', 'user', 'Profile']
       ];
     }
     if (role === 'board') {
       return [
-        ['dashboard', '📈', 'Dashboard'],
-        ['board', '🏛️', 'Board Votes'],
-        ['notices', '📢', 'Announcements'],
-        ['polls', '🗳️', 'Polls'],
-        ['bills', '🧾', 'Bills'],
-        ['funds', '💰', 'Funds'],
-        ['expenses', '💸', 'Expenses'],
-        ['reports', '📊', 'Reports'],
-        ['biodata', '👥', 'Residents'],
-        ['archive', '🗄️', 'Audit & Archive'],
-        ['profile', '👤', 'Profile']
+        ['dashboard', 'chart', 'Dashboard'],
+        ['board', 'gavel', 'Board Votes'],
+        ['notices', 'megaphone', 'Announcements'],
+        ['polls', 'vote', 'Polls'],
+        ['bills', 'receipt', 'Bills'],
+        ['funds', 'wallet', 'Funds'],
+        ['expenses', 'cash', 'Expenses'],
+        ['reports', 'pie', 'Reports'],
+        ['biodata', 'users', 'Residents'],
+        ['archive', 'archive', 'Audit & Archive'],
+        ['profile', 'user', 'Profile']
       ];
     }
     if (role === 'admin') {
       return [
-        ['dashboard', '📈', 'Dashboard'],
-        ['notices', '📢', 'Announcements'],
-        ['polls', '🗳️', 'Polls'],
-        ['tickets', '🛠️', 'Complaints'],
-        ['bills', '🧾', 'Bills'],
-        ['funds', '💰', 'Funds'],
-        ['expenses', '💸', 'Expenses'],
-        ['reports', '📊', 'Reports'],
-        ['volunteers', '🤝', 'Volunteer Programs'],
-        ['biodata', '👥', 'Residents'],
-        ['approvals', '✅', 'Approvals'],
-        ['board', '🏛️', 'Board Decisions'],
-        ['archive', '🗄️', 'Audit & Archive'],
-        ['profile', '👤', 'Profile']
+        ['dashboard', 'chart', 'Dashboard'],
+        ['notices', 'megaphone', 'Announcements'],
+        ['polls', 'vote', 'Polls'],
+        ['tickets', 'wrench', 'Complaints'],
+        ['bills', 'receipt', 'Bills'],
+        ['funds', 'wallet', 'Funds'],
+        ['expenses', 'cash', 'Expenses'],
+        ['reports', 'pie', 'Reports'],
+        ['volunteers', 'heart', 'Volunteer Programs'],
+        ['biodata', 'users', 'Residents'],
+        ['approvals', 'usercheck', 'Approvals'],
+        ['board', 'gavel', 'Board Decisions'],
+        ['archive', 'archive', 'Audit & Archive'],
+        ['profile', 'user', 'Profile']
       ];
     }
     return [
-      ['dashboard', '📈', 'Dashboard'],
-      ...(isBoard() ? [['board', '🏛️', 'Board Votes']] : []),
-      ['notices', '📢', 'Announcements'],
-      ['polls', '🗳️', 'Polls'],
-      ['tickets', '🛠️', 'Complaints'],
-      ['bills', '🧾', 'Bills'],
-      ['funds', '💰', 'Funds'],
-      ['volunteers', '🤝', 'Volunteer Programs'],
-      ['reports', '📊', 'Reports'],
-      ['profile', '👤', 'Profile']
+      ['dashboard', 'chart', 'Dashboard'],
+      ...(isBoard() ? [['board', 'gavel', 'Board Votes']] : []),
+      ['notices', 'megaphone', 'Announcements'],
+      ['polls', 'vote', 'Polls'],
+      ['tickets', 'wrench', 'Complaints'],
+      ['bills', 'receipt', 'Bills'],
+      ['funds', 'wallet', 'Funds'],
+      ['volunteers', 'heart', 'Volunteer Programs'],
+      ['reports', 'pie', 'Reports'],
+      ['profile', 'user', 'Profile']
     ];
   }
 
@@ -1852,7 +2209,7 @@
   window.openNotificationsModal = function() {
     notifView = 'list';
     renderNotificationsModal();
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
     loadNotifications(true);
   };
 
@@ -1977,6 +2334,7 @@
   };
 
   window.closeModal = function() {
+    closeUiSheet(null);
     document.getElementById('modal-view').classList.remove('active');
   };
 
@@ -2252,7 +2610,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Publish & Broadcast</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('notice-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2357,7 +2715,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Publish Poll</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('poll-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2646,7 +3004,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Submit Ticket</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('ticket-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2705,7 +3063,7 @@
         </form>
       ` : ''}
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     if (isAdmin) {
       document.getElementById('admin-ticket-form').addEventListener('submit', async (e) => {
@@ -2764,7 +3122,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Save Changes</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
     initFamilySection('edit-family-sect', currentUserProfile.family, currentUserProfile.otherDependents);
 
     document.getElementById('edit-bio-form').addEventListener('submit', async (e) => {
@@ -2958,7 +3316,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Save</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('recurring-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -3011,7 +3369,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Issue Bills & Notify Residents</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
     pickerOnChange('rec-now-month', (val) => { document.getElementById('rec-now-due').value = dueFor(val); });
 
     document.getElementById('recurring-now-form').addEventListener('submit', async (e) => {
@@ -3131,7 +3489,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Save Account Details</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('bank-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -3280,7 +3638,7 @@
   window.openDefaultersModal = async function() {
     if (!isStaff()) return;
     document.getElementById('modal-body').innerHTML = '<div style="color:var(--text-muted); padding:10px 0;">Loading defaulters…</div>';
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
     try { await ensureResidents(); } catch (e) { console.error("Residents load failed:", e); }
     renderDefaultersModal();
   };
@@ -3663,7 +4021,7 @@
       </form>
       <div style="text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px;">Management will verify your proof and mark the bill paid.</div>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('proof-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -3897,7 +4255,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Issue Bill & Notify Resident</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('bill-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -4008,7 +4366,7 @@
         <div style="text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px;">Online payment gateway to be connected. Pay to the society account and upload your proof.</div>
       `)}
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     if (isAdmin) {
       document.getElementById('admin-bill-form').addEventListener('submit', async (e) => {
@@ -4242,7 +4600,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Start Fund & Notify Residents</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('fund-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -4377,7 +4735,7 @@
       <div class="section-title" style="font-size:15px; margin:16px 0 8px;">Transfers</div>
       <div id="fund-transfers">${renderTransferRows(transfers, 'fund', f.id)}</div>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     const contribForm = document.getElementById('contrib-form');
     if (contribForm) {
@@ -4457,7 +4815,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Record as Verified</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('record-contrib-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -4911,7 +5269,7 @@
         ${currentUserProfile.role === 'admin' ? `<button class="btn sm secondary block" onclick="requestMonthlySummary('${escapeHtml(s.month)}', true)">↻ Regenerate</button>` : ''}
       </div>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
   };
 
   window.downloadMonthlySummaryPDF = async function(month) {
@@ -5047,7 +5405,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Generate & Post</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
     document.getElementById('summary-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const month = document.getElementById('summary-month').value;
@@ -5324,7 +5682,7 @@
       <button class="btn secondary block" onclick="downloadExpensePDF('${x.id}')" style="margin-bottom:10px;">Download Receipt PDF</button>
       ${isAdmin ? `<button class="btn danger block" onclick="closeModal(); archiveExpense('${x.id}')">Remove Expense</button>` : ''}
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
   };
 
   window.downloadExpensePDF = async function(expenseId) {
@@ -5385,7 +5743,7 @@
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Add Expense</div>
       <div style="color:var(--text-muted); font-size:13.5px;">Loading account balances…</div>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     // Always read fresh balances so the Pay From list reflects the latest
     // verified bills / contributions, even if the tab was opened a while ago.
@@ -5435,7 +5793,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Record Expense</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('expense-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -5506,7 +5864,7 @@
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">${heading}</div>
       <div style="color:var(--text-muted); font-size:13.5px;">Loading account balances…</div>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     try {
       await fetchExpenseData();
@@ -5682,7 +6040,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Start & Notify Residents</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('program-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -6051,7 +6409,7 @@
         <button type="submit" class="btn primary block" style="margin-top:16px;">Send to Board (3-of-5 vote)</button>
       </form>
     `;
-    document.getElementById('modal-view').classList.add('active');
+    openModal();
 
     document.getElementById('decision-form').addEventListener('submit', async (e) => {
       e.preventDefault();
