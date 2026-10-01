@@ -210,8 +210,19 @@
   label{display:block; font-size:13px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
   input[type=text], input[type=search], input[type=number], input[type=date], input[type=email], input[type=password], select, textarea{
     width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
-    border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
+    border-radius:10px; padding:12px 13px; font-family:inherit; font-size:16px; outline:none;
   }
+  input[type=tel], input[type=url]{ width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:12px 13px; font-family:inherit; font-size:16px; outline:none; }
+  /* Never let the page itself scroll sideways (that is what forces pinch-zooming out). */
+  html, body{ max-width:100%; overflow-x:hidden; }
+  #app, main, .card, .modal-card, .filter-bar, .stat-box, .house-card{ min-width:0; overflow-wrap:break-word; }
+  main *{ min-width:0; }
+  img, svg, canvas, table{ max-width:100%; }
+  .stat-strip .stat-box .v{ white-space:normal; font-size:14px; }
+  .clickable{ cursor:pointer; }
+  .detail-rows > div{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:9px 0; border-top:1px solid var(--border-soft); }
+  .detail-rows > div > span:first-child{ color:var(--text-muted); font-size:14px; flex:none; }
+  .detail-rows > div > span:last-child{ text-align:right; font-weight:600; overflow-wrap:anywhere; }
   textarea{resize:vertical; min-height:80px;}
   input:focus, select:focus, textarea:focus{ border-color:rgba(242,169,59,0.6); box-shadow:0 0 0 3px var(--accent-soft); }
   select{
@@ -287,7 +298,7 @@
   .modal-card{
     background:var(--bg-elevated); border:1px solid var(--border); border-bottom:none;
     border-radius:24px 24px 0 0; padding:10px 20px calc(24px + env(safe-area-inset-bottom)); max-width:520px; width:100%;
-    box-shadow:0 -10px 40px rgba(0,0,0,0.45); position:relative; max-height:90vh; overflow-y:auto;
+    box-shadow:0 -10px 40px rgba(0,0,0,0.45); position:relative; max-height:90vh; max-height:90dvh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
     animation:sheetUp .22s ease-out;
   }
   @keyframes sheetUp{ from{ transform:translateY(30px); opacity:0; } to{ transform:none; opacity:1; } }
@@ -2311,10 +2322,10 @@
         ${page.length ? page.map(n => {
           const meta = notifCategoryMeta(notifCategory(n));
           return `
-          <div class="notif-item ${n.read ? '' : 'unread'}" onclick="toggleNotificationRead('${n.id}')">
+          <div class="notif-item ${n.read ? '' : 'unread'}" onclick="openNotificationDetail('${n.id}')">
             ${n.title ? `<div style="font-weight:700; font-size:13px; color:${n.read ? 'var(--text)' : 'var(--accent-2)'};">${escapeHtml(n.title)}</div>` : ''}
             <div style="font-size:13px; color:var(--text-muted); line-height:1.4; white-space:pre-wrap;">${escapeHtml(n.text || n.body || '')}</div>
-            <div class="meta"><span class="notif-cat">${meta[2]} ${escapeHtml(meta[1])}</span><span>${timeAgo(n.createdAt)}${n.read ? '' : ' · tap to mark read'}</span></div>
+            <div class="meta"><span class="notif-cat">${meta[2]} ${escapeHtml(meta[1])}</span><span>${timeAgo(n.createdAt)}${n.read ? '' : ' · new'}</span></div>
           </div>`;
         }).join('') : `<div style="color:var(--text-muted); text-align:center; padding:20px;">${notifFilter === 'unread' ? 'No unread notifications.' : 'No notifications yet.'}</div>`}
         ${showMoreButton('notifs', list.length)}
@@ -2336,6 +2347,36 @@
     renderNotificationsModal();
     try { await notifRef(id).update({ read: n.read }); }
     catch (e) { console.error("Error updating notification:", e); }
+  };
+
+  const NOTIF_TAB = { bills: 'bills', notices: 'notices', polls: 'polls', funds: 'funds', complaints: 'tickets', volunteers: 'volunteers', membership: 'profile' };
+  window.openNotificationDetail = function(id) {
+    const n = notifications.find(item => item.id === id);
+    if (!n) return;
+    if (!n.read) {
+      n.read = true;
+      renderUnreadBadge();
+      renderNotificationsModal();
+      notifRef(id).update({ read: true }).catch(e => console.error("Error updating notification:", e));
+    }
+    const cat = notifCategory(n);
+    const meta = notifCategoryMeta(cat);
+    const tab = NOTIF_TAB[cat];
+    const canOpen = tab && drawerItemsForRole().some(x => x[0] === tab);
+    const label = canOpen ? drawerItemsForRole().find(x => x[0] === tab)[2] : '';
+    openUiSheet(`
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;"><span class="notif-cat">${meta[2]} ${escapeHtml(meta[1])}</span> · ${escapeHtml(formatDate(n.createdAt))} (${escapeHtml(timeAgo(n.createdAt))})</div>
+      <div class="ui-sheet-title">${escapeHtml(n.title || 'Notification')}</div>
+      <div style="font-size:15px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere;">${escapeHtml(n.text || n.body || '')}</div>
+      <div class="ui-sheet-actions">
+        ${canOpen ? `<button class="btn primary block" data-ui="go">Open ${escapeHtml(label)}</button>` : ''}
+        <button class="btn secondary block" data-ui="unread">Mark as unread</button>
+      </div>
+    `, view => {
+      const go = view.querySelector('[data-ui="go"]');
+      if (go) go.onclick = () => { closeModal(); selectTab(tab); };
+      view.querySelector('[data-ui="unread"]').onclick = () => { closeUiSheet(null); toggleNotificationRead(id); };
+    });
   };
 
   window.markAllNotificationsRead = async function() {
@@ -2624,10 +2665,11 @@
     listEl.innerHTML = noticesList.map(n => `
       <div class="card" style="cursor:default;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-          <div style="font-weight:700; font-size:16px; color:var(--accent-2);">${escapeHtml(n.title)}</div>
+          <div class="clickable" onclick="openNoticeDetail('${n.id}')" style="font-weight:700; font-size:16px; color:var(--accent-2);">${escapeHtml(n.title)}</div>
           ${isStaff() || canDeletePost(n) ? `<button class="dots-btn" onclick="openNoticeMenu('${n.id}')" aria-label="More actions">${icon('dots')}</button>` : ''}
         </div>
-        <div style="font-size:13.5px; color:var(--text); line-height:1.5; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
+        <div class="clickable" onclick="openNoticeDetail('${n.id}')" style="font-size:14.5px; color:var(--text); line-height:1.5; white-space:pre-wrap; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(n.content)}</div>
+        ${String(n.content || '').length > 220 || String(n.content || '').split('\n').length > 4 ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="openNoticeDetail('${n.id}')">Read more</button>` : ''}
         <div style="font-size:13px; color:var(--text-faint); margin-top:10px;">${postedByLabel(n)}${n.createdAt ? ' · ' + escapeHtml(formatDate(n.createdAt)) : ''}</div>
         ${n.summaryMonth ? `<div style="display:flex; gap:8px; margin-top:10px;">
           <button class="btn sm secondary block" onclick="openMonthlySummaryModal('${escapeHtml(n.summaryMonth)}')">📊 Breakdown</button>
@@ -2684,6 +2726,21 @@
     };
     const m = menus[kind] && menus[kind]();
     if (m) menuSheet(m[0], m[1]);
+  };
+
+  window.openNoticeDetail = function(id) {
+    const n = noticesList.find(x => x.id === id);
+    if (!n) return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">${postedByLabel(n)}${n.createdAt ? ' · ' + escapeHtml(formatDate(n.createdAt)) : ''}</div>
+      <div style="font-family:var(--font-display); font-size:21px; font-weight:600; margin-bottom:10px;">${escapeHtml(n.title || '')}</div>
+      <div style="font-size:15.5px; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere;">${escapeHtml(n.content || '')}</div>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
+        ${n.summaryMonth ? `<button class="btn secondary block" onclick="openMonthlySummaryModal('${escapeHtml(n.summaryMonth)}')">See the breakdown</button>` : ''}
+        ${isStaff() ? `<button class="btn secondary block" onclick="shareNoticeOnWhatsApp('${n.id}')">${icon('share')} Share on WhatsApp</button>` : ''}
+      </div>
+    `;
+    openModal();
   };
 
   window.openNoticeMenu = function(id) {
@@ -4545,7 +4602,22 @@
         <div style="display:flex; justify-content:space-between;"><span style="font-size:13px; color:var(--text-muted);">${status === 'paid' ? 'Paid On' : 'Issued On'}</span><span style="font-size:13.5px;">${escapeHtml(formatDate(status === 'paid' ? b.paidAt : b.createdAt))}</span></div>
       </div>
 
-      ${b.notes ? `<div style="font-size:13.5px; line-height:1.5; margin-bottom:16px; white-space:pre-wrap;">${escapeHtml(b.notes)}</div>` : ''}
+      <div style="font-weight:700; margin:4px 0 2px;">What this bill is for</div>
+      <div class="detail-rows" style="margin-bottom:12px;">
+        <div><span>Charge</span><span>${escapeHtml(b.category || 'Maintenance')}</span></div>
+        <div><span>Period</span><span>${escapeHtml(b.period || 'N/A')}</span></div>
+        <div><span>House</span><span>${escapeHtml(houseLabel(b.house))}${b.name ? ' · ' + escapeHtml(b.name) : ''}</span></div>
+        ${b.issuedBy ? `<div><span>Issued by</span><span>${escapeHtml(b.issuedBy)} · ${escapeHtml(formatDate(b.createdAt))}</span></div>` : ''}
+        ${b.notes ? `<div><span>Details</span><span style="white-space:pre-wrap; font-weight:500;">${escapeHtml(b.notes)}</span></div>` : ''}
+      </div>
+      ${(b.paymentMethod || b.paymentDate || b.paymentRef || b.verifiedBy) ? `
+        <div style="font-weight:700; margin:4px 0 2px;">Payment</div>
+        <div class="detail-rows" style="margin-bottom:14px;">
+          ${b.paymentMethod ? `<div><span>Paid by</span><span>${escapeHtml(b.paymentMethod)}</span></div>` : ''}
+          ${b.paymentDate ? `<div><span>Payment date</span><span>${escapeHtml(formatDate(b.paymentDate))}</span></div>` : ''}
+          ${b.paymentRef ? `<div><span>Reference</span><span>${escapeHtml(b.paymentRef)}</span></div>` : ''}
+          ${b.verifiedBy ? `<div><span>Checked by</span><span>${escapeHtml(b.verifiedBy)}${b.paidAt ? ' · ' + escapeHtml(formatDate(b.paidAt)) : ''}</span></div>` : ''}
+        </div>` : ''}
 
       ${proofSectionHtml('bill', b)}
       ${!isAdmin && (status === 'unpaid' || status === 'overdue') && b.proofRejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-bottom:14px;">Your previous proof was rejected: ${escapeHtml(b.proofRejectedReason)}. Please upload a new one.</div>` : ''}
@@ -5469,9 +5541,11 @@
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const bills = billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted);
       const contribs = contribsSnap.docs.map(d => d.data()).filter(c => !c.isDeleted);
-      const expenses = expSnap.docs.map(d => d.data()).filter(x => !x.isDeleted);
+      const expenses = expSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.isDeleted);
       const tickets = ticketsSnap.docs.map(d => d.data()).filter(t => !t.isDeleted);
       const transfers = transfersSnap.docs.map(d => d.data()).filter(t => !t.isDeleted);
+      // Lets "Recent spending" rows open the expense detail sheet.
+      expensesList = expenses;
       // My own bills feed the "My house" card and its Upload proof button.
       billsList = bills.filter(b => b.uid === auth.currentUser.uid);
       billsLoaded = true;
@@ -5559,7 +5633,7 @@
         <div style="font-weight:700; font-size:14px; margin-bottom:4px;">Recent Spending</div>
         <div style="font-size:13px; color:var(--text-faint); margin-bottom:10px;">Every expense recorded by management, newest first.</div>
         ${recentExpenses.length ? recentExpenses.map(x => `
-          <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-size:13px;">
+          <div class="clickable" onclick="openExpenseDetailModal('${x.id}')" style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-size:13px;">
             <div style="min-width:0;">
               <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(x.description || x.category || 'Expense')}</div>
               <div style="font-size:13px; color:var(--text-faint); margin-top:2px;">${escapeHtml(x.category || 'Other')} · ${escapeHtml(expenseSourceLabel(x))}${x.expenseDate ? ' · ' + escapeHtml(formatDate(x.expenseDate)) : ''}</div>
