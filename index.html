@@ -102,9 +102,9 @@
   .brand-mark img{ width:100%; height:100%; object-fit:contain; display:block; }
   .brand-text{flex:1; min-width:0;}
   .brand-text .name{font-family:var(--font-display); font-weight:600; font-size:16.5px; line-height:1.2; letter-spacing:0.1px;}
-  .brand-text .sub{font-size:11.5px; color:var(--text-muted); margin-top:2px; display:flex; align-items:center; gap:6px;}
+  .brand-text .sub{font-size:13px; color:var(--text-muted); margin-top:2px; display:flex; align-items:center; gap:6px;}
   .role-pill{
-    font-size:10.5px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
+    font-size:13px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
     padding:2px 8px; border-radius:20px; background:var(--accent-soft); color:var(--accent-2);
     border:1px solid rgba(242,169,59,0.3);
   }
@@ -116,7 +116,7 @@
   }
   .notif-badge{
     position:absolute; top:-4px; right:-4px; background:var(--danger); color:#fff;
-    font-size:10px; font-weight:800; border-radius:10px; padding:2px 5px; min-width:16px; text-align:center;
+    font-size:13px; font-weight:800; border-radius:10px; padding:2px 5px; min-width:16px; text-align:center;
   }
 
   .push-banner{
@@ -126,14 +126,14 @@
   }
   .offline-banner{
     background:var(--warning-soft); border:1px solid rgba(242,169,59,0.35); color:var(--accent-2);
-    border-radius:12px; padding:9px 14px; margin-bottom:14px; font-size:12.5px; font-weight:600; text-align:center;
+    border-radius:12px; padding:9px 14px; margin-bottom:14px; font-size:13px; font-weight:600; text-align:center;
   }
 
   .notif-item{background:var(--bg-elevated-2); border:1px solid var(--border); padding:10px 12px 10px 16px; border-radius:10px; margin-bottom:8px; position:relative; cursor:pointer;}
   .notif-item.unread{border-color:rgba(242,169,59,0.35); background:linear-gradient(180deg, rgba(242,169,59,0.08), var(--bg-elevated-2));}
   .notif-item.unread::before{content:''; position:absolute; left:6px; top:16px; width:6px; height:6px; border-radius:50%; background:var(--accent);}
-  .notif-item .meta{display:flex; justify-content:space-between; gap:8px; font-size:10.5px; color:var(--text-faint); margin-top:6px;}
-  .notif-cat{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-muted);}
+  .notif-item .meta{display:flex; justify-content:space-between; gap:8px; font-size:13px; color:var(--text-faint); margin-top:6px;}
+  .notif-cat{font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-muted);}
   .mute-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px;}
   .mute-row:last-child{border-bottom:none;}
   .switch{position:relative; width:40px; height:22px; border-radius:11px; background:rgba(255,255,255,0.14); border:none; cursor:pointer; transition:background .15s; flex:none;}
@@ -154,13 +154,13 @@
   }
 
   .ticket-no{
-    font-family:var(--font-mono); font-size:11px; color:var(--accent-2);
+    font-family:var(--font-mono); font-size:13px; color:var(--accent-2);
     background:var(--accent-soft); padding:2px 6px; border-radius:4px; font-weight:600;
   }
 
   .badge{
-    display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.3px;
-    text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:5px; font-size:13px; font-weight:700;
+    padding:3px 10px; border-radius:20px; white-space:nowrap;
   }
   .badge.pending{background:var(--warning-soft); color:var(--accent-2);}
   .badge.assigned{background:var(--info-soft); color:var(--info);}
@@ -179,11 +179,11 @@
 
   .stat-strip{display:flex; gap:8px; margin-bottom:14px;}
   .stat-box{flex:1; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;}
-  .stat-box .k{font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700;}
+  .stat-box .k{font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700;}
   .stat-box .v{font-family:var(--font-mono); font-size:15px; font-weight:600; margin-top:4px;}
 
   .chip-row{display:flex; gap:8px; margin-bottom:14px; overflow-x:auto;}
-  .chip{font-size:12px; font-weight:700; padding:6px 12px; border-radius:20px; border:1px solid var(--border); background:var(--bg-elevated-2); color:var(--text-muted); cursor:pointer; white-space:nowrap;}
+  .chip{font-size:13px; font-weight:700; padding:6px 12px; border-radius:20px; border:1px solid var(--border); background:var(--bg-elevated-2); color:var(--text-muted); cursor:pointer; white-space:nowrap;}
   .chip.active{background:var(--accent-soft); color:var(--accent-2); border-color:rgba(242,169,59,0.35);}
 
   .amount{font-family:var(--font-mono); font-size:19px; font-weight:600; color:var(--text);}
@@ -191,8 +191,8 @@
   .filter-bar{background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:14px;}
   .filter-bar label{margin-top:0;}
 
-  input[type="file"]{width:100%; padding:10px 12px; margin-top:6px; background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-muted); font-size:12.5px; font-family:var(--font-body);}
-  input[type="file"]::file-selector-button{background:var(--bg-elevated-3); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 12px; margin-right:10px; font-size:12px; font-weight:700; cursor:pointer;}
+  input[type="file"]{width:100%; padding:10px 12px; margin-top:6px; background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-muted); font-size:13px; font-family:var(--font-body);}
+  input[type="file"]::file-selector-button{background:var(--bg-elevated-3); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 12px; margin-right:10px; font-size:13px; font-weight:700; cursor:pointer;}
   .proof-thumb{max-width:100%; border-radius:var(--radius-sm); border:1px solid var(--border); display:block; margin:8px 0;}
   .progress{height:8px; background:var(--bg-elevated-2); border:1px solid var(--border-soft); border-radius:6px; overflow:hidden; margin:8px 0 6px;}
   .progress .fill{height:100%; background:linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius:6px;}
@@ -204,10 +204,10 @@
   .btn.primary{background:linear-gradient(180deg, var(--accent-2), var(--accent)); color:#251400; box-shadow:0 4px 16px rgba(242,169,59,0.35);}
   .btn.secondary{background:var(--bg-elevated-2); color:var(--text); border:1px solid var(--border);}
   .btn.danger{background:var(--danger); color:#fff;}
-  .btn.sm{padding:6px 12px; font-size:11.5px; border-radius:8px;}
+  .btn.sm{padding:6px 12px; font-size:13px; border-radius:8px;}
   .btn.block{width:100%;}
 
-  label{display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
+  label{display:block; font-size:13px; font-weight:700; color:var(--text-muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.3px;}
   input[type=text], input[type=search], input[type=number], input[type=date], input[type=email], input[type=password], select, textarea{
     width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
     border-radius:10px; padding:12px 13px; font-family:inherit; font-size:14.5px; outline:none;
@@ -220,7 +220,7 @@
     background-repeat:no-repeat; background-position:right 13px center;
   }
   select option, select optgroup{ background:var(--bg-elevated); color:var(--text); font-family:var(--font-body); font-size:14px; padding:10px 12px; }
-  select optgroup{ color:var(--text-faint); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+  select optgroup{ color:var(--text-faint); font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.4px; }
   select option:checked{ background:var(--bg-elevated-3); color:var(--accent-2); }
 
   /* Custom picker: styled, searchable replacement for a native <select> */
@@ -233,7 +233,7 @@
   .picker-trigger:focus-visible, .picker.open .picker-trigger{ outline:none; border-color:rgba(242,169,59,0.6); box-shadow:0 0 0 3px var(--accent-soft); }
   .picker-avatar{
     width:36px; height:36px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
-    font-size:12.5px; font-weight:800; letter-spacing:.3px; color:#251400;
+    font-size:13px; font-weight:800; letter-spacing:.3px; color:#251400;
     background:linear-gradient(180deg, var(--accent-2), var(--accent));
   }
   .picker-avatar.all{ background:var(--info); color:#fff; font-size:15px; }
@@ -241,7 +241,7 @@
   .picker-avatar.cat{ background:var(--bg-elevated-3); color:var(--accent-2); font-size:16px; }
   .picker-text{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
   .picker-main{ font-size:14.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .picker-sub{ font-size:11.5px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .picker-sub{ font-size:13px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .picker-chev{ flex-shrink:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; color:var(--accent-2); transition:transform .18s; }
   .picker.open .picker-chev{ transform:rotate(180deg); }
   .picker-panel{
@@ -260,7 +260,7 @@
   .picker-list{ max-height:280px; overflow-y:auto; padding:4px 6px 8px; }
   .picker-group{
     display:flex; justify-content:space-between; align-items:center; padding:10px 10px 4px;
-    font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--text-faint);
+    font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--text-faint);
   }
   .picker-opt{
     width:100%; display:flex; align-items:center; gap:12px; text-align:left; cursor:pointer;
@@ -268,12 +268,12 @@
   }
   .picker-opt:hover, .picker-opt:focus-visible{ background:var(--bg-elevated-3); outline:none; }
   .picker-opt.selected{ background:var(--accent-soft); }
-  .picker-opt .picker-avatar{ width:34px; height:34px; font-size:12px; }
+  .picker-opt .picker-avatar{ width:34px; height:34px; font-size:13px; }
   .picker-opt .picker-main{ font-size:14px; font-weight:600; }
   .picker-check{ flex-shrink:0; width:20px; color:var(--accent-2); font-weight:800; opacity:0; }
   .picker-opt.selected .picker-check{ opacity:1; }
   .picker-tag{
-    flex-shrink:0; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px;
+    flex-shrink:0; font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.4px;
     padding:3px 7px; border-radius:6px; background:var(--info-soft); color:var(--info);
   }
   .picker-empty{ text-align:center; color:var(--text-muted); font-size:13px; padding:18px 10px; }
@@ -378,7 +378,7 @@
   .drawer-footer{margin-top:auto; border-top:1px solid var(--border-soft); padding-top:10px;}
 
   .fam-sect-title{font-family:var(--font-display); font-size:16px; font-weight:700; color:var(--accent-2); margin-top:22px; padding-top:14px; border-top:1px solid var(--border);}
-  .fam-hint{font-size:12px; color:var(--text-muted); margin-top:4px;}
+  .fam-hint{font-size:13px; color:var(--text-muted); margin-top:4px;}
   .fam-member{background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-top:10px;}
   .fam-member .fam-head{display:flex; align-items:center; gap:10px; font-weight:700; font-size:14px; cursor:pointer;}
   .fam-member input[type=checkbox]{width:18px; height:18px; accent-color:var(--accent); margin:0;}
@@ -1629,7 +1629,7 @@
 
         <div class="card" style="cursor:default; padding:20px;">
           <div style="font-weight:700; font-size:18px; color:var(--accent-2); margin-bottom:4px;">${escapeHtml(currentUserProfile.name)}</div>
-          <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px; text-transform:capitalize;">${escapeHtml(roleLabel())}</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px; text-transform:capitalize;">${escapeHtml(roleLabel())}</div>
           <div style="font-size:13.5px; margin-bottom:8px;"><strong>House / Plot:</strong> ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
           <div style="font-size:13.5px; margin-bottom:8px;"><strong>CNIC:</strong> ${escapeHtml(currentUserProfile.cnic || 'N/A')}</div>
           <div style="font-size:13.5px; margin-bottom:8px;"><strong>Phone:</strong> ${escapeHtml(currentUserProfile.phone || 'N/A')}</div>
@@ -1656,7 +1656,7 @@
               <input type="search" id="resident-search" placeholder="Search name, house, phone or CNIC" value="${escapeHtml(residentSearch)}" oninput="setResidentSearch(this.value)" style="flex:1; min-width:0;" />
               <button class="btn sm secondary" style="white-space:nowrap;" onclick="exportResidentsCSV()">⬇ CSV</button>
             </div>
-            <div id="resident-filter-summary" style="font-size:12px; color:var(--text-muted); margin-top:8px;"></div>
+            <div id="resident-filter-summary" style="font-size:13px; color:var(--text-muted); margin-top:8px;"></div>
           </div>
           <div id="residents-list">Loading residents directory...</div>
         `;
@@ -2229,7 +2229,7 @@
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding-right:44px; margin-bottom:12px;">
         <div>
           <div style="font-family:var(--font-display); font-size:20px; font-weight:600;">Notifications</div>
-          <div style="font-size:12px; color:var(--text-muted);">${unread ? `${unread} unread` : 'All caught up'}${muted.length ? ` · ${muted.length} muted` : ''}</div>
+          <div style="font-size:13px; color:var(--text-muted);">${unread ? `${unread} unread` : 'All caught up'}${muted.length ? ` · ${muted.length} muted` : ''}</div>
         </div>
         <button class="btn sm ${notifView === 'settings' ? 'primary' : 'secondary'}" onclick="toggleNotifSettings()" title="Notification settings">⚙️ Settings</button>
       </div>`;
@@ -2238,7 +2238,7 @@
       body.innerHTML = head + `
         <div class="card" style="margin-bottom:10px;">
           <div style="font-weight:700; font-size:13.5px; margin-bottom:4px;">Push alerts</div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">Turn off a category to stop phone alerts for it. Muted items still appear here in the centre. Emergency alerts are always delivered.</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:8px;">Turn off a category to stop phone alerts for it. Muted items still appear here in the centre. Emergency alerts are always delivered.</div>
           ${NOTIF_CATEGORIES.filter(c => MUTABLE_CATEGORIES.includes(c[0])).map(([key, label, ico]) => `
             <div class="mute-row">
               <span>${ico} ${label}</span>
@@ -2461,8 +2461,8 @@
   }
 
   function commentAuthorTag(c) {
-    if (c.role === 'board') return '<span class="badge notice" style="font-size:9.5px; padding:1px 6px; margin-left:6px;">Board</span>';
-    if (c.role === 'management') return '<span class="badge verified" style="font-size:9.5px; padding:1px 6px; margin-left:6px;">Management</span>';
+    if (c.role === 'board') return '<span class="badge notice" style="font-size:13px; padding:1px 6px; margin-left:6px;">Board</span>';
+    if (c.role === 'management') return '<span class="badge verified" style="font-size:13px; padding:1px 6px; margin-left:6px;">Management</span>';
     return '';
   }
 
@@ -2477,15 +2477,15 @@
     const items = comments.length ? comments.map(c => `
       <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:8px 10px; margin-bottom:6px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <div style="font-size:12px; font-weight:700; color:var(--text);">${escapeHtml(c.name || 'Resident')}${commentAuthorTag(c)}</div>
-          <div style="font-size:10.5px; color:var(--text-faint); white-space:nowrap;">${escapeHtml(formatDate(c.createdAt))}</div>
+          <div style="font-size:13px; font-weight:700; color:var(--text);">${escapeHtml(c.name || 'Resident')}${commentAuthorTag(c)}</div>
+          <div style="font-size:13px; color:var(--text-faint); white-space:nowrap;">${escapeHtml(formatDate(c.createdAt))}</div>
         </div>
         <div style="font-size:13px; color:var(--text); line-height:1.45; white-space:pre-wrap; margin-top:3px;">${escapeHtml(c.text || '')}</div>
-        ${canDeleteComment(n, c) ? `<button class="btn sm danger" style="margin-top:6px; padding:3px 8px; font-size:10.5px;" onclick="deleteComment('${n.id}','${c.id}')">Delete</button>` : ''}
+        ${canDeleteComment(n, c) ? `<button class="btn sm danger" style="margin-top:6px; padding:3px 8px; font-size:13px;" onclick="deleteComment('${n.id}','${c.id}')">Delete</button>` : ''}
       </div>`).join('')
-      : '<div style="font-size:12.5px; color:var(--text-muted); padding:6px 0;">No comments yet. Be the first to respond.</div>';
+      : '<div style="font-size:13px; color:var(--text-muted); padding:6px 0;">No comments yet. Be the first to respond.</div>';
     const composer = !commentsAllowed(n)
-      ? '<div style="font-size:12px; color:var(--text-faint); margin-top:6px;">Comments are closed on this announcement.</div>'
+      ? '<div style="font-size:13px; color:var(--text-faint); margin-top:6px;">Comments are closed on this announcement.</div>'
       : canComment()
         ? `<form onsubmit="return postComment(event,'${n.id}')" style="margin-top:8px;">
             <textarea id="comment-input-${n.id}" placeholder="Write a comment..." required maxlength="500" style="min-height:56px; margin-top:0;"></textarea>
@@ -2495,10 +2495,10 @@
     return `
       <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <div style="font-size:12px; font-weight:700; color:var(--text-muted);">&#128172; ${toggleLabel}</div>
+          <div style="font-size:13px; font-weight:700; color:var(--text-muted);">&#128172; ${toggleLabel}</div>
           <div style="display:flex; gap:6px;">
-            ${canDeletePost(n) ? `<button class="btn sm secondary" style="padding:3px 8px; font-size:10.5px;" onclick="toggleCommentsAllowed('${n.id}')">${commentsAllowed(n) ? 'Close comments' : 'Reopen comments'}</button>` : ''}
-            <button class="btn sm secondary" style="padding:3px 8px; font-size:10.5px;" onclick="toggleComments('${n.id}')">Hide</button>
+            ${canDeletePost(n) ? `<button class="btn sm secondary" style="padding:3px 8px; font-size:13px;" onclick="toggleCommentsAllowed('${n.id}')">${commentsAllowed(n) ? 'Close comments' : 'Reopen comments'}</button>` : ''}
+            <button class="btn sm secondary" style="padding:3px 8px; font-size:13px;" onclick="toggleComments('${n.id}')">Hide</button>
           </div>
         </div>
         ${items}
@@ -2578,22 +2578,47 @@
       <div class="card" style="cursor:default;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
           <div style="font-weight:700; font-size:16px; color:var(--accent-2);">${escapeHtml(n.title)}</div>
-          <span class="badge notice">Notice</span>
+          ${isStaff() || canDeletePost(n) ? `<button class="dots-btn" onclick="openNoticeMenu('${n.id}')" aria-label="More actions">${icon('dots')}</button>` : ''}
         </div>
         <div style="font-size:13.5px; color:var(--text); line-height:1.5; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
-        <div style="font-size:11px; color:var(--text-faint); margin-top:10px;">${postedByLabel(n)}${n.createdAt ? ' · ' + escapeHtml(formatDate(n.createdAt)) : ''}</div>
+        <div style="font-size:13px; color:var(--text-faint); margin-top:10px;">${postedByLabel(n)}${n.createdAt ? ' · ' + escapeHtml(formatDate(n.createdAt)) : ''}</div>
         ${n.summaryMonth ? `<div style="display:flex; gap:8px; margin-top:10px;">
           <button class="btn sm secondary block" onclick="openMonthlySummaryModal('${escapeHtml(n.summaryMonth)}')">📊 Breakdown</button>
           <button class="btn sm secondary block" onclick="downloadMonthlySummaryPDF('${escapeHtml(n.summaryMonth)}')">📄 PDF</button>
         </div>` : ''}
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           ${renderCommentThread(n)}
-          ${canDeletePost(n) && !openCommentThreads.has(n.id) ? `<button class="btn sm danger" style="margin-top:12px;" onclick="deleteNotice('${n.id}')">Delete</button>` : ''}
+          ${isStaff() ? `<button class="btn sm secondary" style="margin-top:12px;" onclick="shareNoticeOnWhatsApp('${n.id}')">${icon('share')} Share on WhatsApp</button>` : ''}
         </div>
-        ${canDeletePost(n) && openCommentThreads.has(n.id) ? `<button class="btn sm danger" style="margin-top:12px;" onclick="deleteNotice('${n.id}')">Delete announcement</button>` : ''}
       </div>
     `).join('');
   }
+
+  // WhatsApp sharing uses a plain wa.me link (no number, no paid API):
+  // WhatsApp opens and the admin picks the residents' group.
+  function noticeWhatsAppText(title, content) {
+    return `*${title}*\n\n${content}\n\n- RPHS Management`;
+  }
+  function openWhatsAppShare(text) {
+    const url = 'https://wa.me/?text=' + encodeURIComponent(text);
+    const w = window.open(url, '_blank');
+    if (w) return;
+    // Pop-up blocked (e.g. after a slow save): ask for one more tap.
+    confirmSheet({ title: 'Share on WhatsApp', body: 'Open WhatsApp and pick your residents\u2019 group.', okLabel: 'Open WhatsApp' })
+      .then(ok => { if (ok) window.location.href = url; });
+  }
+  window.shareNoticeOnWhatsApp = function(id) {
+    const n = noticesList.find(x => x.id === id);
+    if (n) openWhatsAppShare(noticeWhatsAppText(n.title || '', n.content || ''));
+  };
+  window.openNoticeMenu = function(id) {
+    const n = noticesList.find(x => x.id === id);
+    if (!n) return;
+    menuSheet(n.title, [
+      isStaff() && { label: 'Share on WhatsApp', icon: 'share', run: () => shareNoticeOnWhatsApp(id) },
+      canDeletePost(n) && { label: 'Delete announcement', icon: 'trash', danger: true, run: () => deleteNotice(id) }
+    ]);
+  };
 
   window.openPostNoticeModal = function() {
     document.getElementById('modal-body').innerHTML = `
@@ -2607,7 +2632,11 @@
           <input type="checkbox" id="notice-allow-comments" checked style="width:auto; margin:0;" />
           <span>Allow residents to comment</span>
         </label>
-        <button type="submit" class="btn primary block" style="margin-top:16px;">Publish & Broadcast</button>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+          <input type="checkbox" id="notice-share-wa" checked style="width:auto; margin:0;" />
+          <span>Also share on WhatsApp after posting</span>
+        </label>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Post to everyone</button>
       </form>
     `;
     openModal();
@@ -2617,6 +2646,7 @@
       const title = document.getElementById('notice-title').value.trim();
       const content = document.getElementById('notice-content').value.trim();
       const allowComments = document.getElementById('notice-allow-comments').checked;
+      const shareWa = document.getElementById('notice-share-wa').checked;
 
       try {
         await db.collection('announcements').add({
@@ -2629,6 +2659,8 @@
         await broadcastNotification("New Announcement: " + title, content, 'notices');
         closeModal();
         loadNotices();
+        toast('Announcement posted');
+        if (shareWa) openWhatsAppShare(noticeWhatsAppText(title, content));
       } catch(err) {
         toast("Error publishing notice: " + err.message);
       }
@@ -2672,7 +2704,7 @@
       return `
         <div class="card" style="cursor:default;">
           <div style="font-weight:700; font-size:16px; color:var(--accent-2); margin-bottom:6px;">${escapeHtml(poll.question)}</div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Total Votes: ${totalVotes} · ${postedByLabel(poll)}</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Total Votes: ${totalVotes} · ${postedByLabel(poll)}</div>
 
           <div style="display:flex; flex-direction:column; gap:8px;">
             ${options.map((opt, idx) => {
@@ -2686,7 +2718,7 @@
                   <div style="display:flex; justify-content:space-between; align-items:center; position:relative; z-index:1;">
                     <span style="font-size:13.5px; font-weight:${isSelected?'700':'500'};">${escapeHtml(opt)}</span>
                     <div style="display:flex; align-items:center; gap:10px;">
-                      <span style="font-size:12px; color:var(--text-muted);">${pct}% (${count})</span>
+                      <span style="font-size:13px; color:var(--text-muted);">${pct}% (${count})</span>
                       ${!hasVoted ? `<button class="btn sm primary" onclick="votePoll('${poll.id}', ${idx})">Vote</button>` : ''}
                     </div>
                   </div>
@@ -2793,9 +2825,21 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   function formatDate(value) {
     const d = toDate(value);
-    return d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+    return d ? `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}` : 'N/A';
+  }
+
+  // One label per status, used on every pill.
+  const STATUS_LABELS = {
+    unpaid: 'Due', overdue: 'Overdue', paid: 'Paid', submitted: 'In review', pending: 'Pending',
+    'in-progress': 'In progress', assigned: 'Assigned', resolved: 'Resolved', closed: 'Closed',
+    cancelled: 'Cancelled', verified: 'Verified', rejected: 'Rejected', approved: 'Approved', active: 'Active'
+  };
+  function statusLabel(status) {
+    const k = String(status || 'pending').toLowerCase();
+    return STATUS_LABELS[k] || (k.charAt(0).toUpperCase() + k.slice(1).replace(/-/g, ' '));
   }
 
   function lastTwelveMonths() {
@@ -2824,7 +2868,7 @@
             <option value="closed" ${ticketFilterStatus==='closed'?'selected':''}>Closed</option>
           </select>
         </div>
-        <div id="ticket-filter-summary" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
+        <div id="ticket-filter-summary" style="font-size:13px; color:var(--text-muted); margin-top:10px;"></div>
         <button class="btn sm secondary block" style="margin-top:10px;" onclick="downloadTicketsReportPDF()">Print / Export Filtered Report</button>
       </div>
     `;
@@ -2973,12 +3017,12 @@
             <span class="ticket-no">${escapeHtml(t.ticketNo || 'TICKET')}</span>
             <span style="font-weight:700; font-size:15px; color:var(--accent-2); margin-left:6px;">${escapeHtml(t.category)}</span>
           </div>
-          <span class="badge ${t.status || 'pending'}">${escapeHtml(t.status || 'Pending')}</span>
+          <span class="badge ${t.status || 'pending'}">${escapeHtml(statusLabel(t.status))}</span>
         </div>
         <div style="font-size:13px; color:var(--text); line-height:1.4; margin-bottom:8px;">${escapeHtml(t.description)}</div>
-        <div style="font-size:11.5px; color:var(--text-muted);">House: ${escapeHtml(t.house || 'N/A')} | Resident: ${escapeHtml(t.name || 'N/A')}</div>
-        <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Lodged: ${escapeHtml(formatDate(t.createdAt))}</div>
-        ${t.department ? `<div style="font-size:11.5px; color:var(--info); margin-top:4px;">Assigned Dept: ${escapeHtml(t.department)}</div>` : ''}
+        <div style="font-size:13px; color:var(--text-muted);">House: ${escapeHtml(t.house || 'N/A')} | Resident: ${escapeHtml(t.name || 'N/A')}</div>
+        <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Lodged: ${escapeHtml(formatDate(t.createdAt))}</div>
+        ${t.department ? `<div style="font-size:13px; color:var(--info); margin-top:4px;">Assigned Dept: ${escapeHtml(t.department)}</div>` : ''}
         ${isAdmin ? `<div style="margin-top:12px; display:flex; gap:8px;">
           <button class="btn sm secondary" onclick="event.stopPropagation(); downloadTicketPDF('${t.id}')">Export PDF</button>
           <button class="btn sm danger" onclick="event.stopPropagation(); archiveTicket('${t.id}')">Remove</button>
@@ -3039,7 +3083,7 @@
     document.getElementById('modal-body').innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <span class="ticket-no">${escapeHtml(t.ticketNo)}</span>
-        <span class="badge ${t.status || 'pending'}">${escapeHtml(t.status || 'Pending')}</span>
+        <span class="badge ${t.status || 'pending'}">${escapeHtml(statusLabel(t.status))}</span>
       </div>
       <div style="font-family:var(--font-display); font-size:18px; font-weight:600; color:var(--accent-2); margin-bottom:6px;">${escapeHtml(t.category)}</div>
       <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Lodged by: ${escapeHtml(t.name)} (${escapeHtml(t.house)})</div>
@@ -3073,7 +3117,7 @@
 
         try {
           await db.collection('tickets').doc(ticketId).update({ status, department });
-          await sendNotification(t.uid, `Ticket Updated (${t.ticketNo})`, `Your complaint status is now: ${status.toUpperCase()}`, 'info');
+          await sendNotification(t.uid, `Ticket Updated (${t.ticketNo})`, `Your complaint status is now: ${statusLabel(status)}`, 'info');
           closeModal();
           loadTickets();
         } catch(err) {
@@ -3263,27 +3307,27 @@
       <div class="filter-bar">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
           <label style="margin:0;">Recurring Monthly Bill</label>
-          <span class="badge ${s.enabled ? 'paid' : 'closed'}" style="flex-shrink:0;">${s.enabled ? 'ON' : 'OFF'}</span>
+          <span class="badge ${s.enabled ? 'paid' : 'closed'}" style="flex-shrink:0;">${s.enabled ? 'On' : 'Off'}</span>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:8px;">
           <span style="font-size:13px; color:var(--text-muted);">${escapeHtml(s.category)}</span>
           <span class="amount">${formatMoney(s.amount)}</span>
         </div>
-        <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">
+        <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">
           Issued on the 1st of every month to every approved resident · due on the ${ordinal(Number(s.dueDay) || 20)} · ${recurringExempt.length} exempt
         </div>
-        <div style="font-size:11.5px; color:var(--text-faint); margin-top:2px;">
+        <div style="font-size:13px; color:var(--text-faint); margin-top:2px;">
           Members who already have a ${escapeHtml(s.category)} bill for that month (paid or unpaid) are skipped. New residents are included automatically once approved.
         </div>
-        ${pending ? `<div style="font-size:12px; color:var(--accent-2); margin-top:8px;">Issuing ${escapeHtml(monthLabel(s.runRequest.month))} bills now… refresh in a moment.</div>` : ''}
-        ${last ? `<div style="font-size:12px; color:var(--text-muted); margin-top:8px;">Last run${lastAt ? ' ' + lastAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}: <b>${last.issued}</b> bill(s) for ${escapeHtml(last.period || '')}, ${last.skippedBilled || 0} already billed, ${last.skippedExempt || 0} exempt.</div>` : ''}
+        ${pending ? `<div style="font-size:13px; color:var(--accent-2); margin-top:8px;">Issuing ${escapeHtml(monthLabel(s.runRequest.month))} bills now… refresh in a moment.</div>` : ''}
+        ${last ? `<div style="font-size:13px; color:var(--text-muted); margin-top:8px;">Last run${lastAt ? ' ' + lastAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}: <b>${last.issued}</b> bill(s) for ${escapeHtml(last.period || '')}, ${last.skippedBilled || 0} already billed, ${last.skippedExempt || 0} exempt.</div>` : ''}
         ${recurringExempt.length ? `
           <details style="margin-top:8px;">
-            <summary style="font-size:12.5px; color:var(--accent-2); cursor:pointer;">Exempt members (${recurringExempt.length})</summary>
-            <div style="margin-top:6px; font-size:12.5px; line-height:1.7;">
+            <summary style="font-size:13px; color:var(--accent-2); cursor:pointer;">Exempt members (${recurringExempt.length})</summary>
+            <div style="margin-top:6px; font-size:13px; line-height:1.7;">
               ${recurringExempt.map(u => `<div>${escapeHtml(u.name || 'Member')} <span style="color:var(--text-faint);">— ${escapeHtml(u.house || 'N/A')}${u.billExemptReason ? ' · ' + escapeHtml(u.billExemptReason) : ''}</span></div>`).join('')}
             </div>
-            <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Manage exemptions from the Residents Directory.</div>
+            <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Manage exemptions from the Residents Directory.</div>
           </details>
         ` : ''}
         <div style="display:flex; gap:8px; margin-top:12px;">
@@ -3365,7 +3409,7 @@
         ], { value: thisKey, searchable: false })}
         <label>Due Date</label>
         <input type="date" id="rec-now-due" value="${dueFor(thisKey)}" required />
-        <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Defaults to the ${ordinal(Number(s.dueDay) || 20)}; if that has already passed, one week from today.</div>
+        <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Defaults to the ${ordinal(Number(s.dueDay) || 20)}; if that has already passed, one week from today.</div>
         <button type="submit" class="btn primary block" style="margin-top:16px;">Issue Bills & Notify Residents</button>
       </form>
     `;
@@ -3417,10 +3461,10 @@
           <span style="font-size:13px; color:var(--text-muted);">Balance</span>
           <span class="amount" style="color:${balanceColor(acct.balance)};">${formatMoney(acct.balance)}</span>
         </div>
-        <div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">${balanceBreakdown(acct)}</div>
+        <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">${balanceBreakdown(acct)}</div>
         ${transfers.length ? `
           <details style="margin-top:10px;">
-            <summary style="font-size:12.5px; color:var(--accent-2); cursor:pointer;">Transfer history (${transfers.length})</summary>
+            <summary style="font-size:13px; color:var(--accent-2); cursor:pointer;">Transfer history (${transfers.length})</summary>
             <div style="margin-top:8px;">${renderTransferRows(transfers, 'bills')}</div>
           </details>
         ` : ''}
@@ -3461,10 +3505,10 @@
             ${s.accountTitle ? `<div><span style="color:var(--text-faint);">Title:</span> ${escapeHtml(s.accountTitle)}</div>` : ''}
             ${s.accountNumber ? `<div><span style="color:var(--text-faint);">Account #:</span> <span style="font-family:var(--font-mono);">${escapeHtml(s.accountNumber)}</span></div>` : ''}
             ${s.iban ? `<div><span style="color:var(--text-faint);">IBAN:</span> <span style="font-family:var(--font-mono);">${escapeHtml(s.iban)}</span></div>` : ''}
-            ${s.instructions ? `<div style="color:var(--text-muted); font-size:12px; margin-top:4px;">${escapeHtml(s.instructions)}</div>` : ''}
+            ${s.instructions ? `<div style="color:var(--text-muted); font-size:13px; margin-top:4px;">${escapeHtml(s.instructions)}</div>` : ''}
           </div>
-          <div style="font-size:11.5px; color:var(--text-faint); margin-top:8px;">Pay your dues to this account, then upload the payment proof on your bill.</div>
-        ` : `<div style="font-size:12.5px; color:var(--text-muted); margin-top:8px;">No account details added yet. Residents will see them here once added.</div>`}
+          <div style="font-size:13px; color:var(--text-faint); margin-top:8px;">Pay your dues to this account, then upload the payment proof on your bill.</div>
+        ` : `<div style="font-size:13px; color:var(--text-muted); margin-top:8px;">No account details added yet. Residents will see them here once added.</div>`}
       </div>
     `;
   }
@@ -3531,7 +3575,7 @@
             ${lastTwelveMonths().map(k => `<option value="${k}" ${billFilterMonth===k?'selected':''}>${monthLabel(k)}</option>`).join('')}
           </select>
         </div>
-        <div id="bill-filter-summary" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
+        <div id="bill-filter-summary" style="font-size:13px; color:var(--text-muted); margin-top:10px;"></div>
         <div style="display:flex; gap:8px; margin-top:10px;">
           <button class="btn sm secondary" style="flex:1;" onclick="exportBillsCSV()">⬇ Export CSV</button>
           <button class="btn sm secondary" style="flex:1;" id="defaulters-btn" onclick="openDefaultersModal()">⚠ Defaulters</button>
@@ -3654,7 +3698,7 @@
     body.innerHTML = `
       <div style="padding-right:44px; margin-bottom:12px;">
         <div style="font-family:var(--font-display); font-size:20px; font-weight:600;">Defaulters</div>
-        <div style="font-size:12.5px; color:var(--text-muted);">${list.length} house(s) owe <span style="color:var(--danger); font-weight:700;">${formatMoney(total)}</span> · ${overdueHouses} overdue</div>
+        <div style="font-size:13px; color:var(--text-muted);">${list.length} house(s) owe <span style="color:var(--danger); font-weight:700;">${formatMoney(total)}</span> · ${overdueHouses} overdue</div>
       </div>
       ${list.length ? `
         <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -3667,14 +3711,14 @@
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
               <div style="min-width:0;">
                 <div style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(d.name)}</div>
-                <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(houseLabel(d.house))}${d.phone ? ' · ' + escapeHtml(d.phone) : ''}</div>
+                <div style="font-size:13px; color:var(--text-muted);">${escapeHtml(houseLabel(d.house))}${d.phone ? ' · ' + escapeHtml(d.phone) : ''}</div>
               </div>
               <div style="text-align:right; flex-shrink:0;">
                 <div class="amount" style="color:var(--danger);">${formatMoney(d.total)}</div>
-                <div style="font-size:11px; color:${d.overdue ? 'var(--danger)' : 'var(--text-faint)'};">${d.bills.length} bill(s)${d.overdue ? ` · ${d.overdue} overdue` : ''}</div>
+                <div style="font-size:13px; color:${d.overdue ? 'var(--danger)' : 'var(--text-faint)'};">${d.bills.length} bill(s)${d.overdue ? ` · ${d.overdue} overdue` : ''}</div>
               </div>
             </div>
-            <div style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${escapeHtml(d.periods.join(', '))}${d.oldestDue ? ' · oldest due ' + escapeHtml(formatDate(d.oldestDue)) : ''}</div>
+            <div style="font-size:13px; color:var(--text-faint); margin-top:6px;">${escapeHtml(d.periods.join(', '))}${d.oldestDue ? ' · oldest due ' + escapeHtml(formatDate(d.oldestDue)) : ''}</div>
             <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
               ${isAdmin && d.uid ? `<button class="btn sm primary" onclick="remindDefaulter('${d.key}')">🔔 Remind</button>` : ''}
               ${d.phone ? `<button class="btn sm secondary" onclick="whatsappDefaulter('${d.key}')">WhatsApp</button>` : ''}
@@ -3858,9 +3902,9 @@
         </div>
       ` : `
         <div class="due-card">
-          <div style="font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700;">Total Outstanding</div>
+          <div style="font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700;">Total Outstanding</div>
           <div style="font-family:var(--font-mono); font-size:28px; font-weight:600; color:var(--accent-2); margin:6px 0 2px;">${formatMoney(outstanding)}</div>
-          <div style="font-size:12px; color:var(--text-muted);">${billsList.filter(b => billStatus(b) === 'unpaid' || billStatus(b) === 'overdue').length} unpaid bill(s) · ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
+          <div style="font-size:13px; color:var(--text-muted);">${billsList.filter(b => billStatus(b) === 'unpaid' || billStatus(b) === 'overdue').length} unpaid bill(s) · ${escapeHtml(currentUserProfile.house || 'N/A')}</div>
         </div>
         <button class="btn sm secondary block" style="margin-bottom:14px;" onclick="downloadResidentStatement()">📄 My Statement (PDF)</button>
       `;
@@ -3889,14 +3933,14 @@
               <span class="ticket-no">${escapeHtml(b.billNo || 'BILL')}</span>
               <span style="font-weight:700; font-size:15px; color:var(--accent-2); margin-left:6px;">${escapeHtml(b.category || 'Maintenance')}</span>
             </div>
-            <span class="badge ${status}">${escapeHtml(status)}</span>
+            <span class="badge ${status}">${escapeHtml(statusLabel(status))}</span>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:flex-end; margin:10px 0 6px;">
             <div class="amount">${formatMoney(b.amount)}</div>
-            <div style="font-size:11.5px; color:${status === 'overdue' ? 'var(--danger)' : 'var(--text-muted)'};">Due ${escapeHtml(formatDate(b.dueDate))}</div>
+            <div style="font-size:13px; color:${status === 'overdue' ? 'var(--danger)' : 'var(--text-muted)'};">Due ${escapeHtml(formatDate(b.dueDate))}</div>
           </div>
-          <div style="font-size:11.5px; color:var(--text-muted);">Period: ${escapeHtml(b.period || 'N/A')}${isAdmin ? ' | ' + escapeHtml(b.name || 'N/A') + ' — ' + escapeHtml(b.house || 'N/A') : ''}</div>
-          ${!isAdmin && status === 'unpaid' && b.proofRejectedReason ? `<div style="font-size:12px; color:var(--danger); margin-top:8px;">Proof rejected: ${escapeHtml(b.proofRejectedReason)} — please upload again.</div>` : ''}
+          <div style="font-size:13px; color:var(--text-muted);">Period: ${escapeHtml(b.period || 'N/A')}${isAdmin ? ' | ' + escapeHtml(b.name || 'N/A') + ' — ' + escapeHtml(b.house || 'N/A') : ''}</div>
+          ${!isAdmin && status === 'unpaid' && b.proofRejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-top:8px;">Proof rejected: ${escapeHtml(b.proofRejectedReason)} — please upload again.</div>` : ''}
           <div style="margin-top:12px; display:flex; gap:8px;">
             ${status === 'paid'
               ? `<button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">Receipt PDF</button>`
@@ -3967,8 +4011,8 @@
         ${record.proofType === 'image'
           ? `<img class="proof-thumb" src="${record.proofData}" alt="Payment proof" onclick="viewProofFile('${kind}', '${record.id}')" style="cursor:pointer;" />`
           : `<button class="btn sm secondary" style="margin-top:6px;" onclick="viewProofFile('${kind}', '${record.id}')">Open PDF Proof</button>`}
-        ${record.paymentRef ? `<div style="font-size:12.5px; color:var(--text-muted); margin-top:6px;">Transaction Ref: <span style="font-family:var(--font-mono);">${escapeHtml(record.paymentRef)}</span></div>` : ''}
-        ${record.proofUploadedAt ? `<div style="font-size:11.5px; color:var(--text-faint); margin-top:2px;">Uploaded: ${escapeHtml(formatDate(record.proofUploadedAt))}</div>` : ''}
+        ${record.paymentRef ? `<div style="font-size:13px; color:var(--text-muted); margin-top:6px;">Transaction Ref: <span style="font-family:var(--font-mono);">${escapeHtml(record.paymentRef)}</span></div>` : ''}
+        ${record.proofUploadedAt ? `<div style="font-size:13px; color:var(--text-faint); margin-top:2px;">Uploaded: ${escapeHtml(formatDate(record.proofUploadedAt))}</div>` : ''}
       </div>
     `;
   }
@@ -4019,7 +4063,7 @@
         <input type="text" id="proof-ref" placeholder="e.g. bank / wallet transaction ID" />
         <button type="submit" class="btn primary block" style="margin-top:16px;">Submit for Verification</button>
       </form>
-      <div style="text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px;">Management will verify your proof and mark the bill paid.</div>
+      <div style="text-align:center; font-size:13px; color:var(--text-faint); margin-top:10px;">Management will verify your proof and mark the bill paid.</div>
     `;
     openModal();
 
@@ -4313,7 +4357,7 @@
     document.getElementById('modal-body').innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding-right:44px; margin-bottom:12px;">
         <span class="ticket-no">${escapeHtml(b.billNo || 'BILL')}</span>
-        <span class="badge ${status}">${escapeHtml(status)}</span>
+        <span class="badge ${status}">${escapeHtml(statusLabel(status))}</span>
       </div>
       <div style="font-family:var(--font-display); font-size:18px; font-weight:600; color:var(--accent-2); margin-bottom:4px;">${escapeHtml(b.category || 'Maintenance')}</div>
       <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">${escapeHtml(b.name || '')} (${escapeHtml(b.house || 'N/A')}) · ${escapeHtml(b.period || 'N/A')}</div>
@@ -4327,8 +4371,8 @@
       ${b.notes ? `<div style="font-size:13.5px; line-height:1.5; margin-bottom:16px; white-space:pre-wrap;">${escapeHtml(b.notes)}</div>` : ''}
 
       ${proofSectionHtml('bill', b)}
-      ${!isAdmin && status === 'unpaid' && b.proofRejectedReason ? `<div style="font-size:12.5px; color:var(--danger); margin-bottom:14px;">Your previous proof was rejected: ${escapeHtml(b.proofRejectedReason)}. Please upload a new one.</div>` : ''}
-      ${!isAdmin && status === 'submitted' ? `<div style="font-size:12.5px; color:var(--info); margin-bottom:14px;">Your payment proof has been submitted and is awaiting verification by management.</div>` : ''}
+      ${!isAdmin && status === 'unpaid' && b.proofRejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-bottom:14px;">Your previous proof was rejected: ${escapeHtml(b.proofRejectedReason)}. Please upload a new one.</div>` : ''}
+      ${!isAdmin && status === 'submitted' ? `<div style="font-size:13px; color:var(--info); margin-bottom:14px;">Your payment proof has been submitted and is awaiting verification by management.</div>` : ''}
 
       <button class="btn secondary block" onclick="downloadBillPDF('${b.id}')" style="margin-bottom:10px;">${status === 'paid' ? 'Download Receipt' : 'Download Invoice'}</button>
       ${isStaff() && b.uid ? `<button class="btn secondary block" onclick="downloadResidentStatement('${b.uid}')" style="margin-bottom:10px;">Resident Statement (PDF)</button>` : ''}
@@ -4362,7 +4406,7 @@
       ` : (status === 'paid' || status === 'submitted' ? '' : `
         <button class="btn primary block" onclick="openUploadProofModal('${b.id}')" style="margin-bottom:10px;">Upload Payment Proof</button>
         <button class="btn secondary block" onclick="payBill('${b.id}')">Pay Now — ${formatMoney(b.amount)}</button>
-        <div style="text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px;">Online payment gateway to be connected. Pay to the society account and upload your proof.</div>
+        <div style="text-align:center; font-size:13px; color:var(--text-faint); margin-top:10px;">Online payment gateway to be connected. Pay to the society account and upload your proof.</div>
       `)}
     `;
     openModal();
@@ -4533,7 +4577,7 @@
         </div>
         <div class="stat-strip">
           <div class="stat-box"><div class="k">Spent From Funds</div><div class="v" style="color:var(--danger);">${formatMoney(acct.spent)}</div></div>
-          <div class="stat-box"><div class="k">Funds Balance</div><div class="v" style="color:${balanceColor(acct.balance)};">${formatMoney(acct.balance)}</div>${acct.transferredIn || acct.transferredOut ? `<div style="font-size:10.5px; color:var(--text-faint); margin-top:2px;">${formatMoney(acct.transferredIn)} in · ${formatMoney(acct.transferredOut)} out via transfers</div>` : ''}</div>
+          <div class="stat-box"><div class="k">Funds Balance</div><div class="v" style="color:${balanceColor(acct.balance)};">${formatMoney(acct.balance)}</div>${acct.transferredIn || acct.transferredOut ? `<div style="font-size:13px; color:var(--text-faint); margin-top:2px;">${formatMoney(acct.transferredIn)} in · ${formatMoney(acct.transferredOut)} out via transfers</div>` : ''}</div>
         </div>
       `;
     }
@@ -4557,21 +4601,21 @@
         <div class="card" onclick="openFundDetailModal('${f.id}')">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
             <span style="font-weight:700; font-size:15px; color:var(--accent-2);">${escapeHtml(f.title || 'Fund')}</span>
-            <span class="badge ${status}">${escapeHtml(status)}</span>
+            <span class="badge ${status}">${escapeHtml(statusLabel(status))}</span>
           </div>
-          <div style="font-size:12.5px; color:var(--text-muted); line-height:1.5; margin-bottom:8px;">${escapeHtml((f.purpose || '').slice(0, 120))}${(f.purpose || '').length > 120 ? '…' : ''}</div>
+          <div style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:8px;">${escapeHtml((f.purpose || '').slice(0, 120))}${(f.purpose || '').length > 120 ? '…' : ''}</div>
           ${target > 0 ? `
             <div class="progress"><div class="fill" style="width:${pct}%;"></div></div>
-            <div style="display:flex; justify-content:space-between; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; font-size:13px;">
               <span style="font-family:var(--font-mono); color:var(--success);">${formatMoney(collected)}</span>
               <span style="color:var(--text-faint);">${pct}% of ${formatMoney(target)}</span>
             </div>
-          ` : `<div style="font-size:12.5px;"><span style="color:var(--text-faint);">Collected:</span> <span style="font-family:var(--font-mono); color:var(--success);">${formatMoney(collected)}</span></div>`}
-          <div style="display:flex; gap:14px; font-size:12px; margin-top:6px;">
+          ` : `<div style="font-size:13px;"><span style="color:var(--text-faint);">Collected:</span> <span style="font-family:var(--font-mono); color:var(--success);">${formatMoney(collected)}</span></div>`}
+          <div style="display:flex; gap:14px; font-size:13px; margin-top:6px;">
             <span><span style="color:var(--text-faint);">Spent:</span> <span style="font-family:var(--font-mono); color:var(--danger);">${formatMoney(acct.spent)}</span></span>
             <span><span style="color:var(--text-faint);">Balance:</span> <span style="font-family:var(--font-mono); color:${balanceColor(acct.balance)}; font-weight:600;">${formatMoney(acct.balance)}</span></span>
           </div>
-          <div style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${contributors} contributor(s) · Started ${escapeHtml(formatDate(f.createdAt))}${f.deadline ? ' · Deadline ' + escapeHtml(formatDate(f.deadline)) : ''}${isAdmin && pendingCount ? ` · <span style="color:var(--info);">${pendingCount} awaiting verification</span>` : ''}${!isAdmin && myPending ? ' · <span style="color:var(--info);">Your contribution is under review</span>' : ''}</div>
+          <div style="font-size:13px; color:var(--text-faint); margin-top:6px;">${contributors} contributor(s) · Started ${escapeHtml(formatDate(f.createdAt))}${f.deadline ? ' · Deadline ' + escapeHtml(formatDate(f.deadline)) : ''}${isAdmin && pendingCount ? ` · <span style="color:var(--info);">${pendingCount} awaiting verification</span>` : ''}${!isAdmin && myPending ? ' · <span style="color:var(--info);">Your contribution is under review</span>' : ''}</div>
           ${isAdmin ? `<button class="btn sm danger" style="margin-top:10px;" onclick="event.stopPropagation(); archiveFund('${f.id}')">Remove</button>` : ''}
         </div>
       `;
@@ -4652,9 +4696,9 @@
     document.getElementById('modal-body').innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding-right:44px; margin-bottom:12px;">
         <span style="font-family:var(--font-display); font-size:19px; font-weight:600; color:var(--accent-2);">${escapeHtml(f.title || 'Fund')}</span>
-        <span class="badge ${status}">${escapeHtml(status)}</span>
+        <span class="badge ${status}">${escapeHtml(statusLabel(status))}</span>
       </div>
-      ${f.category ? `<div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">Category: <strong style="color:var(--accent-2);">${escapeHtml(f.category)}</strong></div>` : ''}
+      ${f.category ? `<div style="font-size:13px; color:var(--text-muted); margin-bottom:8px;">Category: <strong style="color:var(--accent-2);">${escapeHtml(f.category)}</strong></div>` : ''}
       <div style="font-size:13.5px; line-height:1.6; margin-bottom:14px; white-space:pre-wrap;">${escapeHtml(f.purpose || '')}</div>
 
       <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px;">
@@ -4666,7 +4710,7 @@
         ${target > 0 ? `
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="font-size:13px; color:var(--text-muted);">Target</span><span style="font-size:13.5px; font-family:var(--font-mono);">${formatMoney(target)}</span></div>
           <div class="progress"><div class="fill" style="width:${pct}%;"></div></div>
-          <div style="text-align:right; font-size:11.5px; color:var(--text-faint);">${pct}% reached</div>
+          <div style="text-align:right; font-size:13px; color:var(--text-faint);">${pct}% reached</div>
         ` : ''}
         <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="font-size:13px; color:var(--text-muted);">Started</span><span style="font-size:13.5px;">${escapeHtml(formatDate(f.createdAt))} by ${escapeHtml(f.createdBy || 'Management')}</span></div>
         ${f.deadline ? `<div style="display:flex; justify-content:space-between;"><span style="font-size:13px; color:var(--text-muted);">Deadline</span><span style="font-size:13.5px;">${escapeHtml(formatDate(f.deadline))}</span></div>` : ''}
@@ -4701,11 +4745,11 @@
           <div style="background:var(--bg-elevated-2); border:1px solid var(--border-soft); border-radius:10px; padding:12px; margin-bottom:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
               <span style="font-size:13px; font-weight:700;">${isAdmin ? escapeHtml(c.name || 'Resident') + ' — ' + escapeHtml(c.house || 'N/A') : formatMoney(c.amount)}</span>
-              <span class="badge ${c.status || 'submitted'}">${escapeHtml(c.status === 'submitted' ? 'in review' : (c.status || 'in review'))}</span>
+              <span class="badge ${c.status || 'submitted'}">${escapeHtml(statusLabel(c.status || 'submitted'))}</span>
             </div>
             ${isAdmin ? `<div style="font-size:13px; font-family:var(--font-mono); margin-bottom:4px;">${formatMoney(c.amount)}</div>` : ''}
-            <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(formatDate(c.createdAt))}${c.paymentRef ? ' · Ref: ' + escapeHtml(c.paymentRef) : ''}</div>
-            ${c.status === 'rejected' && c.rejectedReason ? `<div style="font-size:12px; color:var(--danger); margin-top:4px;">Rejected: ${escapeHtml(c.rejectedReason)}</div>` : ''}
+            <div style="font-size:13px; color:var(--text-faint);">${escapeHtml(formatDate(c.createdAt))}${c.paymentRef ? ' · Ref: ' + escapeHtml(c.paymentRef) : ''}</div>
+            ${c.status === 'rejected' && c.rejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-top:4px;">Rejected: ${escapeHtml(c.rejectedReason)}</div>` : ''}
             ${c.proofData ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="viewProofFile('contrib', '${c.id}')">View Proof</button>` : ''}
             ${isAdmin && c.status === 'submitted' ? `
               <div style="display:flex; gap:8px; margin-top:8px;">
@@ -4714,7 +4758,7 @@
               </div>
             ` : ''}
           </div>
-        `).join('') : `<div style="font-size:12.5px; color:var(--text-muted);">No contributions ${isAdmin ? 'received' : 'made'} yet.</div>`}
+        `).join('') : `<div style="font-size:13px; color:var(--text-muted);">No contributions ${isAdmin ? 'received' : 'made'} yet.</div>`}
       </div>
 
       <div class="section-title" style="font-size:15px; margin:16px 0 8px;">Spending From This Fund</div>
@@ -4725,10 +4769,10 @@
               <span style="font-size:13px; font-weight:700;">${escapeHtml(x.category || 'Other')}</span>
               <span style="font-family:var(--font-mono); font-size:13px; color:var(--danger);">${formatMoney(x.amount)}</span>
             </div>
-            <div style="font-size:12.5px; white-space:pre-wrap; margin-bottom:4px;">${escapeHtml(x.description || '')}</div>
-            <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(x.expenseDate || '')} · Entered by ${escapeHtml(x.enteredBy || 'Management')}</div>
+            <div style="font-size:13px; white-space:pre-wrap; margin-bottom:4px;">${escapeHtml(x.description || '')}</div>
+            <div style="font-size:13px; color:var(--text-faint);">${escapeHtml(x.expenseDate || '')} · Entered by ${escapeHtml(x.enteredBy || 'Management')}</div>
           </div>
-        `).join('') : `<div style="font-size:12.5px; color:var(--text-muted);">Nothing has been spent from this fund yet.</div>`}
+        `).join('') : `<div style="font-size:13px; color:var(--text-muted);">Nothing has been spent from this fund yet.</div>`}
       </div>
 
       <div class="section-title" style="font-size:15px; margin:16px 0 8px;">Transfers</div>
@@ -4929,7 +4973,7 @@
       return el;
     }).join('');
     const legend = segments.map((seg, i) => `
-      <div style="display:flex; align-items:center; gap:7px; font-size:12px; margin-bottom:5px;">
+      <div style="display:flex; align-items:center; gap:7px; font-size:13px; margin-bottom:5px;">
         <span style="width:10px; height:10px; border-radius:3px; background:${CHART_COLORS[i % CHART_COLORS.length]}; flex-shrink:0;"></span>
         <span style="color:var(--text-muted); flex:1;">${escapeHtml(seg.label)}</span>
         <span style="font-weight:600;">${seg.money === false ? seg.value : formatMoney(seg.value)}</span>
@@ -5034,7 +5078,7 @@
 
     const stat = (label, value, color) => `
       <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px;">
-        <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">${label}</div>
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">${label}</div>
         <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:${color || 'var(--text)'};">${value}</div>
       </div>`;
 
@@ -5143,7 +5187,7 @@
 
     const stat = (label, value, color) => `
       <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px;">
-        <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">${label}</div>
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">${label}</div>
         <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:${color || 'var(--text)'};">${value}</div>
       </div>`;
 
@@ -5174,12 +5218,12 @@
 
       <div class="card" style="cursor:default; margin-bottom:14px;">
         <div style="font-weight:700; font-size:14px; margin-bottom:4px;">Recent Spending</div>
-        <div style="font-size:11.5px; color:var(--text-faint); margin-bottom:10px;">Every expense recorded by management, newest first.</div>
+        <div style="font-size:13px; color:var(--text-faint); margin-bottom:10px;">Every expense recorded by management, newest first.</div>
         ${recentExpenses.length ? recentExpenses.map(x => `
-          <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-size:12.5px;">
+          <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-size:13px;">
             <div style="min-width:0;">
               <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(x.description || x.category || 'Expense')}</div>
-              <div style="font-size:11px; color:var(--text-faint); margin-top:2px;">${escapeHtml(x.category || 'Other')} · ${escapeHtml(expenseSourceLabel(x))}${x.expenseDate ? ' · ' + escapeHtml(formatDate(x.expenseDate)) : ''}</div>
+              <div style="font-size:13px; color:var(--text-faint); margin-top:2px;">${escapeHtml(x.category || 'Other')} · ${escapeHtml(expenseSourceLabel(x))}${x.expenseDate ? ' · ' + escapeHtml(formatDate(x.expenseDate)) : ''}</div>
             </div>
             <div style="font-family:var(--font-mono); font-weight:600; color:var(--danger); white-space:nowrap;">−${formatMoney(x.amount)}</div>
           </div>`).join('') : '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:12px 0;">No expenses recorded yet.</div>'}
@@ -5224,12 +5268,12 @@
           <div style="font-weight:700; font-size:14px;">Monthly Financial Summaries</div>
           ${isAdmin ? `<button class="btn sm secondary" onclick="openGenerateSummaryModal()">Generate</button>` : ''}
         </div>
-        <div style="font-size:11.5px; color:var(--text-faint); margin-bottom:8px;">Posted automatically on the 1st of every month: what came in, what was spent and the closing balances.</div>
+        <div style="font-size:13px; color:var(--text-faint); margin-bottom:8px;">Posted automatically on the 1st of every month: what came in, what was spent and the closing balances.</div>
         ${rows.length ? rows.map(s => `
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--border);">
             <div style="min-width:0; flex:1;">
               <div style="font-weight:600; font-size:13.5px;">${escapeHtml(s.period || monthLabel(s.month))}</div>
-              <div style="font-size:11.5px; color:var(--text-faint); margin-top:2px;">
+              <div style="font-size:13px; color:var(--text-faint); margin-top:2px;">
                 In <span style="color:var(--success);">${formatMoney(s.totals && s.totals.in)}</span> · Out <span style="color:var(--danger);">${formatMoney(s.totals && s.totals.out)}</span> · Net <span style="color:${netColor(s.totals ? s.totals.net : 0)};">${s.totals && s.totals.net < 0 ? '−' : '+'}${formatMoney(Math.abs(s.totals ? s.totals.net : 0))}</span>
               </div>
             </div>
@@ -5251,17 +5295,17 @@
     const segs = arr => (arr || []).map(r => ({ label: r.label, value: r.value }));
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:2px;">${escapeHtml(s.period || monthLabel(s.month))}</div>
-      <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Monthly Financial Summary · balances as of ${escapeHtml(s.asOf || formatDate(s.generatedAt))}</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">Monthly Financial Summary · balances as of ${escapeHtml(s.asOf || formatDate(s.generatedAt))}</div>
       <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
-        <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px;"><div style="font-size:10.5px; color:var(--text-muted);">Collected</div><div style="font-weight:700; color:var(--success); font-size:13px; white-space:nowrap;">${money(s.totals && s.totals.in)}</div></div>
-        <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px;"><div style="font-size:10.5px; color:var(--text-muted);">Spent</div><div style="font-weight:700; color:var(--danger); font-size:13px; white-space:nowrap;">${money(s.totals && s.totals.out)}</div></div>
-        <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px;"><div style="font-size:10.5px; color:var(--text-muted);">Net</div><div style="font-weight:700; font-size:13px; white-space:nowrap; color:${(s.totals && s.totals.net < 0) ? 'var(--danger)' : 'var(--success)'};">${s.totals && s.totals.net < 0 ? '−' : '+'}${money(Math.abs(s.totals ? s.totals.net : 0))}</div></div>
+        <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px;"><div style="font-size:13px; color:var(--text-muted);">Collected</div><div style="font-weight:700; color:var(--success); font-size:13px; white-space:nowrap;">${money(s.totals && s.totals.in)}</div></div>
+        <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px;"><div style="font-size:13px; color:var(--text-muted);">Spent</div><div style="font-weight:700; color:var(--danger); font-size:13px; white-space:nowrap;">${money(s.totals && s.totals.out)}</div></div>
+        <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px;"><div style="font-size:13px; color:var(--text-muted);">Net</div><div style="font-weight:700; font-size:13px; white-space:nowrap; color:${(s.totals && s.totals.net < 0) ? 'var(--danger)' : 'var(--success)'};">${s.totals && s.totals.net < 0 ? '−' : '+'}${money(Math.abs(s.totals ? s.totals.net : 0))}</div></div>
       </div>
       ${section('Collected', row('Maintenance bills paid', `${money(b.collectedAmount)} <span style="color:var(--text-faint); font-family:inherit;">(${b.collectedCount || 0})</span>`) + row('Fund contributions verified', `${money(c.amount)} <span style="color:var(--text-faint); font-family:inherit;">(${c.count || 0})</span>`) + (segs(c.byFund).map(f => row('&nbsp;&nbsp;' + escapeHtml(f.label), money(f.value))).join('')))}
-      ${section('Spent', (segs(x.byCategory).length ? svgDonut(segs(x.byCategory), 'Spent', 'PKR ' + Math.round((x.amount || 0) / 1000) + 'k') : '') + (segs(x.bySource).length > 1 ? segs(x.bySource).map(r => row('Paid from ' + escapeHtml(r.label), money(r.value))).join('') : '') + (x.items && x.items.length ? `<details style="margin-top:6px;"><summary style="font-size:12.5px; color:var(--accent-2); cursor:pointer;">All ${x.items.length} expense(s)</summary>${x.items.map(i => `<div style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border); font-size:12px;"><div style="min-width:0;"><div style="font-weight:600; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(i.description || i.category)}</div><div style="font-size:11px; color:var(--text-faint);">${escapeHtml(i.category)} · ${escapeHtml(i.source)} · ${escapeHtml(formatDate(i.date))}</div></div><div style="font-family:var(--font-mono); color:var(--danger); white-space:nowrap;">−${money(i.amount)}</div></div>`).join('')}</details>` : '<div style="font-size:12.5px; color:var(--text-muted);">No expenses recorded this month.</div>'))}
+      ${section('Spent', (segs(x.byCategory).length ? svgDonut(segs(x.byCategory), 'Spent', 'PKR ' + Math.round((x.amount || 0) / 1000) + 'k') : '') + (segs(x.bySource).length > 1 ? segs(x.bySource).map(r => row('Paid from ' + escapeHtml(r.label), money(r.value))).join('') : '') + (x.items && x.items.length ? `<details style="margin-top:6px;"><summary style="font-size:13px; color:var(--accent-2); cursor:pointer;">All ${x.items.length} expense(s)</summary>${x.items.map(i => `<div style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border); font-size:13px;"><div style="min-width:0;"><div style="font-weight:600; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(i.description || i.category)}</div><div style="font-size:13px; color:var(--text-faint);">${escapeHtml(i.category)} · ${escapeHtml(i.source)} · ${escapeHtml(formatDate(i.date))}</div></div><div style="font-family:var(--font-mono); color:var(--danger); white-space:nowrap;">−${money(i.amount)}</div></div>`).join('')}</details>` : '<div style="font-size:13px; color:var(--text-muted);">No expenses recorded this month.</div>'))}
       ${(s.transfers && s.transfers.length) ? section('Transfers', s.transfers.map(t => row(`${escapeHtml(t.from)} → ${escapeHtml(t.to)}${t.note ? ' <span style="color:var(--text-faint);">(' + escapeHtml(t.note) + ')</span>' : ''}`, money(t.amount))).join('')) : ''}
       ${section('Closing Balances', row('Bills account', money(bal.bills && bal.bills.balance), balanceColor(bal.bills ? bal.bills.balance : 0), true) + row('Community funds', money(bal.funds && bal.funds.balance), balanceColor(bal.funds ? bal.funds.balance : 0), true) + (bal.perFund || []).map(f => row('&nbsp;&nbsp;' + escapeHtml(f.title), money(f.balance))).join(''))}
-      ${section('Outstanding', b.outstandingCount ? row(`${b.outstandingCount} unpaid bill(s) · ${b.owingHouses || 0} house(s)`, money(b.outstandingAmount), 'var(--warning)', true) : '<div style="font-size:12.5px; color:var(--success);">Every issued bill has been paid.</div>')}
+      ${section('Outstanding', b.outstandingCount ? row(`${b.outstandingCount} unpaid bill(s) · ${b.owingHouses || 0} house(s)`, money(b.outstandingAmount), 'var(--warning)', true) : '<div style="font-size:13px; color:var(--success);">Every issued bill has been paid.</div>')}
       <div style="display:flex; gap:8px; margin-top:16px;">
         <button class="btn sm secondary block" onclick="downloadMonthlySummaryPDF('${escapeHtml(s.month)}')">📄 Download PDF</button>
         ${currentUserProfile.role === 'admin' ? `<button class="btn sm secondary block" onclick="requestMonthlySummary('${escapeHtml(s.month)}', true)">↻ Regenerate</button>` : ''}
@@ -5487,7 +5531,7 @@
   }
 
   function renderTransferRows(transfers, viewType, viewFundId) {
-    if (!transfers.length) return '<div style="font-size:12.5px; color:var(--text-muted);">No transfers yet.</div>';
+    if (!transfers.length) return '<div style="font-size:13px; color:var(--text-muted);">No transfers yet.</div>';
     return transfers.map(t => {
       const outgoing = isAccount(transferEnd(t, 'from'), viewType, viewFundId);
       return `
@@ -5496,8 +5540,8 @@
             <span style="font-size:13px; font-weight:700;">${outgoing ? 'To' : 'From'} ${escapeHtml(transferEndLabel(t, outgoing ? 'to' : 'from'))}</span>
             <span style="font-family:var(--font-mono); font-size:13px; color:${outgoing ? 'var(--danger)' : 'var(--success)'};">${outgoing ? '−' : '+'}${formatMoney(t.amount)}</span>
           </div>
-          <div style="font-size:12.5px; white-space:pre-wrap; margin-bottom:4px;">${escapeHtml(t.note || '')}</div>
-          <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(t.transferDate || '')} · By ${escapeHtml(t.enteredBy || 'Management')}</div>
+          <div style="font-size:13px; white-space:pre-wrap; margin-bottom:4px;">${escapeHtml(t.note || '')}</div>
+          <div style="font-size:13px; color:var(--text-faint);">${escapeHtml(t.transferDate || '')} · By ${escapeHtml(t.enteredBy || 'Management')}</div>
         </div>`;
     }).join('');
   }
@@ -5562,7 +5606,7 @@
           </select>
           <button class="btn sm secondary" style="white-space:nowrap;" onclick="exportExpensesCSV()">⬇ Export CSV</button>
         </div>
-        <div id="expense-filter-summary" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
+        <div id="expense-filter-summary" style="font-size:13px; color:var(--text-muted); margin-top:10px;"></div>
       </div>
     `;
   }
@@ -5609,8 +5653,8 @@
     if (sumEl) {
       sumEl.innerHTML = `
         <div class="stat-strip">
-          <div class="stat-box"><div class="k">Bills Account Balance</div><div class="v" style="color:${balanceColor(billsAcct.balance)};">${formatMoney(billsAcct.balance)}</div><div style="font-size:10.5px; color:var(--text-faint); margin-top:2px;">${balanceBreakdown(billsAcct)}</div></div>
-          <div class="stat-box"><div class="k">Funds Balance</div><div class="v" style="color:${balanceColor(fundsAcct.balance)};">${formatMoney(fundsAcct.balance)}</div><div style="font-size:10.5px; color:var(--text-faint); margin-top:2px;">${balanceBreakdown(fundsAcct)}</div></div>
+          <div class="stat-box"><div class="k">Bills Account Balance</div><div class="v" style="color:${balanceColor(billsAcct.balance)};">${formatMoney(billsAcct.balance)}</div><div style="font-size:13px; color:var(--text-faint); margin-top:2px;">${balanceBreakdown(billsAcct)}</div></div>
+          <div class="stat-box"><div class="k">Funds Balance</div><div class="v" style="color:${balanceColor(fundsAcct.balance)};">${formatMoney(fundsAcct.balance)}</div><div style="font-size:13px; color:var(--text-faint); margin-top:2px;">${balanceBreakdown(fundsAcct)}</div></div>
         </div>
         <div class="stat-strip">
           <div class="stat-box"><div class="k">Total Spent</div><div class="v" style="color:var(--danger);">${formatMoney(total)}</div></div>
@@ -5636,8 +5680,8 @@
           <span class="amount" style="color:var(--danger);">${formatMoney(x.amount)}</span>
         </div>
         <div style="font-size:13px; margin-bottom:4px; white-space:pre-wrap;">${escapeHtml(x.description || '')}</div>
-        <div style="font-size:12px; margin-bottom:4px;"><span style="color:var(--text-faint);">Paid from:</span> <span style="color:${expenseSource(x) === 'fund' ? 'var(--info)' : 'var(--accent-2)'}; font-weight:600;">${escapeHtml(expenseSourceLabel(x))}</span></div>
-        <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(x.expenseDate || '')} · Entered by ${escapeHtml(x.enteredBy || 'Management')}${x.decisionRef ? ' · Board ref: ' + escapeHtml(x.decisionRef) : ''}</div>
+        <div style="font-size:13px; margin-bottom:4px;"><span style="color:var(--text-faint);">Paid from:</span> <span style="color:${expenseSource(x) === 'fund' ? 'var(--info)' : 'var(--accent-2)'}; font-weight:600;">${escapeHtml(expenseSourceLabel(x))}</span></div>
+        <div style="font-size:13px; color:var(--text-faint);">${escapeHtml(x.expenseDate || '')} · Entered by ${escapeHtml(x.enteredBy || 'Management')}${x.decisionRef ? ' · Board ref: ' + escapeHtml(x.decisionRef) : ''}</div>
         <div style="margin-top:12px; display:flex; gap:8px;">
           <button class="btn sm secondary" onclick="event.stopPropagation(); downloadExpensePDF('${x.id}')">Receipt PDF</button>
           ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" onclick="event.stopPropagation(); archiveExpense('${x.id}')">Remove</button>` : ''}
@@ -5674,7 +5718,7 @@
         ${x.decisionRef ? row('Board Reference', escapeHtml(x.decisionRef)) : ''}
       </div>
 
-      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700; margin-bottom:6px;">Details</div>
+      <div style="font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700; margin-bottom:6px;">Details</div>
       <div style="font-size:13.5px; line-height:1.55; margin-bottom:16px; white-space:pre-wrap;">${escapeHtml(x.description || 'No details recorded.')}</div>
 
       <button class="btn secondary block" onclick="downloadExpensePDF('${x.id}')" style="margin-bottom:10px;">Download Receipt PDF</button>
@@ -5772,7 +5816,7 @@
       <form id="expense-form">
         <label>Pay From</label>
         ${pickerHtml('exp-source', sourceOptions, { searchPlaceholder: 'Search funds…' })}
-        <div style="font-size:11.5px; color:var(--text-faint); margin:-6px 0 10px;">
+        <div style="font-size:13px; color:var(--text-faint); margin:-6px 0 10px;">
           Bills account = ${formatMoney(billsAcct.collected)} from ${expenseSources.bills.filter(b => b.status === 'paid').length} paid bill(s) minus ${formatMoney(billsAcct.spent)} spent${billsAcct.transferredIn || billsAcct.transferredOut ? `, ${billsAcct.transferredIn >= billsAcct.transferredOut ? 'plus' : 'minus'} ${formatMoney(Math.abs(billsAcct.transferredIn - billsAcct.transferredOut))} net transfers` : ''}.
           ${fundRows.length ? `${fundRows.length} fund(s) listed — each shows verified contributions minus spending from that fund.` : 'No community funds found — start one in the Funds tab to spend from it.'}
         </div>
@@ -5911,13 +5955,13 @@
           : `<select id="tr-fund" required>${fundOptions}</select>`}
         <label>Amount (PKR)</label>
         <input type="number" id="tr-amount" placeholder="e.g. 5000" required min="1" />
-        <div id="tr-available" style="font-size:11.5px; color:var(--text-faint); margin:-6px 0 10px;"></div>
+        <div id="tr-available" style="font-size:13px; color:var(--text-faint); margin:-6px 0 10px;"></div>
         <label>Reason / Note (required)</label>
         <textarea id="tr-note" placeholder="Why is this money being moved, who approved it, any reference..." required minlength="10"></textarea>
         <label>Transfer Date</label>
         <input type="date" id="tr-date" value="${new Date().toISOString().slice(0,10)}" required />
         <button type="submit" class="btn primary block" style="margin-top:16px;">Confirm Transfer</button>
-        <div style="font-size:11.5px; color:var(--text-faint); margin-top:8px; text-align:center;">Transfers are permanent ledger entries. To undo one, transfer the amount back.</div>
+        <div style="font-size:13px; color:var(--text-faint); margin-top:8px; text-align:center;">Transfers are permanent ledger entries. To undo one, transfer the amount back.</div>
       </form>
     `;
 
@@ -6003,19 +6047,19 @@
       <div class="card" style="cursor:default;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px;">
           <div style="font-weight:700; font-size:15.5px; color:var(--accent-2);">${escapeHtml(p.title)}</div>
-          <span class="badge ${active ? 'resolved' : 'closed'}">${active ? 'active' : 'closed'}</span>
+          <span class="badge ${active ? 'resolved' : 'closed'}">${active ? 'Active' : 'Closed'}</span>
         </div>
         <div style="font-size:13px; line-height:1.5; white-space:pre-wrap; margin-bottom:8px;">${escapeHtml(p.description || '')}</div>
-        ${p.schedule ? `<div style="font-size:12.5px; color:var(--text-muted); margin-bottom:6px;">📅 ${escapeHtml(p.schedule)}</div>` : ''}
-        <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:8px;">🤝 ${parts.length} volunteer${parts.length === 1 ? '' : 's'} joined</div>
+        ${p.schedule ? `<div style="font-size:13px; color:var(--text-muted); margin-bottom:6px;">📅 ${escapeHtml(p.schedule)}</div>` : ''}
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:8px;">🤝 ${parts.length} volunteer${parts.length === 1 ? '' : 's'} joined</div>
         ${isStaff() && parts.length ? `
           <div style="background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:10px;">
-            ${parts.map(x => `<div style="font-size:12.5px; margin-bottom:3px;"><strong>${escapeHtml(x.name)}</strong> <span style="color:var(--text-muted);">— ${escapeHtml(x.house || 'N/A')}${x.phone ? ' · ' + escapeHtml(x.phone) : ''}</span></div>`).join('')}
+            ${parts.map(x => `<div style="font-size:13px; margin-bottom:3px;"><strong>${escapeHtml(x.name)}</strong> <span style="color:var(--text-muted);">— ${escapeHtml(x.house || 'N/A')}${x.phone ? ' · ' + escapeHtml(x.phone) : ''}</span></div>`).join('')}
           </div>` : ''}
         ${!isStaff() && active ? (joined
-          ? `<button class="btn sm danger" onclick="leaveProgram('${p.id}')">Leave Program</button> <span style="font-size:12px; color:var(--success); margin-left:8px;">✔ You have joined</span>`
+          ? `<button class="btn sm danger" onclick="leaveProgram('${p.id}')">Leave Program</button> <span style="font-size:13px; color:var(--success); margin-left:8px;">✔ You have joined</span>`
           : `<button class="btn sm primary" onclick="joinProgram('${p.id}')">Join as Volunteer</button>`) : ''}
-        ${!isStaff() && !active && joined ? '<span style="font-size:12px; color:var(--text-muted);">You volunteered in this program.</span>' : ''}
+        ${!isStaff() && !active && joined ? '<span style="font-size:13px; color:var(--text-muted);">You volunteered in this program.</span>' : ''}
         ${isAdmin ? `<div style="margin-top:10px; display:flex; gap:8px;">
           ${active ? `<button class="btn sm" onclick="closeProgram('${p.id}')">Close Program</button>` : ''}
           <button class="btn sm danger" onclick="archiveProgram('${p.id}')">Remove</button>
@@ -6213,7 +6257,7 @@
             <span style="font-size:13px; font-weight:700;">${staff ? escapeHtml(r.name) + ' — ' + escapeHtml(r.house || 'N/A') : escapeHtml(r.type)}</span>
             <span class="amount" style="color:var(--success);">${formatMoney(r.amount)}</span>
           </div>
-          <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(r.date)}${staff ? ' · ' + escapeHtml(r.type) : ''}${r.method ? ' · ' + escapeHtml(r.method) : ''}</div>
+          <div style="font-size:13px; color:var(--text-faint);">${escapeHtml(r.date)}${staff ? ' · ' + escapeHtml(r.type) : ''}${r.method ? ' · ' + escapeHtml(r.method) : ''}</div>
         </div>
       `).join('') : '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No payments found.</div>'}
 
@@ -6348,22 +6392,22 @@
             <span style="font-weight:700; font-size:14.5px; color:var(--accent-2);">${escapeHtml(d.title || '')}</span>
             <span class="badge ${badgeClass}">${escapeHtml(status)}</span>
           </div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">Type: ${escapeHtml(d.type || 'opinion')} · Queued by ${escapeHtml(d.uploadedBy || '')} · ${escapeHtml(formatDate(d.createdAt))}</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:6px;">Type: ${escapeHtml(d.type || 'opinion')} · Queued by ${escapeHtml(d.uploadedBy || '')} · ${escapeHtml(formatDate(d.createdAt))}</div>
           <div style="font-size:13px; margin-bottom:8px; white-space:pre-wrap;">${escapeHtml(d.description || '')}</div>
-          <div style="font-size:12.5px; margin-bottom:6px;">
+          <div style="font-size:13px; margin-bottom:6px;">
             <span style="color:var(--success);">Endorse: ${endorse}</span> · <span style="color:var(--danger);">Oppose: ${oppose}</span> · Needs ${d.requiredVotes || 3} to finalize
           </div>
-          ${votes.length ? `<div style="font-size:11.5px; color:var(--text-faint); margin-bottom:6px;">${votes.map(v => `${escapeHtml(v.name)}: ${v.choice === 'endorse' ? '✔ endorsed' : '✘ opposed'}${v.reason ? ' — ' + escapeHtml(v.reason) : ''}`).join('<br/>')}</div>` : ''}
+          ${votes.length ? `<div style="font-size:13px; color:var(--text-faint); margin-bottom:6px;">${votes.map(v => `${escapeHtml(v.name)}: ${v.choice === 'endorse' ? '✔ endorsed' : '✘ opposed'}${v.reason ? ' — ' + escapeHtml(v.reason) : ''}`).join('<br/>')}</div>` : ''}
           ${status === 'pending' && isBoard() && !myVote ? `
-            ${reasonRequired ? `<label style="font-size:12px;">Reason (required)</label><input type="text" id="vote-reason-${d.id}" placeholder="State your reason..." />` : ''}
+            ${reasonRequired ? `<label style="font-size:13px;">Reason (required)</label><input type="text" id="vote-reason-${d.id}" placeholder="State your reason..." />` : ''}
             <div style="display:flex; gap:8px; margin-top:8px;">
               <button class="btn sm primary block" onclick="castVote('${d.id}', 'endorse')">Endorse</button>
               <button class="btn sm danger block" onclick="castVote('${d.id}', 'reject')">Oppose</button>
             </div>
           ` : ''}
-          ${status === 'pending' && isBoard() && myVote ? `<div style="font-size:12px; color:var(--info);">You voted: ${myVote.choice === 'endorse' ? 'Endorse' : 'Oppose'}. Waiting for quorum.</div>` : ''}
-          ${status === 'pending' && !isBoard() ? `<div style="font-size:12px; color:var(--text-faint);">Only Board members can vote on this item.</div>` : ''}
-          ${d.finalizedAt ? `<div style="font-size:11.5px; color:var(--text-faint); margin-top:4px;">Finalized ${escapeHtml(formatDate(d.finalizedAt))}</div>` : ''}
+          ${status === 'pending' && isBoard() && myVote ? `<div style="font-size:13px; color:var(--info);">You voted: ${myVote.choice === 'endorse' ? 'Endorse' : 'Oppose'}. Waiting for quorum.</div>` : ''}
+          ${status === 'pending' && !isBoard() ? `<div style="font-size:13px; color:var(--text-faint);">Only Board members can vote on this item.</div>` : ''}
+          ${d.finalizedAt ? `<div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Finalized ${escapeHtml(formatDate(d.finalizedAt))}</div>` : ''}
           ${currentUserProfile.role === 'admin' ? `<button class="btn sm danger" style="margin-top:8px;" onclick="archiveDecision('${d.id}')">Remove</button>` : ''}
         </div>
       `;
@@ -6558,7 +6602,7 @@
       archEl.innerHTML = archivedRecords.length ? archivedRecords.map(a => `
         <div class="card" style="cursor:default;">
           <div style="font-size:13.5px; font-weight:700; margin-bottom:4px;">${escapeHtml(a.label)}</div>
-          <div style="font-size:11.5px; color:var(--text-faint);">Archived ${escapeHtml(formatDate(a.record.deletedAt))} by ${escapeHtml(a.record.deletedBy || 'Management')}</div>
+          <div style="font-size:13px; color:var(--text-faint);">Archived ${escapeHtml(formatDate(a.record.deletedAt))} by ${escapeHtml(a.record.deletedBy || 'Management')}</div>
           ${currentUserProfile.role === 'admin' ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="restoreRecord('${a.type}', '${a.record.id}')">Restore</button>` : ''}
         </div>
       `).join('') : '<div class="card" style="text-align:center; color:var(--text-muted); cursor:default;">No archived records.</div>';
@@ -6567,11 +6611,11 @@
       audEl.innerHTML = auditList.length ? `
         <div class="card" style="cursor:default;">
           ${pageOf('audit', auditList, renderArchiveAndAudit).map(a => `
-            <div style="font-size:12px; padding:6px 0; border-bottom:1px solid var(--border-soft);">
+            <div style="font-size:13px; padding:6px 0; border-bottom:1px solid var(--border-soft);">
               <span style="color:var(--accent-2); font-weight:700;">${escapeHtml(a.action)}</span>
               <span style="color:var(--text-muted);">${escapeHtml(a.entityType)}</span>
               — ${escapeHtml(a.details || '')}
-              <div style="font-size:10.5px; color:var(--text-faint);">${escapeHtml(formatDate(a.timestamp))} · ${escapeHtml(a.performedBy || '')} (${escapeHtml(a.role || '')})</div>
+              <div style="font-size:13px; color:var(--text-faint);">${escapeHtml(formatDate(a.timestamp))} · ${escapeHtml(a.performedBy || '')} (${escapeHtml(a.role || '')})</div>
             </div>
           `).join('')}
           ${showMoreButton('audit', auditList.length)}
@@ -6643,17 +6687,17 @@
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;">
           <div style="min-width:0;">
             <div style="font-weight:700; font-size:15px; color:var(--accent-2);">${escapeHtml(r.name)}</div>
-            <div style="font-size:12.5px; color:var(--text-muted);">House: ${escapeHtml(r.house || 'N/A')}</div>
+            <div style="font-size:13px; color:var(--text-muted);">House: ${escapeHtml(r.house || 'N/A')}</div>
           </div>
           <div style="display:flex; gap:6px; flex-shrink:0;">
             <button class="btn sm secondary" onclick="downloadResidentStatement('${r.uid}')">Statement</button>
             <button class="btn sm secondary" onclick="downloadResidentPDF('${r.uid}')">PDF Card</button>
           </div>
         </div>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">CNIC: ${escapeHtml(r.cnic || 'N/A')} | Phone: ${escapeHtml(r.phone || 'N/A')}</div>
-        <div style="font-size:12px; color:var(--text-muted);">Blood Group: ${escapeHtml(r.bloodGroup || 'N/A')} (${escapeHtml(r.occupancyType || 'N/A')})</div>
-        ${r.suspended ? '<div style="font-size:12px; color:var(--danger); margin-top:4px;">Suspended' + (r.statusReason ? ': ' + escapeHtml(r.statusReason) : '') + '</div>' : ''}
-        ${r.billExempt ? '<div style="font-size:12px; color:var(--accent-2); margin-top:4px;">Exempt from recurring bill' + (r.billExemptReason ? ': ' + escapeHtml(r.billExemptReason) : '') + '</div>' : ''}
+        <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">CNIC: ${escapeHtml(r.cnic || 'N/A')} | Phone: ${escapeHtml(r.phone || 'N/A')}</div>
+        <div style="font-size:13px; color:var(--text-muted);">Blood Group: ${escapeHtml(r.bloodGroup || 'N/A')} (${escapeHtml(r.occupancyType || 'N/A')})</div>
+        ${r.suspended ? '<div style="font-size:13px; color:var(--danger); margin-top:4px;">Suspended' + (r.statusReason ? ': ' + escapeHtml(r.statusReason) : '') + '</div>' : ''}
+        ${r.billExempt ? '<div style="font-size:13px; color:var(--accent-2); margin-top:4px;">Exempt from recurring bill' + (r.billExemptReason ? ': ' + escapeHtml(r.billExemptReason) : '') + '</div>' : ''}
         ${canSuspend() && r.role === 'resident' ? `
           <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
             ${r.suspended
@@ -6739,10 +6783,10 @@
     listEl.innerHTML = pendingResidents.map(r => `
       <div class="card" style="cursor:default;">
         <div style="font-weight:700; font-size:15px; color:var(--accent-2);">${escapeHtml(r.name)}</div>
-        <div style="font-size:12.5px; color:var(--text-muted);">House: ${escapeHtml(r.house || 'N/A')}</div>
-        <div style="font-size:12.5px; color:var(--text-muted);">Phone: ${escapeHtml(r.phone || 'N/A')}</div>
-        <div style="font-size:12.5px; color:var(--text-muted);">Email: ${escapeHtml(r.email || 'N/A')}</div>
-        <div style="font-size:12.5px; color:var(--text-muted);">Biodata Status: ${r.biodataSubmitted ? 'Submitted' : 'Pending'}</div>
+        <div style="font-size:13px; color:var(--text-muted);">House: ${escapeHtml(r.house || 'N/A')}</div>
+        <div style="font-size:13px; color:var(--text-muted);">Phone: ${escapeHtml(r.phone || 'N/A')}</div>
+        <div style="font-size:13px; color:var(--text-muted);">Email: ${escapeHtml(r.email || 'N/A')}</div>
+        <div style="font-size:13px; color:var(--text-muted);">Biodata Status: ${r.biodataSubmitted ? 'Submitted' : 'Pending'}</div>
 
         <div style="display:flex; gap:10px; margin-top:12px;">
           <button class="btn sm primary block" onclick="approveUser('${r.uid}')">Approve</button>
