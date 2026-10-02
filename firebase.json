@@ -16,7 +16,9 @@
       ".nojekyll",
       "**/node_modules/**",
       "functions/**",
-      ".agents/**"
+      ".agents/**",
+      "tests/**",
+      ".github/**"
     ],
     "headers": [
       { "source": "/.well-known/assetlinks.json", "headers": [ { "key": "Content-Type", "value": "application/json" } ] },

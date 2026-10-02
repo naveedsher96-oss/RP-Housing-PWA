@@ -120,11 +120,11 @@ service cloud.firestore {
       allow create: if canPublish()
         && request.resource.data.get('createdBy', '') == request.auth.uid;
       allow delete: if isAdmin() || isSuperAdmin() || ownsPost();
-      // Publishers may edit; everyone else may only add their own single vote.
+      // Publishers may edit; everyone else may only set or change their own vote while the poll is open.
       allow update: if isAdmin() || isSuperAdmin() || ownsPost()
         || (signedIn()
             && onlyChanges(['votes'])
-            && !(request.auth.uid in resource.data.get('votes', {}))
+            && resource.data.get('closed', false) != true
             && request.resource.data.votes.diff(resource.data.get('votes', {})).affectedKeys().hasOnly([request.auth.uid]));
     }
 
@@ -138,7 +138,8 @@ service cloud.firestore {
 
     // ---------- bills ----------
     match /bills/{id} {
-      allow read: if isStaff() || isApprovedResident() || (signedIn() && resource.data.uid == request.auth.uid);
+      // Residents read only their own bills; society totals come from settings/billsSummary.
+      allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if isAdmin();
       // Admin may update anything; the billed resident may only submit payment proof
       allow update: if isAdmin() || superAdminRestore()
@@ -230,6 +231,19 @@ service cloud.firestore {
     match /settings/{id} {
       allow read: if signedIn();
       allow write: if isAdmin();
+    }
+    // Bill totals for the resident dashboard, kept up to date by any staff member.
+    match /settings/billsSummary {
+      allow write: if isStaff();
+    }
+
+    // ---------- payment proof files ----------
+    // Bills and contributions keep only proofId; the photo or PDF lives here.
+    match /proofs/{id} {
+      allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isAdmin() || (signedIn() && request.resource.data.uid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
     // ---------- audit log (immutable) ----------

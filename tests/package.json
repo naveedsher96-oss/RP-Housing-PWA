@@ -1,0 +1,17 @@
+{
+  "name": "rphs-checks",
+  "private": true,
+  "description": "Automated checks for the RP Housing PWA (app screens + Firestore rules)",
+  "type": "module",
+  "scripts": {
+    "build": "node build-harness.mjs",
+    "ui": "node build-harness.mjs && node ui.test.mjs",
+    "rules": "firebase emulators:exec --only firestore --project rphs-test --config firebase.json \"node rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0",
+    "firebase-tools": "^15.32.1",
+    "playwright": "1.56.1"
+  }
+}
