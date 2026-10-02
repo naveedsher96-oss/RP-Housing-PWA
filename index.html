@@ -712,6 +712,10 @@
         currentUserProfile = null;
         notifications = [];
         notifsLoadedAt = 0;
+        // Nothing from the previous account may show to the next one.
+        billsList = []; billsLoaded = false; billsSeq++;
+        allResidents = []; pendingResidents = []; expensesList = [];
+        activeTab = 'dashboard'; navStack = [];
         if (wasSignedIn) {
           authMessage = manualSignOut
             ? { type: 'success', text: 'You have been signed out successfully.' }
@@ -1533,7 +1537,7 @@
       return `
         <div class="section-title">
           Complaints & Suggestions
-          <button class="btn sm primary" onclick="openNewTicketModal()">+ Lodge Ticket</button>
+          ${isStaff() ? '' : '<button class="btn sm primary" onclick="openNewTicketModal()">+ Lodge Ticket</button>'}
         </div>
         <div class="section-sub">Report maintenance issues or submit feedback.</div>
         ${isAdmin ? renderTicketFilterBar() : ''}
@@ -1575,7 +1579,7 @@
         ${!staffView ? `
           <button class="btn secondary block" style="margin-top:6px;" onclick="downloadResidentStatement()">${icon('file')} Download my statement (PDF)</button>
           <div id="bank-card" style="margin-top:14px;"></div>
-        ` : ''}
+        ` : (currentUserProfile.role !== 'admin' ? '<div id="bank-card" style="margin-top:14px;"></div>' : '')}
       `;
     }
 
@@ -1742,7 +1746,7 @@
   window.selectTab = function(tab) {
     navStack = [];
     closeModal();
-    if (activeTab === tab) { window.scrollTo(0, 0); return; }
+    // Tapping the screen you are on reloads it (as the old menu did).
     activeTab = tab;
     render();
     window.scrollTo(0, 0);
@@ -1751,12 +1755,23 @@
   // In-page links (e.g. a dashboard tile): remembered, so Back returns here.
   window.goTab = function(tab) {
     closeModal();
-    if (activeTab === tab) return;
+    if (activeTab === tab) { render(); window.scrollTo(0, 0); return; }
     navStack.push(activeTab);
     activeTab = tab;
     render();
     window.scrollTo(0, 0);
   };
+
+  // Coming back to the app after a while reloads the current screen, so counts
+  // and lists (Defaulters, proofs to check) are never left hours out of date.
+  let lastRefreshAt = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !currentUserProfile || !auth || !auth.currentUser) return;
+    if (Date.now() - lastRefreshAt < 30000) return;
+    lastRefreshAt = Date.now();
+    billsLoaded = false;
+    if (!document.getElementById('modal-view').classList.contains('active') && !uiSheetOpen()) loadData();
+  });
 
   window.goBack = function() {
     if (uiSheetOpen()) { closeUiSheet(null); return; }
@@ -2932,7 +2947,7 @@
   function loadTickets() {
     if (!db) return;
     let query = db.collection('tickets').orderBy('createdAt', 'desc');
-    if (currentUserProfile.role !== 'admin') {
+    if (!isStaff()) {
       query = query.where('uid', '==', auth.currentUser.uid);
     }
     fetchFast(query, snapshot => {
@@ -3388,13 +3403,29 @@
     return status;
   }
 
+  // Every bills load takes a ticket; a load that lands after a newer load or
+  // after a bill was changed is dropped, so old data never overwrites new.
+  let billsSeq = 0;
+
+  // After any bill change: update the copy in memory at once, then reload
+  // whichever screen is showing bills (Bills tab or a dashboard).
+  function afterBillWrite(billId, patch) {
+    billsSeq++;
+    const b = billsList.find(x => x.id === billId);
+    if (b && patch) Object.assign(b, patch);
+    if (document.getElementById('bills-list')) loadBills();
+    if (document.getElementById('dashboard-body')) (isStaff() ? loadDashboard() : loadResidentDashboard());
+  }
+
   function loadBills() {
     if (!db || !auth.currentUser) return;
     const query = isStaff()
       ? db.collection('bills')
       : db.collection('bills').where('uid', '==', auth.currentUser.uid);
+    const seq = ++billsSeq;
 
     fetchFast(query, snapshot => {
+      if (seq !== billsSeq) return;
       billsList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(b => !b.isDeleted)
@@ -3406,7 +3437,7 @@
       renderBillsList();
     }).catch(e => { console.error("Error loading bills:", e); showLoadError('bills-list', e); });
 
-    if (!isStaff()) loadSocietySettings().then(renderBankCard);
+    if (currentUserProfile.role !== 'admin') loadSocietySettings().then(renderBankCard);
   }
 
   // --- RECURRING MONTHLY BILL (ADMIN) ---
@@ -3512,8 +3543,8 @@
       try {
         await db.collection('settings').doc('recurringBill').set(data, { merge: true });
         logAudit('settings', 'recurringBill', 'update', `Recurring bill ${data.enabled ? 'enabled' : 'disabled'}: ${data.category} ${formatMoney(data.amount)}, due day ${data.dueDay}`);
-        closeModal();
-        loadRecurringBillCard();
+        toast('Recurring bill saved');
+        openBillingSettings();
       } catch(err) {
         toast("Error saving recurring bill settings: " + err.message);
       }
@@ -3564,7 +3595,7 @@
         logAudit('settings', 'recurringBill', 'update', `Recurring bills for ${monthLabel(month)} requested (due ${dueDate})`);
         closeModal();
         loadRecurringBillCard();
-        setTimeout(() => { loadBills(); }, 6000);
+        setTimeout(() => { afterBillWrite(); }, 6000);
       } catch(err) {
         toast("Error requesting bill run: " + err.message);
       }
@@ -3682,8 +3713,8 @@
       try {
         await db.collection('settings').doc('society').set(data, { merge: true });
         societySettings = { ...societySettings, ...data };
-        closeModal();
-        renderBankCard();
+        toast('Bank details saved');
+        if (currentUserProfile.role === 'admin') openBillingSettings(); else { closeModal(); renderBankCard(); }
       } catch(err) {
         toast("Error saving account details: " + err.message);
       }
@@ -3833,7 +3864,7 @@
     if (!isStaff()) return;
     document.getElementById('modal-body').innerHTML = '<div style="color:var(--text-muted); padding:10px 0;">Loading defaulters…</div>';
     openModal();
-    try { await Promise.all([ensureResidents(), ensureBillsLoaded()]); } catch (e) { console.error("Defaulters load failed:", e); }
+    try { await Promise.all([ensureResidents(), ensureBillsLoaded(true)]); } catch (e) { console.error("Defaulters load failed:", e); }
     renderDefaultersModal();
   };
 
@@ -3859,11 +3890,11 @@
           </div>
         </div>
         <div style="font-size:13px; color:var(--text-faint); margin-top:6px;">${escapeHtml(d.periods.join(', '))}${d.oldestDue ? ' · ' + (d.overdue ? 'overdue since ' : 'due ') + escapeHtml(formatDate(d.oldestDue)) : ''}</div>
-        ${isAdmin ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
-          ${d.uid ? `<button class="btn sm secondary" onclick="remindDefaulter('${d.key}')">${icon('bell')} Remind in app</button>` : ''}
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
+          ${isAdmin && d.uid ? `<button class="btn sm secondary" onclick="remindDefaulter('${d.key}')">${icon('bell')} Remind in app</button>` : ''}
           ${d.phone ? `<button class="btn sm secondary" onclick="whatsappDefaulter('${d.key}')">WhatsApp</button>` : ''}
           ${d.uid ? `<button class="btn sm secondary" onclick="downloadResidentStatement('${d.uid}')">Statement</button>` : ''}
-        </div>` : ''}
+        </div>
       </div>`;
 
     body.innerHTML = `
@@ -3874,7 +3905,7 @@
           ${isAdmin ? `<button class="btn secondary" style="flex:1;" onclick="remindAllDefaulters()">${icon('bell')} Remind all</button>` : ''}
         </div>` : ''}
       </div>
-      <div style="font-size:14px; color:var(--text-muted); line-height:1.5; margin-bottom:6px;">Only bills past their due date count. Bills due later this month are listed separately.</div>
+      <div style="font-size:14px; color:var(--text-muted); line-height:1.5; margin-bottom:6px;">Houses with a bill past its due date. Houses whose only unpaid bill is not due yet are under "Not due yet" at the bottom.</div>
       ${list.length ? `
         <details style="margin:4px 0 4px;">
           <summary style="font-size:14px; color:var(--accent-2); cursor:pointer;">Preview the message</summary>
@@ -3883,7 +3914,7 @@
       ` : ''}
       <div class="group-h" style="color:var(--danger);">Overdue · ${overdue.length} house${overdue.length === 1 ? '' : 's'}${overdue.length ? ` · <span class="money">${formatMoney(overdueTotal)}</span>` : ''}</div>
       ${overdue.length ? overdue.map(row).join('') : '<div class="card" style="cursor:default; color:var(--success);">No house is overdue.</div>'}
-      ${dueSoon.length ? `<div class="group-h">Due soon · ${dueSoon.length} house${dueSoon.length === 1 ? '' : 's'}</div>${dueSoon.map(row).join('')}` : ''}
+      ${dueSoon.length ? `<details style="margin-top:14px;"><summary class="group-h" style="cursor:pointer;">Not due yet · ${dueSoon.length} house${dueSoon.length === 1 ? '' : 's'}</summary>${dueSoon.map(row).join('')}</details>` : ''}
     `;
   }
 
@@ -3905,7 +3936,7 @@
 
   window.remindAllDefaulters = async function() {
     if (currentUserProfile.role !== 'admin') return;
-    const list = defaultersList().filter(d => d.uid);
+    const list = shareTargets().filter(d => d.uid);
     if (!list.length) return;
     if (!(await confirmSheet({ title: `Send a reminder to ${list.length} resident${list.length === 1 ? '' : 's'}?`, body: 'They get an in-app notification about their unpaid bill.', okLabel: 'Send reminder' }))) return;
     await Promise.all(list.map(d => sendNotification(d.uid, 'Payment Reminder', reminderBody(d), 'info', 'bills')));
@@ -4208,7 +4239,7 @@
       await db.collection('bills').doc(billId).update({ amount });
       logAudit('bill', billId, 'update', `Amount changed ${formatMoney(b.amount)} → ${formatMoney(amount)} — ${b.billNo || ''} ${b.name || ''}`);
       toast('Amount updated');
-      loadBills();
+      afterBillWrite(billId, { amount });
     } catch (err) {
       toast('Error updating amount: ' + err.message);
     }
@@ -4304,13 +4335,33 @@
     }
   };
 
+  // Residents cannot look up other users, so admins' uids are kept in
+  // settings/staff (refreshed whenever an admin opens the Dashboard).
   async function notifyAdmins(title, body, type = 'info') {
     try {
-      const snap = await db.collection('users').where('role', '==', 'admin').get();
-      await Promise.all(snap.docs.map(d => sendNotification(d.id, title, body, type)));
+      let uids = [];
+      const doc = await db.collection('settings').doc('staff').get();
+      if (doc.exists) uids = (doc.data().adminUids || []);
+      if (!uids.length && isStaff()) {
+        const snap = await db.collection('users').where('role', '==', 'admin').get();
+        uids = snap.docs.map(d => d.id);
+      }
+      await Promise.all(uids.map(uid => sendNotification(uid, title, body, type)));
     } catch(e) {
       console.error("Admin notification failed:", e);
     }
+  }
+
+  let staffDirSynced = false;
+  function syncStaffDirectory(userDocs) {
+    if (staffDirSynced) return;
+    staffDirSynced = true;
+    const adminUids = userDocs.filter(d => d.data().role === 'admin' && !d.data().suspended).map(d => d.id).sort();
+    const ref = db.collection('settings').doc('staff');
+    ref.get().then(doc => {
+      const cur = doc.exists ? (doc.data().adminUids || []).slice().sort() : [];
+      if (cur.join(',') !== adminUids.join(',')) return ref.set({ adminUids }, { merge: true });
+    }).catch(e => console.error('Staff list sync failed:', e));
   }
 
   window.openUploadProofModal = function(billId) {
@@ -4355,9 +4406,10 @@
           proofRejectedReason: '',
           proofUploadedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        await notifyAdmins(`Payment Proof Submitted (${b.billNo})`, `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) uploaded proof for ${formatMoney(b.amount)} — ${b.period}.`, 'info');
+        afterBillWrite(billId, { status: 'submitted', proofRejectedReason: '' });
         closeModal();
-        loadBills();
+        toast('Proof sent. Management will check it and mark the bill paid.');
+        notifyAdmins(`Payment Proof Submitted (${b.billNo})`, `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) uploaded proof for ${formatMoney(b.amount)} — ${b.period}.`, 'info');
       } catch(err) {
         toast("Error submitting proof: " + err.message);
         submitBtn.disabled = false;
@@ -4377,9 +4429,10 @@
         verifiedBy: currentUserProfile.name
       });
       logAudit('bill', billId, 'update', `Payment proof approved — ${b.billNo} ${formatMoney(b.amount)} marked paid`);
-      await sendNotification(b.uid, `Payment Verified (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been verified. Thank you!`, 'success');
+      afterBillWrite(billId, { status: 'paid', verifiedBy: currentUserProfile.name });
       closeModal();
-      loadBills();
+      toast('Payment approved');
+      await sendNotification(b.uid, `Payment Verified (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been verified. Thank you!`, 'success');
     } catch(err) {
       toast("Error approving payment: " + err.message);
     }
@@ -4397,9 +4450,10 @@
         proofRejectedReason: reason.trim()
       });
       logAudit('bill', billId, 'update', `Payment proof rejected — ${b.billNo}: ${reason.trim()}`);
-      await sendNotification(b.uid, `Payment Proof Rejected (${b.billNo})`, `Reason: ${reason.trim()}. Please upload a valid proof for ${formatMoney(b.amount)} — ${b.period}.`, 'error');
+      afterBillWrite(billId, { status: 'unpaid', proofRejectedReason: reason.trim() });
       closeModal();
-      loadBills();
+      toast('Proof rejected');
+      await sendNotification(b.uid, `Payment Proof Rejected (${b.billNo})`, `Reason: ${reason.trim()}. Please upload a valid proof for ${formatMoney(b.amount)} — ${b.period}.`, 'error');
     } catch(err) {
       toast("Error rejecting proof: " + err.message);
     }
@@ -4611,7 +4665,7 @@
           await sendNotification(r.uid, `New Maintenance Bill (${billNo})`, `${category} for ${period}: ${formatMoney(amount)}. Due by ${dueDate}.`, 'info');
         }
         closeModal();
-        loadBills();
+        afterBillWrite();
       } catch(err) {
         toast("Error issuing bill: " + err.message);
       }
@@ -4705,9 +4759,9 @@
           const update = { status: newStatus, paymentRef };
           if (newStatus === 'paid') update.paidAt = firebase.firestore.FieldValue.serverTimestamp();
           await db.collection('bills').doc(billId).update(update);
-          await sendNotification(b.uid, `Bill Updated (${b.billNo})`, `Your bill for ${b.period} is now marked: ${newStatus.toUpperCase()}`, 'info');
+          afterBillWrite(billId, { status: newStatus, paymentRef });
           closeModal();
-          loadBills();
+          await sendNotification(b.uid, `Bill Updated (${b.billNo})`, `Your bill for ${b.period} is now marked: ${newStatus.toUpperCase()}`, 'info');
         } catch(err) {
           toast("Error updating bill: " + err.message);
         }
@@ -4726,8 +4780,9 @@
         paidAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       logAudit('bill', billId, 'update', `Bill ${b.billNo} manually marked paid (${formatMoney(b.amount)})`);
+      afterBillWrite(billId, { status: 'paid' });
+      toast('Marked as paid');
       await sendNotification(b.uid, `Payment Received (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been recorded.`, 'success');
-      loadBills();
     } catch(err) {
       toast("Error updating bill: " + err.message);
     }
@@ -5299,6 +5354,7 @@
 
   function loadDashboard() {
     if (!db || !isStaff()) return;
+    const seq = ++billsSeq;
     Promise.all([
       db.collection('users').get(),
       db.collection('bills').get(),
@@ -5312,8 +5368,11 @@
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       decisionsList = sortDecisions(decSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(x => !x.isDeleted));
       // The Bills list is what the Defaulters sheet and proof review read.
-      billsList = billsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(b => !b.isDeleted);
-      billsLoaded = true;
+      if (seq === billsSeq) {
+        billsList = billsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(b => !b.isDeleted);
+        billsLoaded = true;
+      }
+      if (currentUserProfile.role === 'admin') syncStaffDirectory(usersSnap.docs);
       pendingResidents = usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() }))
         .filter(u => u.role === 'resident' && u.approved === false && u.membershipStatus !== 'rejected');
       const users = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
@@ -5468,18 +5527,23 @@
   }
 
   window.openNextProof = async function() {
-    await ensureBillsLoaded();
+    try { await ensureBillsLoaded(true); } catch (e) { console.error('Bills load failed:', e); }
     const next = billsList.find(b => b.status === 'submitted');
     if (!next) { toast('No proofs waiting. All caught up.'); return; }
     openBillDetailModal(next.id);
   };
 
-  async function ensureBillsLoaded() {
-    if (billsLoaded) return billsList;
+  // fresh=true always asks the server (Defaulters, proofs to check), so a
+  // payment approved on another phone is never shown as unpaid.
+  async function ensureBillsLoaded(fresh) {
+    if (billsLoaded && !fresh) return billsList;
     const query = isStaff() ? db.collection('bills') : db.collection('bills').where('uid', '==', auth.currentUser.uid);
+    const seq = ++billsSeq;
     const snap = await query.get();
+    if (seq !== billsSeq) return billsList;
     billsList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(b => !b.isDeleted);
     billsLoaded = true;
+    if (document.getElementById('bills-list')) renderBillsList();
     return billsList;
   }
 
@@ -5505,6 +5569,18 @@
     const raw = dict[key] != null ? dict[key] : (I18N.en[key] || key);
     return escapeHtml(raw).replace(/\{(\w+)\}/g, (m, k) => vars && vars[k] != null ? `<bdi>${escapeHtml(vars[k])}</bdi>` : m);
   }
+
+  // More than one unpaid bill: the resident picks which one the proof is for.
+  window.pickBillForProof = function() {
+    const owing = billsList.filter(b => b.uid === auth.currentUser.uid && ['unpaid', 'overdue'].includes(billStatus(b)))
+      .sort((a, b) => (toDate(a.dueDate) || 0) - (toDate(b.dueDate) || 0));
+    if (!owing.length) return;
+    menuSheet('Which bill is this proof for?', owing.map(b => ({
+      icon: 'receipt',
+      label: `${b.period || b.category || 'Bill'} · ${formatMoney(b.amount)}${billStatus(b) === 'overdue' ? ' · overdue' : ''}`,
+      run: () => openUploadProofModal(b.id)
+    })));
+  };
 
   function renderMyHouseCard(myBills) {
     const owing = myBills.filter(b => ['unpaid', 'overdue'].includes(billStatus(b)));
@@ -5533,7 +5609,7 @@
         </div>
         ${rejected ? `<div class="rej">${t('rejected', { month: rejected.period || formatDate(rejected.dueDate), reason: rejected.proofRejectedReason })}</div>` : ''}
         <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;">
-          ${oldest ? `<button class="btn primary block" onclick="openUploadProofModal('${oldest.id}')">${icon('upload')} ${t('upload')}</button>` : ''}
+          ${oldest ? `<button class="btn primary block" onclick="${owing.length > 1 ? 'pickBillForProof()' : `openUploadProofModal('${oldest.id}')`}">${icon('upload')} ${t('upload')}</button>` : ''}
           <button class="btn secondary block" onclick="openBankDetailsSheet()">${icon('bank')} ${t('bank')}</button>
         </div>
       </div>
@@ -5566,6 +5642,7 @@
 
   function loadResidentDashboard() {
     if (!db || !auth.currentUser || currentUserProfile.role !== 'resident') return;
+    const seq = ++billsSeq;
     Promise.all([
       db.collection('bills').get(),
       db.collection('fund_contributions').where('status', '==', 'verified').get(),
@@ -5583,8 +5660,10 @@
       // Lets "Recent spending" rows open the expense detail sheet.
       expensesList = expenses;
       // My own bills feed the "My house" card and its Upload proof button.
-      billsList = bills.filter(b => b.uid === auth.currentUser.uid);
-      billsLoaded = true;
+      if (seq === billsSeq) {
+        billsList = bills.filter(b => b.uid === auth.currentUser.uid);
+        billsLoaded = true;
+      }
       renderResidentDashboard({ bills, contribs, expenses, tickets, transfers });
     }).catch(e => {
       console.error("Error loading dashboard:", e);
@@ -6350,7 +6429,7 @@
     if (document.getElementById('bills-list')) loadBills();
     if (document.getElementById('funds-list')) loadFunds();
     if (document.getElementById('expenses-list')) loadExpenses();
-    if (document.getElementById('dashboard-body')) loadDashboard();
+    if (document.getElementById('dashboard-body')) (isStaff() ? loadDashboard() : loadResidentDashboard());
   }
 
   // direction 'bills': Bills account -> chosen Fund; direction 'fund': chosen Fund -> Bills account.
@@ -6699,9 +6778,10 @@
     // Month chips: latest 3 months + year to date
     const now = new Date();
     const chipMonths = [0, 1, 2].map(i => monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)));
-    const period = reportPeriod || 'ytd';
+    const period = reportPeriod || 'all';
     const inPeriod = dateStr => {
       const s = String(dateStr || '');
+      if (period === 'all') return true;
       return period === 'ytd' ? s.slice(0, 4) === String(now.getFullYear()) : s.slice(0, 7) === period;
     };
     const collectedByCat = {};
@@ -6721,13 +6801,14 @@
       <div class="chip-row">
         ${chipMonths.map(k => `<button class="chip ${period === k ? 'active' : ''}" onclick="setReportPeriod('${k}')">${escapeHtml(MONTHS_SHORT[Number(k.slice(5)) - 1] + ' ' + k.slice(0, 4))}</button>`).join('')}
         <button class="chip ${period === 'ytd' ? 'active' : ''}" onclick="setReportPeriod('ytd')">Year to date</button>
+        <button class="chip ${period === 'all' ? 'active' : ''}" onclick="setReportPeriod('all')">All time</button>
       </div>
       <div class="card" style="cursor:default;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;">
           <div style="font-weight:700; font-size:15px;">Fund utilization by category</div>
           <button class="btn sm secondary" onclick="exportReportPDF()">${icon('file')} PDF</button>
         </div>
-        <div style="font-size:13px; color:var(--text-faint); margin-bottom:8px;">${period === 'ytd' ? 'Year to date' : escapeHtml(monthLabel(period))} · ${staff ? 'verified contributions in, expenses out' : 'category totals only, no names'} · PKR</div>
+        <div style="font-size:13px; color:var(--text-faint); margin-bottom:8px;">${period === 'all' ? 'All time' : period === 'ytd' ? 'Year to date' : escapeHtml(monthLabel(period))} · ${staff ? 'verified contributions in, expenses out' : 'category totals only, no names'} · PKR</div>
         ${utilCats.length ? `
           <div class="table-wrap"><table class="rep">
             <thead><tr><th>Category</th><th class="r">In</th><th class="r">Out</th></tr></thead>
@@ -7014,26 +7095,37 @@
       return;
     }
 
-    const newVotes = [...votes, {
+    const myVote = {
       uid: auth.currentUser.uid,
       name: currentUserProfile.name,
       choice,
       reason,
       votedAt: new Date().toISOString()
-    }];
-
-    const endorse = newVotes.filter(v => v.choice === 'endorse').length;
-    const oppose = newVotes.filter(v => v.choice === 'reject').length;
-    const quorum = d.requiredVotes || 3;
-    const finalStatus = endorse >= quorum ? 'approved' : (oppose >= quorum ? 'rejected' : 'pending');
+    };
 
     try {
-      const update = { votes: newVotes };
-      if (finalStatus !== 'pending') {
-        update.status = finalStatus;
-        update.finalizedAt = firebase.firestore.FieldValue.serverTimestamp();
-      }
-      await db.collection('decisions').doc(decisionId).update(update);
+      // Read the latest votes inside a transaction so a vote cast by another
+      // member a moment ago is kept (and counted towards quorum).
+      let newVotes = [], finalStatus = 'pending';
+      await db.runTransaction(async (tx) => {
+        const ref = db.collection('decisions').doc(decisionId);
+        const snap = await tx.get(ref);
+        const cur = snap.data() || {};
+        if ((cur.status || 'pending') !== 'pending') throw new Error('Voting on this item has already closed.');
+        const curVotes = cur.votes || [];
+        if (curVotes.some(v => v.uid === auth.currentUser.uid)) throw new Error('You have already voted on this item.');
+        newVotes = [...curVotes, myVote];
+        const endorse = newVotes.filter(v => v.choice === 'endorse').length;
+        const oppose = newVotes.filter(v => v.choice === 'reject').length;
+        const quorum = cur.requiredVotes || d.requiredVotes || 3;
+        finalStatus = endorse >= quorum ? 'approved' : (oppose >= quorum ? 'rejected' : 'pending');
+        const update = { votes: newVotes };
+        if (finalStatus !== 'pending') {
+          update.status = finalStatus;
+          update.finalizedAt = firebase.firestore.FieldValue.serverTimestamp();
+        }
+        tx.update(ref, update);
+      });
       logAudit('decision', decisionId, 'update', `${currentUserProfile.name} voted ${choice}${finalStatus !== 'pending' ? ' — auto-tagged ' + finalStatus + ' at quorum' : ''}`);
       if (finalStatus !== 'pending') {
         await applyDecisionOutcome({ ...d, votes: newVotes }, finalStatus);
@@ -7220,7 +7312,7 @@
             <div style="font-size:13px; color:var(--text-muted);">${houseHtml(r.house)}${r.phone ? ' · <span class="nowrap">' + escapeHtml(r.phone) + '</span>' : ''}</div>
           </div>
           ${r.suspended ? '<span class="badge overdue">Suspended</span>' : ''}
-          ${currentUserProfile.role !== 'board' ? `<button class="dots-btn" onclick="openResidentMenu('${r.uid}')" aria-label="More actions">${icon('dots')}</button>` : ''}
+          <button class="dots-btn" onclick="openResidentMenu('${r.uid}')" aria-label="More actions">${icon('dots')}</button>
         </div>
         <div style="font-size:13px; color:var(--text-muted); margin-top:8px;">CNIC <span class="nowrap">${escapeHtml(r.cnic || 'N/A')}</span> · Blood group ${escapeHtml(r.bloodGroup || 'N/A')} · ${escapeHtml(r.occupancyType || 'N/A')}</div>
         ${r.suspended && r.statusReason ? '<div style="font-size:13px; color:var(--danger); margin-top:4px;">Reason: ' + escapeHtml(r.statusReason) + '</div>' : ''}
@@ -7238,9 +7330,9 @@
       { label: 'View profile', icon: 'user', run: () => openResidentProfile(uid) },
       isAdmin && r.phone && { label: 'WhatsApp', icon: 'share', run: () => window.open(whatsappLink(r.phone, `Assalam-o-Alaikum ${r.name}, `), '_blank', 'noopener') },
       { label: 'Account statement (PDF)', icon: 'file', run: () => downloadResidentStatement(uid) },
-      isAdmin && { label: 'Biodata card (PDF)', icon: 'file', run: () => downloadResidentPDF(uid) },
+      { label: 'Biodata card (PDF)', icon: 'file', run: () => downloadResidentPDF(uid) },
       isAdmin && { label: 'Edit details', icon: 'edit', run: () => openEditResidentModal(uid) },
-      isAdmin && r.role === 'resident' && { label: r.billExempt ? 'Include in recurring bill' : 'Exempt from recurring bill', icon: 'receipt', run: () => setBillExempt(uid, !r.billExempt) },
+      manage && { label: r.billExempt ? 'Include in recurring bill' : 'Exempt from recurring bill', icon: 'receipt', run: () => setBillExempt(uid, !r.billExempt) },
       manage && (r.suspended
         ? { label: 'Lift suspension', icon: 'usercheck', run: () => unsuspendResident(uid) }
         : { label: 'Suspend membership', icon: 'x', danger: true, run: () => suspendResident(uid) })
