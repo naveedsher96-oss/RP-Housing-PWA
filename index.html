@@ -2933,7 +2933,7 @@
       return `
         <div class="card" style="cursor:default;">
           <div style="font-weight:700; font-size:16px; color:var(--accent-2); margin-bottom:6px;">${escapeHtml(poll.question)}</div>
-          <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Total Votes: ${totalVotes} · ${postedByLabel(poll)}</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Total Votes: ${totalVotes} · ${postedByLabel(poll)}${hasVoted && !poll.closed ? ' · You can change your vote' : ''}</div>
 
           <div style="display:flex; flex-direction:column; gap:8px;">
             ${options.map((opt, idx) => {
@@ -2948,7 +2948,9 @@
                     <span style="font-size:13.5px; font-weight:${isSelected?'700':'500'};">${escapeHtml(opt)}</span>
                     <div style="display:flex; align-items:center; gap:10px;">
                       <span style="font-size:13px; color:var(--text-muted);">${pct}% (${count})</span>
-                      ${!hasVoted ? `<button class="btn sm primary" onclick="votePoll('${poll.id}', ${idx})">Vote</button>` : ''}
+                      ${!hasVoted ? `<button class="btn sm primary" onclick="votePoll('${poll.id}', ${idx})">Vote</button>`
+                        : isSelected ? `<span style="font-size:12px; font-weight:700; color:var(--accent-2); white-space:nowrap;">✓ Your vote</span>`
+                        : poll.closed ? '' : `<button class="btn sm secondary" onclick="votePoll('${poll.id}', ${idx})">Change</button>`}
                     </div>
                   </div>
                 </div>
@@ -3007,16 +3009,20 @@
 
   window.votePoll = async function(pollId, optionIndex) {
     if (!db || !auth.currentUser) return;
+    let changed = false;
     try {
       const ref = db.collection('polls').doc(pollId);
       await db.runTransaction(async (transaction) => {
         const doc = await transaction.get(ref);
         if (!doc.exists) throw "Poll does not exist!";
         const data = doc.data();
+        if (data.closed) throw "This poll is closed.";
         const votes = data.votes || {};
+        changed = auth.currentUser.uid in votes;
         votes[auth.currentUser.uid] = optionIndex;
         transaction.update(ref, { votes: votes });
       });
+      if (changed) toast('Vote changed.');
       loadPolls();
     } catch(err) {
       toast("Error casting vote: " + err);
