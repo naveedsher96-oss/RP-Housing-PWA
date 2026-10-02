@@ -3436,9 +3436,53 @@
       billsLoaded = true;
       if (isStaff()) syncBillsSummary(billsList);
       renderBillsList();
+      applyLateFees(billsList);
     }).catch(e => { console.error("Error loading bills:", e); showLoadError('bills-list', e); });
 
     if (currentUserProfile.role !== 'admin') loadSocietySettings().then(renderBankCard);
+  }
+
+  // --- LATE FEE (optional, off by default) ---
+  // When an admin opens the app, unpaid bills that are past their due date plus
+  // the grace days get the late fee added once (lateFeeApplied). Only bills due
+  // on or after lateFeeSince are charged.
+  let lateFeeSettings = null, lateFeeRunning = false;
+  async function applyLateFees(bills) {
+    if (currentUserProfile.role !== 'admin' || lateFeeRunning) return;
+    lateFeeRunning = true;
+    try {
+      if (!lateFeeSettings || Date.now() - lateFeeSettings.at > 10 * 60 * 1000) {
+        const doc = await db.collection('settings').doc('recurringBill').get();
+        lateFeeSettings = { at: Date.now(), ...(doc.exists ? doc.data() : {}) };
+      }
+      const s = lateFeeSettings;
+      const fee = Number(s.lateFeeAmount) || 0;
+      if (!s.lateFeeEnabled || !(fee > 0) || !s.lateFeeSince) return;
+      const cutoff = new Date(new Date().toDateString());
+      cutoff.setDate(cutoff.getDate() - (Number(s.lateFeeGraceDays) || 0));
+      const category = s.category || RECURRING_DEFAULTS.category;
+      const due = bills.filter(b => !b.isDeleted && b.status === 'unpaid' && !b.lateFeeApplied && b.dueDate
+        && (b.category || '') === category
+        && String(b.dueDate) >= s.lateFeeSince && toDate(b.dueDate) < cutoff);
+      for (const b of due) {
+        const base = Number(b.amount || 0);
+        const patch = { amount: base + fee, baseAmount: base, lateFee: fee, lateFeeApplied: true };
+        await db.collection('bills').doc(b.id).update({ ...patch, lateFeeAt: firebase.firestore.FieldValue.serverTimestamp() });
+        Object.assign(b, patch);
+        const inList = billsList.find(x => x.id === b.id);
+        if (inList && inList !== b) Object.assign(inList, patch);
+        logAudit('bill', b.id, 'late_fee', `Late fee ${formatMoney(fee)} added to ${b.billNo || b.id} (${b.name || ''})`);
+        if (b.uid) sendNotification(b.uid, `Late fee added (${b.billNo || 'bill'})`, `${b.period || b.category || 'Your bill'} is overdue, so a late fee of ${formatMoney(fee)} was added. New total: ${formatMoney(base + fee)}.`, 'error', 'bills');
+      }
+      if (due.length) {
+        toast(`Late fee added to ${due.length} overdue bill${due.length > 1 ? 's' : ''}.`);
+        if (document.getElementById('bills-list')) renderBillsList();
+      }
+    } catch (e) {
+      console.warn('Late fee check failed:', e && e.message);
+    } finally {
+      lateFeeRunning = false;
+    }
   }
 
   // --- RECURRING MONTHLY BILL (ADMIN) ---
@@ -3486,6 +3530,7 @@
         <div style="font-size:13px; color:var(--text-faint); margin-top:2px;">
           Members who already have a ${escapeHtml(s.category)} bill for that month (paid or unpaid) are skipped. New residents are included automatically once approved.
         </div>
+        <div style="font-size:13px; color:var(--text-muted); margin-top:6px;">Late fee: ${s.lateFeeEnabled ? `<b>${formatMoney(s.lateFeeAmount)}</b>, ${Number(s.lateFeeGraceDays) || 0} day(s) after the due date` : 'Off'}</div>
         ${pending ? `<div style="font-size:13px; color:var(--accent-2); margin-top:8px;">Issuing ${escapeHtml(monthLabel(s.runRequest.month))} bills now… refresh in a moment.</div>` : ''}
         ${last ? `<div style="font-size:13px; color:var(--text-muted); margin-top:8px;">Last run${lastAt ? ' ' + lastAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}: <b>${last.issued}</b> bill(s) for ${escapeHtml(last.period || '')}, ${last.skippedBilled || 0} already billed, ${last.skippedExempt || 0} exempt.</div>` : ''}
         ${recurringExempt.length ? `
@@ -3524,6 +3569,17 @@
         <input type="number" id="rec-dueday" value="${Number(s.dueDay) || 20}" min="1" max="28" required />
         <label>Notes on each bill (optional)</label>
         <textarea id="rec-notes" placeholder="e.g. Covers security, sweeping and street lights">${escapeHtml(s.notes || '')}</textarea>
+        <div style="border-top:1px solid var(--border); margin-top:16px; padding-top:12px;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:0;">
+            <input type="checkbox" id="rec-latefee-on" ${s.lateFeeEnabled ? 'checked' : ''} style="width:18px; height:18px; margin:0;" />
+            <span>Add a late fee to overdue bills</span>
+          </label>
+          <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Added once to each overdue ${escapeHtml(s.category || 'maintenance')} bill, a few days after its due date. Only bills due after you switch this on are charged, and the resident is told.</div>
+          <div style="display:flex; gap:8px;">
+            <div style="flex:1;"><label>Late fee (PKR)</label><input type="number" id="rec-latefee" value="${Number(s.lateFeeAmount) || 200}" min="1" /></div>
+            <div style="flex:1;"><label>Grace days</label><input type="number" id="rec-latefee-days" value="${Number.isFinite(Number(s.lateFeeGraceDays)) ? Number(s.lateFeeGraceDays) : 5}" min="0" max="60" /></div>
+          </div>
+        </div>
         <button type="submit" class="btn primary block" style="margin-top:16px;">Save</button>
       </form>
     `;
@@ -3537,12 +3593,19 @@
         category: document.getElementById('rec-category').value,
         dueDay: Number(document.getElementById('rec-dueday').value) || 20,
         notes: document.getElementById('rec-notes').value.trim(),
+        lateFeeEnabled: document.getElementById('rec-latefee-on').checked,
+        lateFeeAmount: Number(document.getElementById('rec-latefee').value) || 0,
+        lateFeeGraceDays: Math.max(0, Number(document.getElementById('rec-latefee-days').value) || 0),
         updatedBy: currentUserProfile.name,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
       if (!(data.amount > 0)) { toast("Please enter a valid amount."); return; }
+      if (data.lateFeeEnabled && !(data.lateFeeAmount > 0)) { toast("Please enter the late fee amount."); return; }
+      // Switching the late fee on starts it from today, so older bills are never charged.
+      if (data.lateFeeEnabled && !s.lateFeeEnabled) data.lateFeeSince = new Date().toISOString().slice(0, 10);
       try {
         await db.collection('settings').doc('recurringBill').set(data, { merge: true });
+        lateFeeSettings = null;
         logAudit('settings', 'recurringBill', 'update', `Recurring bill ${data.enabled ? 'enabled' : 'disabled'}: ${data.category} ${formatMoney(data.amount)}, due day ${data.dueDay}`);
         toast('Recurring bill saved');
         openBillingSettings();
@@ -4843,6 +4906,7 @@
       <div class="detail-rows" style="margin-bottom:12px;">
         <div><span>Charge</span><span>${escapeHtml(b.category || 'Maintenance')}</span></div>
         <div><span>Period</span><span>${escapeHtml(b.period || 'N/A')}</span></div>
+        ${b.lateFeeApplied ? `<div><span>Late fee</span><span>${formatMoney(b.lateFee)} added to ${formatMoney(b.baseAmount)}</span></div>` : ''}
         <div><span>House</span><span>${escapeHtml(houseLabel(b.house))}${b.name ? ' · ' + escapeHtml(b.name) : ''}</span></div>
         ${b.issuedBy ? `<div><span>Issued by</span><span>${escapeHtml(b.issuedBy)} · ${escapeHtml(formatDate(b.createdAt))}</span></div>` : ''}
         ${b.notes ? `<div><span>Details</span><span style="white-space:pre-wrap; font-weight:500;">${escapeHtml(b.notes)}</span></div>` : ''}
