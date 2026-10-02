@@ -4221,7 +4221,7 @@
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px;">
             <div class="amount money">${formatMoney(b.amount)}</div>
             ${status === 'paid'
-              ? `<button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">${icon('file')} Receipt</button>`
+              ? `<button class="btn sm secondary" onclick="event.stopPropagation(); shareBillReceipt('${b.id}')">${icon('share')} Receipt</button>`
               : status === 'submitted'
                 ? `<span style="font-size:13px; color:var(--info); font-weight:600;">Proof sent. Being checked.</span>`
                 : `<button class="btn sm primary" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">${icon('upload')} Upload proof</button>`}
@@ -4333,12 +4333,66 @@
     });
   }
 
+  // Payment proof files live in proofs/{id}; a bill or contribution keeps only
+  // proofId, so lists stay small and fast. Older records still carry the file
+  // inline in proofData until an admin moves them (Billing settings).
+  const proofCache = {};
+  async function saveProofFile(ownerUid, kind, proof) {
+    try {
+      const ref = await db.collection('proofs').add({
+        uid: ownerUid, kind, data: proof.dataUrl, type: proof.type, name: proof.name,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      proofCache[ref.id] = proof.dataUrl;
+      return ref.id;
+    } catch (e) {
+      // The new Firebase rules are not published yet: keep the file on the record.
+      console.warn('Proof store unavailable, keeping the file on the record:', e && e.message);
+      return null;
+    }
+  }
+  function proofFields(proofId, proof, creating) {
+    if (!proofId) return { proofData: proof.dataUrl, proofType: proof.type, proofName: proof.name };
+    return { proofId, proofType: proof.type, proofName: proof.name,
+      proofData: creating ? '' : firebase.firestore.FieldValue.delete() };
+  }
+  async function proofDataOf(record) {
+    if (!record) return null;
+    if (record.proofData) return record.proofData;
+    if (!record.proofId) return null;
+    if (proofCache[record.proofId]) return proofCache[record.proofId];
+    const doc = await db.collection('proofs').doc(record.proofId).get();
+    const data = doc.exists ? doc.data().data : null;
+    if (data) proofCache[record.proofId] = data;
+    return data;
+  }
+  function hasProof(record) { return !!(record && (record.proofData || record.proofId)); }
+  function proofRecord(kind, id) {
+    return kind === 'bill' ? billsList.find(item => item.id === id) : fundContribsList.find(item => item.id === id);
+  }
+  async function hydrateProofSlots() {
+    for (const slot of document.querySelectorAll('.proof-slot[data-id]')) {
+      const kind = slot.getAttribute('data-kind'), id = slot.getAttribute('data-id');
+      const record = proofRecord(kind, id);
+      try {
+        const data = await proofDataOf(record);
+        if (!data) { slot.textContent = 'Proof file not found.'; continue; }
+        slot.outerHTML = record.proofType === 'image'
+          ? `<img class="proof-thumb" src="${data}" alt="Payment proof" onclick="viewProofFile('${kind}', '${id}')" style="cursor:pointer;" />`
+          : `<button class="btn sm secondary" style="margin-top:6px;" onclick="viewProofFile('${kind}', '${id}')">Open PDF Proof</button>`;
+      } catch (e) { slot.textContent = 'Could not load the proof: ' + e.message; }
+    }
+  }
+
   function proofSectionHtml(kind, record) {
-    if (!record.proofData) return '';
+    if (!hasProof(record)) return '';
+    if (!record.proofData) setTimeout(hydrateProofSlots, 0);
     return `
       <div style="margin-bottom:14px;">
         <label style="margin-top:0;">Payment Proof ${record.proofName ? '(' + escapeHtml(record.proofName) + ')' : ''}</label>
-        ${record.proofType === 'image'
+        ${!record.proofData
+          ? `<div class="proof-slot" data-kind="${kind}" data-id="${record.id}" style="font-size:13px; color:var(--text-muted); padding:8px 0;">Loading proof…</div>`
+          : record.proofType === 'image'
           ? `<img class="proof-thumb" src="${record.proofData}" alt="Payment proof" onclick="viewProofFile('${kind}', '${record.id}')" style="cursor:pointer;" />`
           : `<button class="btn sm secondary" style="margin-top:6px;" onclick="viewProofFile('${kind}', '${record.id}')">Open PDF Proof</button>`}
         ${record.paymentRef ? `<div style="font-size:13px; color:var(--text-muted); margin-top:6px;">Transaction Ref: <span style="font-family:var(--font-mono);">${escapeHtml(record.paymentRef)}</span></div>` : ''}
@@ -4347,13 +4401,13 @@
     `;
   }
 
-  window.viewProofFile = function(kind, id) {
-    const record = kind === 'bill'
-      ? billsList.find(item => item.id === id)
-      : fundContribsList.find(item => item.id === id);
-    if (!record || !record.proofData) return;
+  window.viewProofFile = async function(kind, id) {
+    const record = proofRecord(kind, id);
+    if (!hasProof(record)) return;
     try {
-      const parts = record.proofData.split(',');
+      const data = await proofDataOf(record);
+      if (!data) { toast('Proof file not found.'); return; }
+      const parts = data.split(',');
       const mime = parts[0].match(/data:([^;]+)/)[1];
       const bytes = atob(parts[1]);
       const arr = new Uint8Array(bytes.length);
@@ -4396,11 +4450,25 @@
   window.openUploadProofModal = function(billId) {
     const b = billsList.find(item => item.id === billId);
     if (!b || b.uid !== auth.currentUser.uid) return;
+    // Every unpaid bill of this resident can share one payment proof.
+    const owing = billsList.filter(x => x.uid === auth.currentUser.uid && ['unpaid', 'overdue'].includes(billStatus(x)))
+      .sort((p, q) => (toDate(p.dueDate) || 0) - (toDate(q.dueDate) || 0));
+    if (!owing.some(x => x.id === billId)) owing.unshift(b);
 
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Upload Payment Proof</div>
-      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">${escapeHtml(b.billNo || 'BILL')} · ${escapeHtml(b.category || 'Maintenance')} · ${formatMoney(b.amount)}</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">${owing.length > 1 ? 'Tick every bill this payment covers.' : `${escapeHtml(b.billNo || 'BILL')} · ${escapeHtml(b.category || 'Maintenance')} · ${formatMoney(b.amount)}`}</div>
       <form id="proof-form">
+        ${owing.length > 1 ? `
+          <div class="card" style="cursor:default; padding:6px 12px; margin-bottom:6px;">
+            ${owing.map(x => `
+              <label style="display:flex; align-items:center; gap:10px; margin:0; padding:8px 0; text-transform:none; letter-spacing:0; font-size:14px; color:var(--text); font-weight:600;">
+                <input type="checkbox" class="proof-bill" value="${x.id}" data-amt="${Number(x.amount || 0)}" ${x.id === billId ? 'checked' : ''} style="width:20px; height:20px; flex:none;" />
+                <span style="flex:1; min-width:0;">${escapeHtml(x.category && x.category !== 'Monthly Maintenance' ? x.category + (x.period && x.period !== 'One-time' ? ' · ' + x.period : '') : (x.period || 'Bill'))}${billStatus(x) === 'overdue' ? ' <span class="badge overdue">Overdue</span>' : ''}</span>
+                <span class="money">${formatMoney(x.amount)}</span>
+              </label>`).join('')}
+            <div style="display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--border); font-weight:800;"><span>Total</span><span class="money" id="proof-total">${formatMoney(b.amount)}</span></div>
+          </div>` : ''}
         <label>Payment Method</label>
         <select id="proof-method" required>
           ${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('')}
@@ -4416,29 +4484,41 @@
       <div style="text-align:center; font-size:13px; color:var(--text-faint); margin-top:10px;">Management will verify your proof and mark the bill paid.</div>
     `;
     openModal();
+    document.querySelectorAll('.proof-bill').forEach(cb => cb.addEventListener('change', () => {
+      const sum = [...document.querySelectorAll('.proof-bill:checked')].reduce((s, c) => s + Number(c.dataset.amt || 0), 0);
+      document.getElementById('proof-total').textContent = formatMoney(sum);
+    }));
 
     document.getElementById('proof-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitBtn = e.target.querySelector('button[type="submit"]');
+      const ticked = document.querySelectorAll('.proof-bill').length
+        ? [...document.querySelectorAll('.proof-bill:checked')].map(c => c.value) : [billId];
+      if (!ticked.length) { toast('Tick at least one bill.'); return; }
+      const bills = ticked.map(id => billsList.find(x => x.id === id)).filter(Boolean);
       submitBtn.disabled = true;
       try {
         const proof = await readProofFile(document.getElementById('proof-file').files[0]);
         const paymentRef = document.getElementById('proof-ref').value.trim();
-        await db.collection('bills').doc(billId).update({
-          status: 'submitted',
-          paymentMethod: document.getElementById('proof-method').value,
-          paymentDate: document.getElementById('proof-date').value,
-          proofData: proof.dataUrl,
-          proofType: proof.type,
-          proofName: proof.name,
-          paymentRef,
-          proofRejectedReason: '',
-          proofUploadedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        afterBillWrite(billId, { status: 'submitted', proofRejectedReason: '' });
+        const proofId = await saveProofFile(auth.currentUser.uid, 'bill', proof);
+        const proofBatch = bills.length > 1 ? (proofId || ('batch_' + Date.now())) : '';
+        for (const x of bills) {
+          await db.collection('bills').doc(x.id).update({
+            status: 'submitted',
+            paymentMethod: document.getElementById('proof-method').value,
+            paymentDate: document.getElementById('proof-date').value,
+            ...proofFields(proofId, proof, false),
+            proofBatch,
+            paymentRef,
+            proofRejectedReason: '',
+            proofUploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          afterBillWrite(x.id, { status: 'submitted', proofRejectedReason: '', proofBatch, proofId: proofId || undefined });
+        }
         closeModal();
-        toast('Proof sent. Management will check it and mark the bill paid.');
-        notifyAdmins(`Payment Proof Submitted (${b.billNo})`, `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) uploaded proof for ${formatMoney(b.amount)} — ${b.period}.`, 'info');
+        toast('Proof sent. Management will check it and mark the bill' + (bills.length > 1 ? 's' : '') + ' paid.');
+        const total = bills.reduce((s, x) => s + Number(x.amount || 0), 0);
+        notifyAdmins(`Payment Proof Submitted (${bills.map(x => x.billNo).join(', ')})`, `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) uploaded proof for ${formatMoney(total)} — ${bills.map(x => x.period).join(', ')}.`, 'info');
       } catch(err) {
         toast("Error submitting proof: " + err.message);
         submitBtn.disabled = false;
@@ -4446,22 +4526,36 @@
     });
   };
 
+  // Bills paid together with one proof share proofBatch and are checked together.
+  function proofSiblings(b) {
+    if (!b.proofBatch) return [b];
+    const group = billsList.filter(x => x.proofBatch === b.proofBatch && x.status === 'submitted');
+    return group.some(x => x.id === b.id) ? group : [b, ...group];
+  }
+
   window.approveBillProof = async function(billId) {
     const b = billsList.find(item => item.id === billId);
     if (!b || currentUserProfile.role !== 'admin') return;
-    if (!(await confirmSheet({ title: 'Approve this payment?', body: `${b.billNo} (${formatMoney(b.amount)}) will be marked as paid.`, okLabel: 'Approve' }))) return;
+    const bills = proofSiblings(b);
+    const total = bills.reduce((s, x) => s + Number(x.amount || 0), 0);
+    const body = bills.length > 1
+      ? `This proof covers ${bills.length} bills (${bills.map(x => x.period).join(', ')}), ${formatMoney(total)} in total. All of them will be marked as paid.`
+      : `${b.billNo} (${formatMoney(b.amount)}) will be marked as paid.`;
+    if (!(await confirmSheet({ title: 'Approve this payment?', body, okLabel: 'Approve' }))) return;
 
     try {
-      await db.collection('bills').doc(billId).update({
-        status: 'paid',
-        paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-        verifiedBy: currentUserProfile.name
-      });
-      logAudit('bill', billId, 'update', `Payment proof approved — ${b.billNo} ${formatMoney(b.amount)} marked paid`);
-      afterBillWrite(billId, { status: 'paid', verifiedBy: currentUserProfile.name });
+      for (const x of bills) {
+        await db.collection('bills').doc(x.id).update({
+          status: 'paid',
+          paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+          verifiedBy: currentUserProfile.name
+        });
+        logAudit('bill', x.id, 'update', `Payment proof approved — ${x.billNo} ${formatMoney(x.amount)} marked paid`);
+        afterBillWrite(x.id, { status: 'paid', verifiedBy: currentUserProfile.name, paidAt: new Date() });
+      }
       closeModal();
-      toast('Payment approved');
-      await sendNotification(b.uid, `Payment Verified (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been verified. Thank you!`, 'success');
+      toast(bills.length > 1 ? `${bills.length} bills approved` : 'Payment approved');
+      await sendNotification(b.uid, `Payment Verified (${bills.map(x => x.billNo).join(', ')})`, `Your payment of ${formatMoney(total)} for ${bills.map(x => x.period).join(', ')} has been verified. Thank you! Your receipt is ready in Bills.`, 'success', 'bills');
     } catch(err) {
       toast("Error approving payment: " + err.message);
     }
@@ -4474,12 +4568,14 @@
     if (reason === null) return;
 
     try {
-      await db.collection('bills').doc(billId).update({
-        status: 'unpaid',
-        proofRejectedReason: reason.trim()
-      });
-      logAudit('bill', billId, 'update', `Payment proof rejected — ${b.billNo}: ${reason.trim()}`);
-      afterBillWrite(billId, { status: 'unpaid', proofRejectedReason: reason.trim() });
+      for (const x of proofSiblings(b)) {
+        await db.collection('bills').doc(x.id).update({
+          status: 'unpaid',
+          proofRejectedReason: reason.trim()
+        });
+        logAudit('bill', x.id, 'update', `Payment proof rejected — ${x.billNo}: ${reason.trim()}`);
+        afterBillWrite(x.id, { status: 'unpaid', proofRejectedReason: reason.trim() });
+      }
       closeModal();
       toast('Proof rejected');
       await sendNotification(b.uid, `Payment Proof Rejected (${b.billNo})`, `Reason: ${reason.trim()}. Please upload a valid proof for ${formatMoney(b.amount)} — ${b.period}.`, 'error');
@@ -4742,7 +4838,10 @@
       ${!isAdmin && (status === 'unpaid' || status === 'overdue') && b.proofRejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-bottom:14px;">Your previous proof was rejected: ${escapeHtml(b.proofRejectedReason)}. Please upload a new one.</div>` : ''}
       ${!isAdmin && status === 'submitted' ? `<div style="font-size:13px; color:var(--info); margin-bottom:14px;">Your payment proof has been submitted and is awaiting verification by management.</div>` : ''}
 
-      <button class="btn secondary block" onclick="downloadBillPDF('${b.id}')" style="margin-bottom:10px;">${status === 'paid' ? 'Download Receipt' : 'Download Invoice'}</button>
+      ${status === 'paid' ? `<div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button class="btn primary" style="flex:1;" onclick="shareBillReceipt('${b.id}')">${icon('share')} Share receipt</button>
+        <button class="btn secondary" style="flex:1;" onclick="downloadBillPDF('${b.id}')">${icon('file')} Download</button>
+      </div>` : `<button class="btn secondary block" onclick="downloadBillPDF('${b.id}')" style="margin-bottom:10px;">Download Invoice</button>`}
       ${isStaff() && b.uid ? `<button class="btn secondary block" onclick="downloadResidentStatement('${b.uid}')" style="margin-bottom:10px;">Resident Statement (PDF)</button>` : ''}
 
       ${isAdmin && status === 'submitted' ? `
@@ -4817,7 +4916,7 @@
     }
   };
 
-  window.downloadBillPDF = async function(billId) {
+  window.downloadBillPDF = async function(billId, share) {
     const b = billsList.find(item => item.id === billId);
     if (!b) return;
     const status = billStatus(b);
@@ -4854,7 +4953,7 @@
       if (status === 'paid') addRow("Paid On", formatDate(b.paidAt));
       if (b.paymentRef) addRow("Payment Reference", b.paymentRef);
       if (b.verifiedBy) addRow("Verified By", b.verifiedBy);
-      if (b.proofData) addRow("Payment Proof", "On file" + (b.proofName ? " (" + b.proofName + ")" : ""));
+      if (hasProof(b)) addRow("Payment Proof", "On file" + (b.proofName ? " (" + b.proofName + ")" : ""));
 
       y += 5;
       doc.setFont("helvetica", "bold");
@@ -4863,11 +4962,21 @@
       doc.setFont("helvetica", "normal");
       doc.text(doc.splitTextToSize(b.notes || 'N/A', 160), 25, y);
 
-      doc.save(`${status === 'paid' ? 'Receipt' : 'Bill'}_${(b.billNo || 'Record').replace(/\s+/g, '_')}.pdf`);
+      const fileName = `${status === 'paid' ? 'Receipt' : 'Bill'}_${(b.billNo || 'Record').replace(/\s+/g, '_')}.pdf`;
+      if (share) {
+        const file = new File([doc.output('blob')], fileName, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try { await navigator.share({ files: [file], title: fileName }); return; }
+          catch (e) { if (e && e.name === 'AbortError') return; }
+        }
+      }
+      doc.save(fileName);
     } catch(err) {
       toast("Error generating PDF: " + err.message);
     }
   };
+  // Phone share sheet (WhatsApp, email, ...) where supported, else download.
+  window.shareBillReceipt = function(billId) { return downloadBillPDF(billId, true); };
 
   // --- COMMUNITY FUNDS ---
   function contribQueries() {
@@ -5118,7 +5227,7 @@
             ${isAdmin ? `<div style="font-size:13px; font-family:var(--font-mono); margin-bottom:4px;">${formatMoney(c.amount)}</div>` : ''}
             <div style="font-size:13px; color:var(--text-faint);">${escapeHtml(formatDate(c.createdAt))}${c.paymentRef ? ' · Ref: ' + escapeHtml(c.paymentRef) : ''}</div>
             ${c.status === 'rejected' && c.rejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-top:4px;">Rejected: ${escapeHtml(c.rejectedReason)}</div>` : ''}
-            ${c.proofData ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="viewProofFile('contrib', '${c.id}')">View Proof</button>` : ''}
+            ${hasProof(c) ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="viewProofFile('contrib', '${c.id}')">View Proof</button>` : ''}
             ${isAdmin && c.status === 'submitted' ? `
               <div style="display:flex; gap:8px; margin-top:8px;">
                 <button class="btn sm primary" onclick="verifyContribution('${c.id}')">Verify</button>
@@ -5162,6 +5271,7 @@
           const paymentRef = document.getElementById('contrib-ref').value.trim();
           const paymentMethod = document.getElementById('contrib-method').value;
           const paymentDate = document.getElementById('contrib-date').value;
+          const proofId = proof ? await saveProofFile(auth.currentUser.uid, 'contrib', proof) : null;
 
           await db.collection('fund_contributions').add({
             fundId: f.id,
@@ -5175,9 +5285,7 @@
             paymentRef,
             paymentMethod,
             paymentDate,
-            proofData: proof ? proof.dataUrl : '',
-            proofType: proof ? proof.type : '',
-            proofName: proof ? proof.name : '',
+            ...(proof ? proofFields(proofId, proof, true) : { proofData: '', proofType: '', proofName: '' }),
             status: 'submitted',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
@@ -5599,18 +5707,6 @@
     return escapeHtml(raw).replace(/\{(\w+)\}/g, (m, k) => vars && vars[k] != null ? `<bdi>${escapeHtml(vars[k])}</bdi>` : m);
   }
 
-  // More than one unpaid bill: the resident picks which one the proof is for.
-  window.pickBillForProof = function() {
-    const owing = billsList.filter(b => b.uid === auth.currentUser.uid && ['unpaid', 'overdue'].includes(billStatus(b)))
-      .sort((a, b) => (toDate(a.dueDate) || 0) - (toDate(b.dueDate) || 0));
-    if (!owing.length) return;
-    menuSheet('Which bill is this proof for?', owing.map(b => ({
-      icon: 'receipt',
-      label: `${b.period || b.category || 'Bill'} · ${formatMoney(b.amount)}${billStatus(b) === 'overdue' ? ' · overdue' : ''}`,
-      run: () => openUploadProofModal(b.id)
-    })));
-  };
-
   function renderMyHouseCard(myBills) {
     const owing = myBills.filter(b => ['unpaid', 'overdue'].includes(billStatus(b)));
     const total = owing.reduce((s, b) => s + Number(b.amount || 0), 0);
@@ -5638,7 +5734,7 @@
         </div>
         ${rejected ? `<div class="rej">${t('rejected', { month: rejected.period || formatDate(rejected.dueDate), reason: rejected.proofRejectedReason })}</div>` : ''}
         <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;">
-          ${oldest ? `<button class="btn primary block" onclick="${owing.length > 1 ? 'pickBillForProof()' : `openUploadProofModal('${oldest.id}')`}">${icon('upload')} ${t('upload')}</button>` : ''}
+          ${oldest ? `<button class="btn primary block" onclick="openUploadProofModal('${oldest.id}')">${icon('upload')} ${t('upload')}</button>` : ''}
           <button class="btn secondary block" onclick="openBankDetailsSheet()">${icon('bank')} ${t('bank')}</button>
         </div>
       </div>
