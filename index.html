@@ -3434,6 +3434,7 @@
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
         });
       billsLoaded = true;
+      if (isStaff()) syncBillsSummary(billsList);
       renderBillsList();
     }).catch(e => { console.error("Error loading bills:", e); showLoadError('bills-list', e); });
 
@@ -4436,6 +4437,27 @@
   }
 
   let staffDirSynced = false;
+  // Residents read only their own bills, so staff keep society-wide bill totals
+  // in settings/billsSummary for the resident dashboard.
+  function billsSummaryOf(bills) {
+    const live = bills.filter(b => !b.isDeleted && b.status !== 'cancelled');
+    const by = st => live.filter(b => b.status === st);
+    return {
+      billedTotal: sumAmounts(live), paidTotal: sumAmounts(by('paid')),
+      paidCount: by('paid').length, unpaidCount: by('unpaid').length, submittedCount: by('submitted').length
+    };
+  }
+  let billsSummarySent = '';
+  function syncBillsSummary(bills) {
+    if (!isStaff()) return;
+    const s = billsSummaryOf(bills);
+    const key = JSON.stringify(s);
+    if (key === billsSummarySent) return;
+    billsSummarySent = key;
+    db.collection('settings').doc('billsSummary').set({ ...s, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+      .catch(err => { billsSummarySent = ''; console.warn('Bills summary not saved:', err && err.message); });
+  }
+
   function syncStaffDirectory(userDocs) {
     if (staffDirSynced) return;
     staffDirSynced = true;
@@ -5510,6 +5532,7 @@
         billsLoaded = true;
       }
       if (currentUserProfile.role === 'admin') syncStaffDirectory(usersSnap.docs);
+      syncBillsSummary(billsSnap.docs.map(d => d.data()));
       pendingResidents = usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() }))
         .filter(u => u.role === 'resident' && u.approved === false && u.membershipStatus !== 'rejected');
       const users = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
@@ -5769,13 +5792,14 @@
     if (!db || !auth.currentUser || currentUserProfile.role !== 'resident') return;
     const seq = ++billsSeq;
     Promise.all([
-      db.collection('bills').get(),
+      db.collection('bills').where('uid', '==', auth.currentUser.uid).get(),
+      loadBillsSummaryForResident(),
       db.collection('fund_contributions').where('status', '==', 'verified').get(),
       db.collection('expenses').get(),
       db.collection('tickets').get(),
       db.collection('transfers').get(),
       db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get()
-    ]).then(([billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap]) => {
+    ]).then(([billsSnap, society, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const bills = billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted);
       const contribs = contribsSnap.docs.map(d => d.data()).filter(c => !c.isDeleted);
@@ -5786,10 +5810,10 @@
       expensesList = expenses;
       // My own bills feed the "My house" card and its Upload proof button.
       if (seq === billsSeq) {
-        billsList = bills.filter(b => b.uid === auth.currentUser.uid);
+        billsList = bills;
         billsLoaded = true;
       }
-      renderResidentDashboard({ bills, contribs, expenses, tickets, transfers });
+      renderResidentDashboard({ bills, society, contribs, expenses, tickets, transfers });
     }).catch(e => {
       console.error("Error loading dashboard:", e);
       const el = document.getElementById('dashboard-body');
@@ -5797,19 +5821,30 @@
     });
   }
 
+  // Society-wide bill totals for residents: the staff-kept summary, or (while it
+  // has never been written) the old full read if the Firebase rules still allow it.
+  async function loadBillsSummaryForResident() {
+    try {
+      const doc = await db.collection('settings').doc('billsSummary').get();
+      if (doc.exists) return doc.data();
+    } catch (e) { console.warn('Bills summary unavailable:', e && e.message); }
+    try {
+      const snap = await db.collection('bills').get();
+      return billsSummaryOf(snap.docs.map(d => d.data()));
+    } catch (e) { return null; }
+  }
+
   function renderResidentDashboard(d) {
     const el = document.getElementById('dashboard-body');
     if (!el) return;
 
-    const paidBills = d.bills.filter(b => b.status === 'paid');
-    const unpaidBills = d.bills.filter(b => b.status === 'unpaid');
-    const inReviewBills = d.bills.filter(b => b.status === 'submitted');
-    const billed = d.bills.reduce((s, b) => s + Number(b.amount || 0), 0);
-    const collectedBills = paidBills.reduce((s, b) => s + Number(b.amount || 0), 0);
+    const soc = d.society || billsSummaryOf(d.bills);
+    const billed = Number(soc.billedTotal || 0);
+    const collectedBills = Number(soc.paidTotal || 0);
     const contribTotal = d.contribs.reduce((s, c) => s + Number(c.amount || 0), 0);
     const spentTotal = d.expenses.reduce((s, x) => s + Number(x.amount || 0), 0);
     const openTickets = d.tickets.filter(t => ['pending', 'in-progress'].includes(t.status)).length;
-    const billsAcct = billsAccountSummary(d.bills, d.expenses, d.transfers);
+    const billsAcct = billsAccountSummary([{ status: 'paid', amount: collectedBills }], d.expenses, d.transfers);
     const fundsAcct = allFundsSummary(d.contribs, d.expenses, d.transfers);
 
     // last 6 months expenses
@@ -5844,7 +5879,7 @@
       </div>`;
 
     el.innerHTML = `
-      ${renderMyHouseCard(d.bills.filter(b => b.uid === auth.currentUser.uid))}
+      ${renderMyHouseCard(d.bills)}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Open Complaints', openTickets, openTickets ? 'var(--info)' : 'var(--text)')}
@@ -5884,7 +5919,7 @@
 
       <div class="card" style="cursor:default;">
         <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Maintenance Bills</div>
-        ${svgDonut(billStatusSegments(paidBills.length, unpaidBills.length, inReviewBills.length), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
+        ${svgDonut(billStatusSegments(soc.paidCount || 0, soc.unpaidCount || 0, soc.submittedCount || 0), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
       </div>
     `;
   }
