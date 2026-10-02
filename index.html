@@ -4503,8 +4503,10 @@
       <div id="bank-card"></div>
       <div id="bills-account-card"></div>
       <button class="btn secondary block" onclick="closeModal(); openTransferModal('bills')">⇄ Transfer from the Bills account to a fund</button>
+      <div id="proof-move-card" style="margin-top:12px;"></div>
     `;
     openModal();
+    renderProofMoveCard();
     loadRecurringBillCard();
     loadBillsAccountCard();
     loadSocietySettings().then(renderBankCard);
@@ -4602,6 +4604,55 @@
       } catch (e) { slot.textContent = 'Could not load the proof: ' + e.message; }
     }
   }
+
+  // One-time move of proof photos still stored inside bills/contributions into
+  // proofs/{id}. Needs the new Firebase rules to be published.
+  async function inlineProofRecords() {
+    const [b, c] = await Promise.all([db.collection('bills').get(), db.collection('fund_contributions').get()]);
+    return [
+      ...b.docs.filter(d => d.data().proofData).map(d => ({ kind: 'bill', coll: 'bills', id: d.id, ...d.data() })),
+      ...c.docs.filter(d => d.data().proofData).map(d => ({ kind: 'contribution', coll: 'fund_contributions', id: d.id, ...d.data() }))
+    ];
+  }
+  function renderProofMoveCard() {
+    const el = document.getElementById('proof-move-card');
+    if (!el) return;
+    inlineProofRecords().then(list => {
+      if (!document.getElementById('proof-move-card')) return;
+      el.innerHTML = list.length ? `
+        <div class="filter-bar">
+          <label style="margin:0;">Speed up the app</label>
+          <div style="font-size:13px; color:var(--text-muted); margin:6px 0 10px;">${list.length} older payment proof photo${list.length > 1 ? 's are' : ' is'} stored inside bills, which makes lists slow to load. Move them to the separate proof store once the new Firebase rules are published.</div>
+          <button class="btn sm primary block" onclick="moveOldProofs(this)">Move ${list.length} proof photo${list.length > 1 ? 's' : ''}</button>
+        </div>` : '';
+    }).catch(() => {});
+  }
+  window.moveOldProofs = async function(btn) {
+    if (currentUserProfile.role !== 'admin') return;
+    btn.disabled = true;
+    let moved = 0;
+    try {
+      const list = await inlineProofRecords();
+      for (const r of list) {
+        btn.textContent = `Moving ${moved + 1} of ${list.length}…`;
+        const ref = await db.collection('proofs').add({
+          uid: r.uid || '', kind: r.kind, data: r.proofData, type: r.proofType || 'image', name: r.proofName || '',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(), movedFrom: r.coll + '/' + r.id
+        });
+        await db.collection(r.coll).doc(r.id).update({ proofId: ref.id, proofData: firebase.firestore.FieldValue.delete() });
+        const local = r.kind === 'bill' ? billsList.find(x => x.id === r.id) : fundContribsList.find(x => x.id === r.id);
+        if (local) { local.proofId = ref.id; delete local.proofData; }
+        proofCache[ref.id] = r.proofData;
+        moved++;
+      }
+      logAudit('settings', 'proofs', 'migrate', `Moved ${moved} proof photo(s) to the proof store`);
+      toast(`Moved ${moved} proof photo${moved === 1 ? '' : 's'}. Lists will load faster now.`);
+    } catch (err) {
+      const perm = /permission|insufficient/i.test(err.message || '');
+      toast(perm ? `Moved ${moved}. Please publish the new Firebase rules first, then try again.` : `Moved ${moved}, then stopped: ${err.message}`);
+    }
+    renderProofMoveCard();
+  };
 
   function proofSectionHtml(kind, record) {
     if (!hasProof(record)) return '';
