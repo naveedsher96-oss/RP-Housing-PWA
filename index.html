@@ -144,7 +144,7 @@
   main{flex:1; padding:18px 18px 10px;}
   .section-title{
     font-family:var(--font-display); font-weight:600; font-size:22px; margin:4px 0 4px;
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
   }
   .section-sub{color:var(--text-muted); font-size:13px; margin:0 0 18px; line-height:1.5;}
   .card{
@@ -179,7 +179,7 @@
 
   .stat-strip{display:flex; gap:8px; margin-bottom:14px;}
   .stat-box{flex:1; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;}
-  .stat-box .k{font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700;}
+  .stat-box .k{font-size:12px; text-transform:uppercase; letter-spacing:.2px; color:var(--text-faint); font-weight:700; overflow-wrap:normal; word-break:normal; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .stat-box .v{font-family:var(--font-mono); font-size:15px; font-weight:600; margin-top:4px;}
 
   .chip-row{display:flex; gap:8px; margin-bottom:14px; overflow-x:auto;}
@@ -421,9 +421,27 @@
   .boot-spinner{width:34px; height:34px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:boot-spin .9s linear infinite; margin:22px auto 0;}
   @keyframes boot-spin{to{transform:rotate(360deg);}}
   .boot-msg{font-size:13.5px; color:var(--text-muted); margin-top:14px; max-width:320px; line-height:1.5;}
+  /* Pull down to refresh */
+  #ptr{ position:fixed; left:50%; top:calc(8px + env(safe-area-inset-top)); z-index:60; width:38px; height:38px; margin-left:-19px;
+    border-radius:50%; background:var(--bg-elevated); border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,0.35);
+    display:flex; align-items:center; justify-content:center; color:var(--accent-2); font-size:18px;
+    transform:translateY(-60px); opacity:0; pointer-events:none; transition:transform .2s, opacity .2s; }
+  #ptr.pulling{ transition:none; }
+  #ptr.ready span{ transform:rotate(180deg); }
+  #ptr span{ display:inline-block; transition:transform .15s; }
+  #ptr.spin span{ animation:ptrspin .8s linear infinite; }
+  @keyframes ptrspin{ to{ transform:rotate(360deg); } }
+  /* Offline notice */
+  #offline-bar{ position:fixed; left:12px; right:12px; bottom:calc(72px + env(safe-area-inset-bottom)); z-index:45; max-width:496px; margin:0 auto;
+    background:#3a1d24; color:#ffd6d3; border:1px solid rgba(239,107,99,0.5); border-radius:12px; padding:9px 14px;
+    font-size:13px; font-weight:600; text-align:center; display:none; box-shadow:0 6px 18px rgba(0,0,0,0.35); }
+  #offline-bar.show{ display:block; }
+  #offline-bar.back{ background:#16362f; color:#c9f3e7; border-color:rgba(60,194,162,0.5); }
 </style>
 </head>
 <body>
+<div id="ptr" aria-hidden="true"><span>↓</span></div>
+<div id="offline-bar" role="status"></div>
 
 <div id="app">
   <div class="boot-wrap">
@@ -611,7 +629,7 @@
   let billFilterStatus = null; // null = the role's default chip (see currentBillFilter)
   let billsLoaded = false;
   let billSearch = '';
-  let billFilterMonth = 'all';
+  let billFilterMonth = null; // null = this month (staff); 'all' = every month
   let expenseFilter = { month: 'all', category: 'all', source: 'all' };
   let residentSearch = '';
   let societySettings = null;
@@ -1561,7 +1579,7 @@
             <button class="btn sm primary" style="white-space:nowrap;" onclick="openIssueBillModal()">+ Issue</button>
           </div>` : ''}
         </div>
-        <div class="section-sub">${isAdmin ? escapeHtml(monthLabel(monthKey(new Date()))) : staffView ? 'View only. Admins issue and approve bills.' : 'Maintenance charges issued to your house by management.'}</div>
+        <div class="section-sub">${isAdmin ? 'Bills by month. Needs action, Overdue and In review always cover every month.' : staffView ? 'View only. Admins issue and approve bills.' : 'Maintenance charges issued to your house by management.'}</div>
         <div id="bills-summary"></div>
         ${staffView ? `
           <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -1660,6 +1678,7 @@
       return `
         <div class="section-title">Audit & Archive</div>
         <div class="section-sub">Every change made in the app, and removed records kept for audit.</div>
+        ${currentUserProfile.role === 'admin' || isSuperAdmin() ? `<button class="btn sm secondary" style="margin-bottom:12px;" onclick="downloadBackup(this)">⬇ Download full backup</button>` : ''}
         <div class="chip-row">
           ${AUDIT_FILTERS.map(([k, lbl]) => `<button class="chip ${auditFilter === k ? 'active' : ''}" data-audit="${k}" onclick="setAuditFilter('${k}')">${lbl}</button>`).join('')}
         </div>
@@ -1772,6 +1791,68 @@
     billsLoaded = false;
     if (!document.getElementById('modal-view').classList.contains('active') && !uiSheetOpen()) loadData();
   });
+
+  // Pull down at the top of a screen to reload it.
+  (function setupPullToRefresh() {
+    const ind = document.getElementById('ptr');
+    let startY = null, dy = 0;
+    const blocked = t => document.getElementById('modal-view').classList.contains('active') || uiSheetOpen()
+      || (t && t.closest && t.closest('input, textarea, select, .modal-overlay, nav.tabbar'));
+    document.addEventListener('touchstart', ev => {
+      startY = null;
+      if (!currentUserProfile || window.scrollY > 0 || ev.touches.length !== 1 || blocked(ev.target)) return;
+      startY = ev.touches[0].clientY; dy = 0;
+    }, { passive: true });
+    document.addEventListener('touchmove', ev => {
+      if (startY === null) return;
+      dy = ev.touches[0].clientY - startY;
+      if (dy <= 0 || window.scrollY > 0) { ind.style.opacity = 0; ind.style.transform = ''; return; }
+      const pull = Math.min(dy * 0.5, 80);
+      ind.classList.add('pulling');
+      ind.classList.toggle('ready', dy > 120);
+      ind.style.opacity = Math.min(1, pull / 40);
+      ind.style.transform = `translateY(${pull - 20}px)`;
+    }, { passive: true });
+    document.addEventListener('touchend', () => {
+      if (startY === null) return;
+      startY = null;
+      ind.classList.remove('pulling', 'ready');
+      if (dy > 120 && window.scrollY <= 0 && navigator.onLine !== false) {
+        ind.classList.add('spin');
+        ind.style.opacity = 1; ind.style.transform = 'translateY(40px)';
+        ind.querySelector('span').textContent = '↻';
+        lastRefreshAt = Date.now();
+        billsLoaded = false;
+        loadData();
+        setTimeout(() => {
+          ind.classList.remove('spin'); ind.style.opacity = 0; ind.style.transform = '';
+          ind.querySelector('span').textContent = '↓';
+        }, 900);
+      } else { ind.style.opacity = 0; ind.style.transform = ''; }
+      dy = 0;
+    });
+  })();
+
+  // Tell people when they are offline, so a screen that does not update makes sense.
+  (function setupOfflineBar() {
+    const bar = document.getElementById('offline-bar');
+    let hideTimer = null;
+    const show = () => {
+      clearTimeout(hideTimer);
+      bar.className = 'show';
+      bar.textContent = "You're offline. Showing saved data; changes need a connection.";
+    };
+    window.addEventListener('offline', show);
+    window.addEventListener('online', () => {
+      bar.className = 'show back';
+      bar.textContent = 'Back online.';
+      hideTimer = setTimeout(() => { bar.className = ''; }, 2500);
+      if (currentUserProfile && auth && auth.currentUser && !document.getElementById('modal-view').classList.contains('active') && !uiSheetOpen()) {
+        billsLoaded = false; lastRefreshAt = Date.now(); loadData();
+      }
+    });
+    if (navigator.onLine === false) show();
+  })();
 
   window.goBack = function() {
     if (uiSheetOpen()) { closeUiSheet(null); return; }
@@ -2853,7 +2934,7 @@
       return `
         <div class="card" style="cursor:default;">
           <div style="font-weight:700; font-size:16px; color:var(--accent-2); margin-bottom:6px;">${escapeHtml(poll.question)}</div>
-          <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Total Votes: ${totalVotes} · ${postedByLabel(poll)}</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Total Votes: ${totalVotes} · ${postedByLabel(poll)}${hasVoted && !poll.closed ? ' · You can change your vote' : ''}</div>
 
           <div style="display:flex; flex-direction:column; gap:8px;">
             ${options.map((opt, idx) => {
@@ -2868,7 +2949,9 @@
                     <span style="font-size:13.5px; font-weight:${isSelected?'700':'500'};">${escapeHtml(opt)}</span>
                     <div style="display:flex; align-items:center; gap:10px;">
                       <span style="font-size:13px; color:var(--text-muted);">${pct}% (${count})</span>
-                      ${!hasVoted ? `<button class="btn sm primary" onclick="votePoll('${poll.id}', ${idx})">Vote</button>` : ''}
+                      ${!hasVoted ? `<button class="btn sm primary" onclick="votePoll('${poll.id}', ${idx})">Vote</button>`
+                        : isSelected ? `<span style="font-size:12px; font-weight:700; color:var(--accent-2); white-space:nowrap;">✓ Your vote</span>`
+                        : poll.closed ? '' : `<button class="btn sm secondary" onclick="votePoll('${poll.id}', ${idx})">Change</button>`}
                     </div>
                   </div>
                 </div>
@@ -2927,16 +3010,20 @@
 
   window.votePoll = async function(pollId, optionIndex) {
     if (!db || !auth.currentUser) return;
+    let changed = false;
     try {
       const ref = db.collection('polls').doc(pollId);
       await db.runTransaction(async (transaction) => {
         const doc = await transaction.get(ref);
         if (!doc.exists) throw "Poll does not exist!";
         const data = doc.data();
+        if (data.closed) throw "This poll is closed.";
         const votes = data.votes || {};
+        changed = auth.currentUser.uid in votes;
         votes[auth.currentUser.uid] = optionIndex;
         transaction.update(ref, { votes: votes });
       });
+      if (changed) toast('Vote changed.');
       loadPolls();
     } catch(err) {
       toast("Error casting vote: " + err);
@@ -3363,6 +3450,74 @@
     const d = toDate(value);
     return d ? dateStamp(d) : '';
   }
+  // --- BACKUP (admin) ---
+  // One JSON file with every record, so the society keeps its own copy.
+  // Proof photos are left out to keep the file small.
+  const BACKUP_COLLECTIONS = ['users', 'bills', 'fund_contributions', 'funds', 'expenses', 'transfers', 'tickets',
+    'announcements', 'polls', 'decisions', 'volunteer_programs', 'monthly_summaries', 'settings', 'audit_log', 'report_exports'];
+  function backupValue(v) {
+    if (v === null || v === undefined) return v;
+    if (typeof v.toDate === 'function') { try { return v.toDate().toISOString(); } catch (e) { return null; } }
+    if (Array.isArray(v)) return v.map(backupValue);
+    if (typeof v === 'object') {
+      const out = {};
+      for (const [k, x] of Object.entries(v)) if (k !== 'proofData') out[k] = backupValue(x);
+      return out;
+    }
+    return v;
+  }
+  window.downloadBackup = async function(btn) {
+    if (!(currentUserProfile.role === 'admin' || isSuperAdmin())) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Preparing backup…'; }
+    try {
+      const data = { app: 'RPHS', createdAt: new Date().toISOString(), createdBy: currentUserProfile.name, collections: {} };
+      const counts = [];
+      for (const name of BACKUP_COLLECTIONS) {
+        try {
+          const snap = await db.collection(name).get();
+          data.collections[name] = snap.docs.map(d => ({ id: d.id, ...backupValue(d.data()) }));
+          counts.push(`${name}: ${snap.size}`);
+        } catch (err) {
+          data.collections[name] = { error: err.message };
+        }
+      }
+      const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `RPHS_Backup_${dateStamp()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      logAudit('settings', 'backup', 'export', `Backup downloaded (${counts.join(', ')})`);
+      await db.collection('settings').doc('backup').set({
+        lastAt: firebase.firestore.FieldValue.serverTimestamp(), lastBy: currentUserProfile.name
+      }, { merge: true }).catch(() => {});
+      toast('Backup downloaded. Keep the file somewhere safe, like Google Drive.');
+      const r = document.getElementById('backup-reminder');
+      if (r) r.innerHTML = '';
+    } catch (err) {
+      toast('Backup failed: ' + err.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⬇ Download full backup'; }
+    }
+  };
+  function checkBackupReminder() {
+    const el = document.getElementById('backup-reminder');
+    if (!el) return;
+    db.collection('settings').doc('backup').get().then(doc => {
+      const last = doc.exists ? toDate(doc.data().lastAt) : null;
+      if (last && Date.now() - last.getTime() < 7 * 24 * 3600 * 1000) { el.innerHTML = ''; return; }
+      el.innerHTML = `
+        <div class="card" style="cursor:default; margin-bottom:14px; border-color:rgba(245,177,76,0.45);">
+          <div style="font-weight:700; font-size:14px;">Weekly backup due</div>
+          <div style="font-size:13px; color:var(--text-muted); margin:4px 0 10px;">${last ? 'Last backup: ' + escapeHtml(formatDate(last)) + '.' : 'No backup has been downloaded yet.'} One tap saves a copy of every record to this phone.</div>
+          <button class="btn sm primary" onclick="downloadBackup(this)">⬇ Download full backup</button>
+        </div>`;
+    }).catch(() => {});
+  }
+
   function downloadCSV(fileName, headers, rows, reportType) {
     const lines = [headers].concat(rows).map(r => r.map(csvCell).join(','));
     const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
@@ -3434,10 +3589,55 @@
           return (dbb ? dbb.getTime() : 0) - (da ? da.getTime() : 0);
         });
       billsLoaded = true;
+      if (isStaff()) syncBillsSummary(billsList);
       renderBillsList();
+      applyLateFees(billsList);
     }).catch(e => { console.error("Error loading bills:", e); showLoadError('bills-list', e); });
 
     if (currentUserProfile.role !== 'admin') loadSocietySettings().then(renderBankCard);
+  }
+
+  // --- LATE FEE (optional, off by default) ---
+  // When an admin opens the app, unpaid bills that are past their due date plus
+  // the grace days get the late fee added once (lateFeeApplied). Only bills due
+  // on or after lateFeeSince are charged.
+  let lateFeeSettings = null, lateFeeRunning = false;
+  async function applyLateFees(bills) {
+    if (currentUserProfile.role !== 'admin' || lateFeeRunning) return;
+    lateFeeRunning = true;
+    try {
+      if (!lateFeeSettings || Date.now() - lateFeeSettings.at > 10 * 60 * 1000) {
+        const doc = await db.collection('settings').doc('recurringBill').get();
+        lateFeeSettings = { at: Date.now(), ...(doc.exists ? doc.data() : {}) };
+      }
+      const s = lateFeeSettings;
+      const fee = Number(s.lateFeeAmount) || 0;
+      if (!s.lateFeeEnabled || !(fee > 0) || !s.lateFeeSince) return;
+      const cutoff = new Date(new Date().toDateString());
+      cutoff.setDate(cutoff.getDate() - (Number(s.lateFeeGraceDays) || 0));
+      const category = s.category || RECURRING_DEFAULTS.category;
+      const due = bills.filter(b => !b.isDeleted && b.status === 'unpaid' && !b.lateFeeApplied && b.dueDate
+        && (b.category || '') === category
+        && String(b.dueDate) >= s.lateFeeSince && toDate(b.dueDate) < cutoff);
+      for (const b of due) {
+        const base = Number(b.amount || 0);
+        const patch = { amount: base + fee, baseAmount: base, lateFee: fee, lateFeeApplied: true };
+        await db.collection('bills').doc(b.id).update({ ...patch, lateFeeAt: firebase.firestore.FieldValue.serverTimestamp() });
+        Object.assign(b, patch);
+        const inList = billsList.find(x => x.id === b.id);
+        if (inList && inList !== b) Object.assign(inList, patch);
+        logAudit('bill', b.id, 'late_fee', `Late fee ${formatMoney(fee)} added to ${b.billNo || b.id} (${b.name || ''})`);
+        if (b.uid) sendNotification(b.uid, `Late fee added (${b.billNo || 'bill'})`, `${b.period || b.category || 'Your bill'} is overdue, so a late fee of ${formatMoney(fee)} was added. New total: ${formatMoney(base + fee)}.`, 'error', 'bills');
+      }
+      if (due.length) {
+        toast(`Late fee added to ${due.length} overdue bill${due.length > 1 ? 's' : ''}.`);
+        if (document.getElementById('bills-list')) renderBillsList();
+      }
+    } catch (e) {
+      console.warn('Late fee check failed:', e && e.message);
+    } finally {
+      lateFeeRunning = false;
+    }
   }
 
   // --- RECURRING MONTHLY BILL (ADMIN) ---
@@ -3485,6 +3685,7 @@
         <div style="font-size:13px; color:var(--text-faint); margin-top:2px;">
           Members who already have a ${escapeHtml(s.category)} bill for that month (paid or unpaid) are skipped. New residents are included automatically once approved.
         </div>
+        <div style="font-size:13px; color:var(--text-muted); margin-top:6px;">Late fee: ${s.lateFeeEnabled ? `<b>${formatMoney(s.lateFeeAmount)}</b>, ${Number(s.lateFeeGraceDays) || 0} day(s) after the due date` : 'Off'}</div>
         ${pending ? `<div style="font-size:13px; color:var(--accent-2); margin-top:8px;">Issuing ${escapeHtml(monthLabel(s.runRequest.month))} bills now… refresh in a moment.</div>` : ''}
         ${last ? `<div style="font-size:13px; color:var(--text-muted); margin-top:8px;">Last run${lastAt ? ' ' + lastAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}: <b>${last.issued}</b> bill(s) for ${escapeHtml(last.period || '')}, ${last.skippedBilled || 0} already billed, ${last.skippedExempt || 0} exempt.</div>` : ''}
         ${recurringExempt.length ? `
@@ -3523,6 +3724,17 @@
         <input type="number" id="rec-dueday" value="${Number(s.dueDay) || 20}" min="1" max="28" required />
         <label>Notes on each bill (optional)</label>
         <textarea id="rec-notes" placeholder="e.g. Covers security, sweeping and street lights">${escapeHtml(s.notes || '')}</textarea>
+        <div style="border-top:1px solid var(--border); margin-top:16px; padding-top:12px;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:0;">
+            <input type="checkbox" id="rec-latefee-on" ${s.lateFeeEnabled ? 'checked' : ''} style="width:18px; height:18px; margin:0;" />
+            <span>Add a late fee to overdue bills</span>
+          </label>
+          <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Added once to each overdue ${escapeHtml(s.category || 'maintenance')} bill, a few days after its due date. Only bills due after you switch this on are charged, and the resident is told.</div>
+          <div style="display:flex; gap:8px;">
+            <div style="flex:1;"><label>Late fee (PKR)</label><input type="number" id="rec-latefee" value="${Number(s.lateFeeAmount) || 200}" min="1" /></div>
+            <div style="flex:1;"><label>Grace days</label><input type="number" id="rec-latefee-days" value="${Number.isFinite(Number(s.lateFeeGraceDays)) ? Number(s.lateFeeGraceDays) : 5}" min="0" max="60" /></div>
+          </div>
+        </div>
         <button type="submit" class="btn primary block" style="margin-top:16px;">Save</button>
       </form>
     `;
@@ -3536,12 +3748,19 @@
         category: document.getElementById('rec-category').value,
         dueDay: Number(document.getElementById('rec-dueday').value) || 20,
         notes: document.getElementById('rec-notes').value.trim(),
+        lateFeeEnabled: document.getElementById('rec-latefee-on').checked,
+        lateFeeAmount: Number(document.getElementById('rec-latefee').value) || 0,
+        lateFeeGraceDays: Math.max(0, Number(document.getElementById('rec-latefee-days').value) || 0),
         updatedBy: currentUserProfile.name,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
       if (!(data.amount > 0)) { toast("Please enter a valid amount."); return; }
+      if (data.lateFeeEnabled && !(data.lateFeeAmount > 0)) { toast("Please enter the late fee amount."); return; }
+      // Switching the late fee on starts it from today, so older bills are never charged.
+      if (data.lateFeeEnabled && !s.lateFeeEnabled) data.lateFeeSince = new Date().toISOString().slice(0, 10);
       try {
         await db.collection('settings').doc('recurringBill').set(data, { merge: true });
+        lateFeeSettings = null;
         logAudit('settings', 'recurringBill', 'update', `Recurring bill ${data.enabled ? 'enabled' : 'disabled'}: ${data.category} ${formatMoney(data.amount)}, due day ${data.dueDay}`);
         toast('Recurring bill saved');
         openBillingSettings();
@@ -3730,16 +3949,33 @@
     renderBillsList();
   };
 
+  // Staff see one month at a time (this month by default); Needs action,
+  // Overdue and In review are to-do lists, so they always cover every month.
+  function currentBillMonth() {
+    if (!isStaff()) return 'all';
+    return billFilterMonth || monthKey(new Date());
+  }
+  function monthScopedChip(f) {
+    return !['needs', 'overdue', 'submitted', 'topay'].includes(f);
+  }
+
   function renderBillFilterBar() {
+    const m = currentBillMonth();
+    const months = lastTwelveMonths();
+    if (m !== 'all' && !months.includes(m)) months.push(m);
     return `
       <div class="filter-bar">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <button class="dots-btn" style="border-color:var(--border);" onclick="stepBillMonth(-1)" aria-label="Previous month">‹</button>
+          <select onchange="setBillMonth(this.value)" aria-label="Month" style="flex:1; min-width:0; font-weight:700;">
+            ${months.map(k => `<option value="${k}" ${m===k?'selected':''}>${monthLabel(k)}</option>`).join('')}
+            <option value="all" ${m==='all'?'selected':''}>All months</option>
+          </select>
+          <button class="dots-btn" style="border-color:var(--border);" onclick="stepBillMonth(1)" aria-label="Next month" ${m === monthKey(new Date()) ? 'disabled' : ''}>›</button>
+        </div>
         <label for="bill-search">Find bills</label>
         <div style="display:flex; gap:8px;">
-          <input type="search" id="bill-search" placeholder="Name, house or bill no." value="${escapeHtml(billSearch)}" oninput="setBillSearch(this.value)" style="flex:1.4; min-width:0;" />
-          <select onchange="setBillMonth(this.value)" style="flex:1; min-width:0;">
-            <option value="all" ${billFilterMonth==='all'?'selected':''}>All months</option>
-            ${lastTwelveMonths().map(k => `<option value="${k}" ${billFilterMonth===k?'selected':''}>${monthLabel(k)}</option>`).join('')}
-          </select>
+          <input type="search" id="bill-search" placeholder="Name, house or bill no." value="${escapeHtml(billSearch)}" oninput="setBillSearch(this.value)" style="flex:1; min-width:0;" />
         </div>
         <div id="bill-filter-summary" style="font-size:13px; color:var(--text-muted); margin-top:10px;"></div>
       </div>
@@ -3752,9 +3988,18 @@
     renderBillsList();
   };
   window.setBillMonth = function(value) {
-    billFilterMonth = value || 'all';
+    billFilterMonth = value || null;
     delete pageShown['bills'];
+    const bar = document.querySelector('#bill-search') && document.querySelector('#bill-search').closest('.filter-bar');
+    if (bar) bar.outerHTML = renderBillFilterBar();
     renderBillsList();
+  };
+  window.stepBillMonth = function(dir) {
+    const m = currentBillMonth();
+    const base = m === 'all' ? new Date() : new Date(Number(m.slice(0, 4)), Number(m.slice(5)) - 1, 1);
+    const next = monthKey(new Date(base.getFullYear(), base.getMonth() + (m === 'all' ? 0 : dir), 1));
+    if (next > monthKey(new Date())) return;
+    setBillMonth(next);
   };
 
   function billInMonth(b, key) {
@@ -3780,7 +4025,7 @@
     const f = currentBillFilter();
     return billsList.filter(b => {
       if (!billMatchesChip(b, f)) return false;
-      if (!billInMonth(b, billFilterMonth)) return false;
+      if (monthScopedChip(f) && !billInMonth(b, currentBillMonth())) return false;
       if (billSearch) {
         const hay = [b.name, b.house, b.billNo, b.category, b.period].map(v => String(v || '').toLowerCase()).join(' ');
         if (!hay.includes(billSearch)) return false;
@@ -4117,13 +4362,16 @@
     if (summaryEl) {
       if (staffView) {
         const sum = arr => arr.reduce((s, b) => s + Number(b.amount || 0), 0);
-        const collected = sum(billsList.filter(b => billStatus(b) === 'paid'));
-        const outstanding = sum(billsList.filter(b => ['unpaid', 'overdue'].includes(billStatus(b))));
+        const m = currentBillMonth();
+        const inMonth = billsList.filter(b => billInMonth(b, m));
+        const collected = sum(inMonth.filter(b => billStatus(b) === 'paid'));
+        const outstanding = sum(inMonth.filter(b => ['unpaid', 'overdue'].includes(billStatus(b))));
         const review = billsList.filter(b => b.status === 'submitted');
         summaryEl.innerHTML = `
+          <div style="font-size:13px; color:var(--text-muted); font-weight:700; margin-bottom:6px;">${m === 'all' ? 'All months' : escapeHtml(monthLabel(m))}</div>
           <div class="stat-strip">
             <div class="stat-box"><div class="k">Collected</div><div class="v money" style="color:var(--success);">${formatMoney(collected)}</div></div>
-            <div class="stat-box"><div class="k">Outstanding</div><div class="v money" style="color:var(--danger);">${formatMoney(outstanding)}</div></div>
+            <div class="stat-box"><div class="k">Unpaid</div><div class="v money" style="color:var(--danger);">${formatMoney(outstanding)}</div></div>
             <div class="stat-box"><div class="k">In review</div><div class="v" style="color:var(--info);">${review.length} proof${review.length === 1 ? '' : 's'}</div></div>
           </div>`;
       } else {
@@ -4134,13 +4382,13 @@
     // chip counts
     document.querySelectorAll('[data-count]').forEach(el => {
       const f = el.getAttribute('data-count');
-      const n = billsList.filter(b => billMatchesChip(b, f)).length;
+      const n = billsList.filter(b => billMatchesChip(b, f) && (!monthScopedChip(f) || billInMonth(b, currentBillMonth()))).length;
       el.textContent = f === 'all' || !n ? '' : String(n);
     });
 
     const list = filteredBills();
     const filterSummary = document.getElementById('bill-filter-summary');
-    if (filterSummary) filterSummary.textContent = `${list.length} of ${billsList.length} bill(s) · ${formatMoney(sumAmounts(list))} billed · ${formatMoney(sumAmounts(list.filter(isOutstanding)))} outstanding`;
+    if (filterSummary) filterSummary.textContent = `${list.length} bill(s)${monthScopedChip(currentBillFilter()) ? '' : ' from every month'} · ${formatMoney(sumAmounts(list))} billed · ${formatMoney(sumAmounts(list.filter(isOutstanding)))} outstanding`;
     const defaultersBtn = document.getElementById('defaulters-btn');
     if (defaultersBtn) {
       const n = defaultersList().filter(d => d.overdue).length;
@@ -4192,7 +4440,7 @@
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px;">
             <div class="amount money">${formatMoney(b.amount)}</div>
             ${status === 'paid'
-              ? `<button class="btn sm secondary" onclick="event.stopPropagation(); downloadBillPDF('${b.id}')">${icon('file')} Receipt</button>`
+              ? `<button class="btn sm secondary" onclick="event.stopPropagation(); shareBillReceipt('${b.id}')">${icon('share')} Receipt</button>`
               : status === 'submitted'
                 ? `<span style="font-size:13px; color:var(--info); font-weight:600;">Proof sent. Being checked.</span>`
                 : `<button class="btn sm primary" onclick="event.stopPropagation(); openUploadProofModal('${b.id}')">${icon('upload')} Upload proof</button>`}
@@ -4255,8 +4503,10 @@
       <div id="bank-card"></div>
       <div id="bills-account-card"></div>
       <button class="btn secondary block" onclick="closeModal(); openTransferModal('bills')">⇄ Transfer from the Bills account to a fund</button>
+      <div id="proof-move-card" style="margin-top:12px;"></div>
     `;
     openModal();
+    renderProofMoveCard();
     loadRecurringBillCard();
     loadBillsAccountCard();
     loadSocietySettings().then(renderBankCard);
@@ -4304,12 +4554,115 @@
     });
   }
 
+  // Payment proof files live in proofs/{id}; a bill or contribution keeps only
+  // proofId, so lists stay small and fast. Older records still carry the file
+  // inline in proofData until an admin moves them (Billing settings).
+  const proofCache = {};
+  async function saveProofFile(ownerUid, kind, proof) {
+    try {
+      const ref = await db.collection('proofs').add({
+        uid: ownerUid, kind, data: proof.dataUrl, type: proof.type, name: proof.name,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      proofCache[ref.id] = proof.dataUrl;
+      return ref.id;
+    } catch (e) {
+      // The new Firebase rules are not published yet: keep the file on the record.
+      console.warn('Proof store unavailable, keeping the file on the record:', e && e.message);
+      return null;
+    }
+  }
+  function proofFields(proofId, proof, creating) {
+    if (!proofId) return { proofData: proof.dataUrl, proofType: proof.type, proofName: proof.name };
+    return { proofId, proofType: proof.type, proofName: proof.name,
+      proofData: creating ? '' : firebase.firestore.FieldValue.delete() };
+  }
+  async function proofDataOf(record) {
+    if (!record) return null;
+    if (record.proofData) return record.proofData;
+    if (!record.proofId) return null;
+    if (proofCache[record.proofId]) return proofCache[record.proofId];
+    const doc = await db.collection('proofs').doc(record.proofId).get();
+    const data = doc.exists ? doc.data().data : null;
+    if (data) proofCache[record.proofId] = data;
+    return data;
+  }
+  function hasProof(record) { return !!(record && (record.proofData || record.proofId)); }
+  function proofRecord(kind, id) {
+    return kind === 'bill' ? billsList.find(item => item.id === id) : fundContribsList.find(item => item.id === id);
+  }
+  async function hydrateProofSlots() {
+    for (const slot of document.querySelectorAll('.proof-slot[data-id]')) {
+      const kind = slot.getAttribute('data-kind'), id = slot.getAttribute('data-id');
+      const record = proofRecord(kind, id);
+      try {
+        const data = await proofDataOf(record);
+        if (!data) { slot.textContent = 'Proof file not found.'; continue; }
+        slot.outerHTML = record.proofType === 'image'
+          ? `<img class="proof-thumb" src="${data}" alt="Payment proof" onclick="viewProofFile('${kind}', '${id}')" style="cursor:pointer;" />`
+          : `<button class="btn sm secondary" style="margin-top:6px;" onclick="viewProofFile('${kind}', '${id}')">Open PDF Proof</button>`;
+      } catch (e) { slot.textContent = 'Could not load the proof: ' + e.message; }
+    }
+  }
+
+  // One-time move of proof photos still stored inside bills/contributions into
+  // proofs/{id}. Needs the new Firebase rules to be published.
+  async function inlineProofRecords() {
+    const [b, c] = await Promise.all([db.collection('bills').get(), db.collection('fund_contributions').get()]);
+    return [
+      ...b.docs.filter(d => d.data().proofData).map(d => ({ kind: 'bill', coll: 'bills', id: d.id, ...d.data() })),
+      ...c.docs.filter(d => d.data().proofData).map(d => ({ kind: 'contribution', coll: 'fund_contributions', id: d.id, ...d.data() }))
+    ];
+  }
+  function renderProofMoveCard() {
+    const el = document.getElementById('proof-move-card');
+    if (!el) return;
+    inlineProofRecords().then(list => {
+      if (!document.getElementById('proof-move-card')) return;
+      el.innerHTML = list.length ? `
+        <div class="filter-bar">
+          <label style="margin:0;">Speed up the app</label>
+          <div style="font-size:13px; color:var(--text-muted); margin:6px 0 10px;">${list.length} older payment proof photo${list.length > 1 ? 's are' : ' is'} stored inside bills, which makes lists slow to load. Move them to the separate proof store once the new Firebase rules are published.</div>
+          <button class="btn sm primary block" onclick="moveOldProofs(this)">Move ${list.length} proof photo${list.length > 1 ? 's' : ''}</button>
+        </div>` : '';
+    }).catch(() => {});
+  }
+  window.moveOldProofs = async function(btn) {
+    if (currentUserProfile.role !== 'admin') return;
+    btn.disabled = true;
+    let moved = 0;
+    try {
+      const list = await inlineProofRecords();
+      for (const r of list) {
+        btn.textContent = `Moving ${moved + 1} of ${list.length}…`;
+        const ref = await db.collection('proofs').add({
+          uid: r.uid || '', kind: r.kind, data: r.proofData, type: r.proofType || 'image', name: r.proofName || '',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(), movedFrom: r.coll + '/' + r.id
+        });
+        await db.collection(r.coll).doc(r.id).update({ proofId: ref.id, proofData: firebase.firestore.FieldValue.delete() });
+        const local = r.kind === 'bill' ? billsList.find(x => x.id === r.id) : fundContribsList.find(x => x.id === r.id);
+        if (local) { local.proofId = ref.id; delete local.proofData; }
+        proofCache[ref.id] = r.proofData;
+        moved++;
+      }
+      logAudit('settings', 'proofs', 'migrate', `Moved ${moved} proof photo(s) to the proof store`);
+      toast(`Moved ${moved} proof photo${moved === 1 ? '' : 's'}. Lists will load faster now.`);
+    } catch (err) {
+      const perm = /permission|insufficient/i.test(err.message || '');
+      toast(perm ? `Moved ${moved}. Please publish the new Firebase rules first, then try again.` : `Moved ${moved}, then stopped: ${err.message}`);
+    }
+    renderProofMoveCard();
+  };
+
   function proofSectionHtml(kind, record) {
-    if (!record.proofData) return '';
+    if (!hasProof(record)) return '';
+    if (!record.proofData) setTimeout(hydrateProofSlots, 0);
     return `
       <div style="margin-bottom:14px;">
         <label style="margin-top:0;">Payment Proof ${record.proofName ? '(' + escapeHtml(record.proofName) + ')' : ''}</label>
-        ${record.proofType === 'image'
+        ${!record.proofData
+          ? `<div class="proof-slot" data-kind="${kind}" data-id="${record.id}" style="font-size:13px; color:var(--text-muted); padding:8px 0;">Loading proof…</div>`
+          : record.proofType === 'image'
           ? `<img class="proof-thumb" src="${record.proofData}" alt="Payment proof" onclick="viewProofFile('${kind}', '${record.id}')" style="cursor:pointer;" />`
           : `<button class="btn sm secondary" style="margin-top:6px;" onclick="viewProofFile('${kind}', '${record.id}')">Open PDF Proof</button>`}
         ${record.paymentRef ? `<div style="font-size:13px; color:var(--text-muted); margin-top:6px;">Transaction Ref: <span style="font-family:var(--font-mono);">${escapeHtml(record.paymentRef)}</span></div>` : ''}
@@ -4318,13 +4671,13 @@
     `;
   }
 
-  window.viewProofFile = function(kind, id) {
-    const record = kind === 'bill'
-      ? billsList.find(item => item.id === id)
-      : fundContribsList.find(item => item.id === id);
-    if (!record || !record.proofData) return;
+  window.viewProofFile = async function(kind, id) {
+    const record = proofRecord(kind, id);
+    if (!hasProof(record)) return;
     try {
-      const parts = record.proofData.split(',');
+      const data = await proofDataOf(record);
+      if (!data) { toast('Proof file not found.'); return; }
+      const parts = data.split(',');
       const mime = parts[0].match(/data:([^;]+)/)[1];
       const bytes = atob(parts[1]);
       const arr = new Uint8Array(bytes.length);
@@ -4353,6 +4706,27 @@
   }
 
   let staffDirSynced = false;
+  // Residents read only their own bills, so staff keep society-wide bill totals
+  // in settings/billsSummary for the resident dashboard.
+  function billsSummaryOf(bills) {
+    const live = bills.filter(b => !b.isDeleted && b.status !== 'cancelled');
+    const by = st => live.filter(b => b.status === st);
+    return {
+      billedTotal: sumAmounts(live), paidTotal: sumAmounts(by('paid')),
+      paidCount: by('paid').length, unpaidCount: by('unpaid').length, submittedCount: by('submitted').length
+    };
+  }
+  let billsSummarySent = '';
+  function syncBillsSummary(bills) {
+    if (!isStaff()) return;
+    const s = billsSummaryOf(bills);
+    const key = JSON.stringify(s);
+    if (key === billsSummarySent) return;
+    billsSummarySent = key;
+    db.collection('settings').doc('billsSummary').set({ ...s, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+      .catch(err => { billsSummarySent = ''; console.warn('Bills summary not saved:', err && err.message); });
+  }
+
   function syncStaffDirectory(userDocs) {
     if (staffDirSynced) return;
     staffDirSynced = true;
@@ -4367,11 +4741,25 @@
   window.openUploadProofModal = function(billId) {
     const b = billsList.find(item => item.id === billId);
     if (!b || b.uid !== auth.currentUser.uid) return;
+    // Every unpaid bill of this resident can share one payment proof.
+    const owing = billsList.filter(x => x.uid === auth.currentUser.uid && ['unpaid', 'overdue'].includes(billStatus(x)))
+      .sort((p, q) => (toDate(p.dueDate) || 0) - (toDate(q.dueDate) || 0));
+    if (!owing.some(x => x.id === billId)) owing.unshift(b);
 
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Upload Payment Proof</div>
-      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">${escapeHtml(b.billNo || 'BILL')} · ${escapeHtml(b.category || 'Maintenance')} · ${formatMoney(b.amount)}</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">${owing.length > 1 ? 'Tick every bill this payment covers.' : `${escapeHtml(b.billNo || 'BILL')} · ${escapeHtml(b.category || 'Maintenance')} · ${formatMoney(b.amount)}`}</div>
       <form id="proof-form">
+        ${owing.length > 1 ? `
+          <div class="card" style="cursor:default; padding:6px 12px; margin-bottom:6px;">
+            ${owing.map(x => `
+              <label style="display:flex; align-items:center; gap:10px; margin:0; padding:8px 0; text-transform:none; letter-spacing:0; font-size:14px; color:var(--text); font-weight:600;">
+                <input type="checkbox" class="proof-bill" value="${x.id}" data-amt="${Number(x.amount || 0)}" ${x.id === billId ? 'checked' : ''} style="width:20px; height:20px; flex:none;" />
+                <span style="flex:1; min-width:0;">${escapeHtml(x.category && x.category !== 'Monthly Maintenance' ? x.category + (x.period && x.period !== 'One-time' ? ' · ' + x.period : '') : (x.period || 'Bill'))}${billStatus(x) === 'overdue' ? ' <span class="badge overdue">Overdue</span>' : ''}</span>
+                <span class="money">${formatMoney(x.amount)}</span>
+              </label>`).join('')}
+            <div style="display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--border); font-weight:800;"><span>Total</span><span class="money" id="proof-total">${formatMoney(b.amount)}</span></div>
+          </div>` : ''}
         <label>Payment Method</label>
         <select id="proof-method" required>
           ${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('')}
@@ -4387,29 +4775,41 @@
       <div style="text-align:center; font-size:13px; color:var(--text-faint); margin-top:10px;">Management will verify your proof and mark the bill paid.</div>
     `;
     openModal();
+    document.querySelectorAll('.proof-bill').forEach(cb => cb.addEventListener('change', () => {
+      const sum = [...document.querySelectorAll('.proof-bill:checked')].reduce((s, c) => s + Number(c.dataset.amt || 0), 0);
+      document.getElementById('proof-total').textContent = formatMoney(sum);
+    }));
 
     document.getElementById('proof-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitBtn = e.target.querySelector('button[type="submit"]');
+      const ticked = document.querySelectorAll('.proof-bill').length
+        ? [...document.querySelectorAll('.proof-bill:checked')].map(c => c.value) : [billId];
+      if (!ticked.length) { toast('Tick at least one bill.'); return; }
+      const bills = ticked.map(id => billsList.find(x => x.id === id)).filter(Boolean);
       submitBtn.disabled = true;
       try {
         const proof = await readProofFile(document.getElementById('proof-file').files[0]);
         const paymentRef = document.getElementById('proof-ref').value.trim();
-        await db.collection('bills').doc(billId).update({
-          status: 'submitted',
-          paymentMethod: document.getElementById('proof-method').value,
-          paymentDate: document.getElementById('proof-date').value,
-          proofData: proof.dataUrl,
-          proofType: proof.type,
-          proofName: proof.name,
-          paymentRef,
-          proofRejectedReason: '',
-          proofUploadedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        afterBillWrite(billId, { status: 'submitted', proofRejectedReason: '' });
+        const proofId = await saveProofFile(auth.currentUser.uid, 'bill', proof);
+        const proofBatch = bills.length > 1 ? (proofId || ('batch_' + Date.now())) : '';
+        for (const x of bills) {
+          await db.collection('bills').doc(x.id).update({
+            status: 'submitted',
+            paymentMethod: document.getElementById('proof-method').value,
+            paymentDate: document.getElementById('proof-date').value,
+            ...proofFields(proofId, proof, false),
+            proofBatch,
+            paymentRef,
+            proofRejectedReason: '',
+            proofUploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          afterBillWrite(x.id, { status: 'submitted', proofRejectedReason: '', proofBatch, proofId: proofId || undefined });
+        }
         closeModal();
-        toast('Proof sent. Management will check it and mark the bill paid.');
-        notifyAdmins(`Payment Proof Submitted (${b.billNo})`, `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) uploaded proof for ${formatMoney(b.amount)} — ${b.period}.`, 'info');
+        toast('Proof sent. Management will check it and mark the bill' + (bills.length > 1 ? 's' : '') + ' paid.');
+        const total = bills.reduce((s, x) => s + Number(x.amount || 0), 0);
+        notifyAdmins(`Payment Proof Submitted (${bills.map(x => x.billNo).join(', ')})`, `${currentUserProfile.name} (${currentUserProfile.house || 'N/A'}) uploaded proof for ${formatMoney(total)} — ${bills.map(x => x.period).join(', ')}.`, 'info');
       } catch(err) {
         toast("Error submitting proof: " + err.message);
         submitBtn.disabled = false;
@@ -4417,22 +4817,36 @@
     });
   };
 
+  // Bills paid together with one proof share proofBatch and are checked together.
+  function proofSiblings(b) {
+    if (!b.proofBatch) return [b];
+    const group = billsList.filter(x => x.proofBatch === b.proofBatch && x.status === 'submitted');
+    return group.some(x => x.id === b.id) ? group : [b, ...group];
+  }
+
   window.approveBillProof = async function(billId) {
     const b = billsList.find(item => item.id === billId);
     if (!b || currentUserProfile.role !== 'admin') return;
-    if (!(await confirmSheet({ title: 'Approve this payment?', body: `${b.billNo} (${formatMoney(b.amount)}) will be marked as paid.`, okLabel: 'Approve' }))) return;
+    const bills = proofSiblings(b);
+    const total = bills.reduce((s, x) => s + Number(x.amount || 0), 0);
+    const body = bills.length > 1
+      ? `This proof covers ${bills.length} bills (${bills.map(x => x.period).join(', ')}), ${formatMoney(total)} in total. All of them will be marked as paid.`
+      : `${b.billNo} (${formatMoney(b.amount)}) will be marked as paid.`;
+    if (!(await confirmSheet({ title: 'Approve this payment?', body, okLabel: 'Approve' }))) return;
 
     try {
-      await db.collection('bills').doc(billId).update({
-        status: 'paid',
-        paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-        verifiedBy: currentUserProfile.name
-      });
-      logAudit('bill', billId, 'update', `Payment proof approved — ${b.billNo} ${formatMoney(b.amount)} marked paid`);
-      afterBillWrite(billId, { status: 'paid', verifiedBy: currentUserProfile.name });
+      for (const x of bills) {
+        await db.collection('bills').doc(x.id).update({
+          status: 'paid',
+          paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+          verifiedBy: currentUserProfile.name
+        });
+        logAudit('bill', x.id, 'update', `Payment proof approved — ${x.billNo} ${formatMoney(x.amount)} marked paid`);
+        afterBillWrite(x.id, { status: 'paid', verifiedBy: currentUserProfile.name, paidAt: new Date() });
+      }
       closeModal();
-      toast('Payment approved');
-      await sendNotification(b.uid, `Payment Verified (${b.billNo})`, `Your payment of ${formatMoney(b.amount)} for ${b.period} has been verified. Thank you!`, 'success');
+      toast(bills.length > 1 ? `${bills.length} bills approved` : 'Payment approved');
+      await sendNotification(b.uid, `Payment Verified (${bills.map(x => x.billNo).join(', ')})`, `Your payment of ${formatMoney(total)} for ${bills.map(x => x.period).join(', ')} has been verified. Thank you! Your receipt is ready in Bills.`, 'success', 'bills');
     } catch(err) {
       toast("Error approving payment: " + err.message);
     }
@@ -4445,12 +4859,14 @@
     if (reason === null) return;
 
     try {
-      await db.collection('bills').doc(billId).update({
-        status: 'unpaid',
-        proofRejectedReason: reason.trim()
-      });
-      logAudit('bill', billId, 'update', `Payment proof rejected — ${b.billNo}: ${reason.trim()}`);
-      afterBillWrite(billId, { status: 'unpaid', proofRejectedReason: reason.trim() });
+      for (const x of proofSiblings(b)) {
+        await db.collection('bills').doc(x.id).update({
+          status: 'unpaid',
+          proofRejectedReason: reason.trim()
+        });
+        logAudit('bill', x.id, 'update', `Payment proof rejected — ${x.billNo}: ${reason.trim()}`);
+        afterBillWrite(x.id, { status: 'unpaid', proofRejectedReason: reason.trim() });
+      }
       closeModal();
       toast('Proof rejected');
       await sendNotification(b.uid, `Payment Proof Rejected (${b.billNo})`, `Reason: ${reason.trim()}. Please upload a valid proof for ${formatMoney(b.amount)} — ${b.period}.`, 'error');
@@ -4696,6 +5112,7 @@
       <div class="detail-rows" style="margin-bottom:12px;">
         <div><span>Charge</span><span>${escapeHtml(b.category || 'Maintenance')}</span></div>
         <div><span>Period</span><span>${escapeHtml(b.period || 'N/A')}</span></div>
+        ${b.lateFeeApplied ? `<div><span>Late fee</span><span>${formatMoney(b.lateFee)} added to ${formatMoney(b.baseAmount)}</span></div>` : ''}
         <div><span>House</span><span>${escapeHtml(houseLabel(b.house))}${b.name ? ' · ' + escapeHtml(b.name) : ''}</span></div>
         ${b.issuedBy ? `<div><span>Issued by</span><span>${escapeHtml(b.issuedBy)} · ${escapeHtml(formatDate(b.createdAt))}</span></div>` : ''}
         ${b.notes ? `<div><span>Details</span><span style="white-space:pre-wrap; font-weight:500;">${escapeHtml(b.notes)}</span></div>` : ''}
@@ -4713,7 +5130,10 @@
       ${!isAdmin && (status === 'unpaid' || status === 'overdue') && b.proofRejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-bottom:14px;">Your previous proof was rejected: ${escapeHtml(b.proofRejectedReason)}. Please upload a new one.</div>` : ''}
       ${!isAdmin && status === 'submitted' ? `<div style="font-size:13px; color:var(--info); margin-bottom:14px;">Your payment proof has been submitted and is awaiting verification by management.</div>` : ''}
 
-      <button class="btn secondary block" onclick="downloadBillPDF('${b.id}')" style="margin-bottom:10px;">${status === 'paid' ? 'Download Receipt' : 'Download Invoice'}</button>
+      ${status === 'paid' ? `<div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button class="btn primary" style="flex:1;" onclick="shareBillReceipt('${b.id}')">${icon('share')} Share receipt</button>
+        <button class="btn secondary" style="flex:1;" onclick="downloadBillPDF('${b.id}')">${icon('file')} Download</button>
+      </div>` : `<button class="btn secondary block" onclick="downloadBillPDF('${b.id}')" style="margin-bottom:10px;">Download Invoice</button>`}
       ${isStaff() && b.uid ? `<button class="btn secondary block" onclick="downloadResidentStatement('${b.uid}')" style="margin-bottom:10px;">Resident Statement (PDF)</button>` : ''}
 
       ${isAdmin && status === 'submitted' ? `
@@ -4788,7 +5208,7 @@
     }
   };
 
-  window.downloadBillPDF = async function(billId) {
+  window.downloadBillPDF = async function(billId, share) {
     const b = billsList.find(item => item.id === billId);
     if (!b) return;
     const status = billStatus(b);
@@ -4825,7 +5245,7 @@
       if (status === 'paid') addRow("Paid On", formatDate(b.paidAt));
       if (b.paymentRef) addRow("Payment Reference", b.paymentRef);
       if (b.verifiedBy) addRow("Verified By", b.verifiedBy);
-      if (b.proofData) addRow("Payment Proof", "On file" + (b.proofName ? " (" + b.proofName + ")" : ""));
+      if (hasProof(b)) addRow("Payment Proof", "On file" + (b.proofName ? " (" + b.proofName + ")" : ""));
 
       y += 5;
       doc.setFont("helvetica", "bold");
@@ -4834,11 +5254,21 @@
       doc.setFont("helvetica", "normal");
       doc.text(doc.splitTextToSize(b.notes || 'N/A', 160), 25, y);
 
-      doc.save(`${status === 'paid' ? 'Receipt' : 'Bill'}_${(b.billNo || 'Record').replace(/\s+/g, '_')}.pdf`);
+      const fileName = `${status === 'paid' ? 'Receipt' : 'Bill'}_${(b.billNo || 'Record').replace(/\s+/g, '_')}.pdf`;
+      if (share) {
+        const file = new File([doc.output('blob')], fileName, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try { await navigator.share({ files: [file], title: fileName }); return; }
+          catch (e) { if (e && e.name === 'AbortError') return; }
+        }
+      }
+      doc.save(fileName);
     } catch(err) {
       toast("Error generating PDF: " + err.message);
     }
   };
+  // Phone share sheet (WhatsApp, email, ...) where supported, else download.
+  window.shareBillReceipt = function(billId) { return downloadBillPDF(billId, true); };
 
   // --- COMMUNITY FUNDS ---
   function contribQueries() {
@@ -5089,7 +5519,7 @@
             ${isAdmin ? `<div style="font-size:13px; font-family:var(--font-mono); margin-bottom:4px;">${formatMoney(c.amount)}</div>` : ''}
             <div style="font-size:13px; color:var(--text-faint);">${escapeHtml(formatDate(c.createdAt))}${c.paymentRef ? ' · Ref: ' + escapeHtml(c.paymentRef) : ''}</div>
             ${c.status === 'rejected' && c.rejectedReason ? `<div style="font-size:13px; color:var(--danger); margin-top:4px;">Rejected: ${escapeHtml(c.rejectedReason)}</div>` : ''}
-            ${c.proofData ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="viewProofFile('contrib', '${c.id}')">View Proof</button>` : ''}
+            ${hasProof(c) ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="viewProofFile('contrib', '${c.id}')">View Proof</button>` : ''}
             ${isAdmin && c.status === 'submitted' ? `
               <div style="display:flex; gap:8px; margin-top:8px;">
                 <button class="btn sm primary" onclick="verifyContribution('${c.id}')">Verify</button>
@@ -5133,6 +5563,7 @@
           const paymentRef = document.getElementById('contrib-ref').value.trim();
           const paymentMethod = document.getElementById('contrib-method').value;
           const paymentDate = document.getElementById('contrib-date').value;
+          const proofId = proof ? await saveProofFile(auth.currentUser.uid, 'contrib', proof) : null;
 
           await db.collection('fund_contributions').add({
             fundId: f.id,
@@ -5146,9 +5577,7 @@
             paymentRef,
             paymentMethod,
             paymentDate,
-            proofData: proof ? proof.dataUrl : '',
-            proofType: proof ? proof.type : '',
-            proofName: proof ? proof.name : '',
+            ...(proof ? proofFields(proofId, proof, true) : { proofData: '', proofType: '', proofName: '' }),
             status: 'submitted',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
@@ -5373,6 +5802,7 @@
         billsLoaded = true;
       }
       if (currentUserProfile.role === 'admin') syncStaffDirectory(usersSnap.docs);
+      syncBillsSummary(billsSnap.docs.map(d => d.data()));
       pendingResidents = usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() }))
         .filter(u => u.role === 'resident' && u.approved === false && u.membershipStatus !== 'rejected');
       const users = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
@@ -5443,6 +5873,7 @@
 
     el.innerHTML = `
       ${renderStaffNeedsYou(d, { pendingApprovals, inReview: inReviewBills.length, openTickets })}
+      ${currentUserProfile.role === 'admin' ? '<div id="backup-reminder"></div>' : ''}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Approved Residents', residents)}
@@ -5475,6 +5906,7 @@
         ${svgDonut(spendSegs, 'Spent', 'PKR ' + Math.round(spentTotal / 1000) + 'k')}
       </div>
     `;
+    checkBackupReminder();
   }
 
   function greetingWord() {
@@ -5570,18 +6002,6 @@
     return escapeHtml(raw).replace(/\{(\w+)\}/g, (m, k) => vars && vars[k] != null ? `<bdi>${escapeHtml(vars[k])}</bdi>` : m);
   }
 
-  // More than one unpaid bill: the resident picks which one the proof is for.
-  window.pickBillForProof = function() {
-    const owing = billsList.filter(b => b.uid === auth.currentUser.uid && ['unpaid', 'overdue'].includes(billStatus(b)))
-      .sort((a, b) => (toDate(a.dueDate) || 0) - (toDate(b.dueDate) || 0));
-    if (!owing.length) return;
-    menuSheet('Which bill is this proof for?', owing.map(b => ({
-      icon: 'receipt',
-      label: `${b.period || b.category || 'Bill'} · ${formatMoney(b.amount)}${billStatus(b) === 'overdue' ? ' · overdue' : ''}`,
-      run: () => openUploadProofModal(b.id)
-    })));
-  };
-
   function renderMyHouseCard(myBills) {
     const owing = myBills.filter(b => ['unpaid', 'overdue'].includes(billStatus(b)));
     const total = owing.reduce((s, b) => s + Number(b.amount || 0), 0);
@@ -5609,7 +6029,7 @@
         </div>
         ${rejected ? `<div class="rej">${t('rejected', { month: rejected.period || formatDate(rejected.dueDate), reason: rejected.proofRejectedReason })}</div>` : ''}
         <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;">
-          ${oldest ? `<button class="btn primary block" onclick="${owing.length > 1 ? 'pickBillForProof()' : `openUploadProofModal('${oldest.id}')`}">${icon('upload')} ${t('upload')}</button>` : ''}
+          ${oldest ? `<button class="btn primary block" onclick="openUploadProofModal('${oldest.id}')">${icon('upload')} ${t('upload')}</button>` : ''}
           <button class="btn secondary block" onclick="openBankDetailsSheet()">${icon('bank')} ${t('bank')}</button>
         </div>
       </div>
@@ -5644,13 +6064,14 @@
     if (!db || !auth.currentUser || currentUserProfile.role !== 'resident') return;
     const seq = ++billsSeq;
     Promise.all([
-      db.collection('bills').get(),
+      db.collection('bills').where('uid', '==', auth.currentUser.uid).get(),
+      loadBillsSummaryForResident(),
       db.collection('fund_contributions').where('status', '==', 'verified').get(),
       db.collection('expenses').get(),
       db.collection('tickets').get(),
       db.collection('transfers').get(),
       db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get()
-    ]).then(([billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap]) => {
+    ]).then(([billsSnap, society, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const bills = billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted);
       const contribs = contribsSnap.docs.map(d => d.data()).filter(c => !c.isDeleted);
@@ -5661,10 +6082,10 @@
       expensesList = expenses;
       // My own bills feed the "My house" card and its Upload proof button.
       if (seq === billsSeq) {
-        billsList = bills.filter(b => b.uid === auth.currentUser.uid);
+        billsList = bills;
         billsLoaded = true;
       }
-      renderResidentDashboard({ bills, contribs, expenses, tickets, transfers });
+      renderResidentDashboard({ bills, society, contribs, expenses, tickets, transfers });
     }).catch(e => {
       console.error("Error loading dashboard:", e);
       const el = document.getElementById('dashboard-body');
@@ -5672,19 +6093,30 @@
     });
   }
 
+  // Society-wide bill totals for residents: the staff-kept summary, or (while it
+  // has never been written) the old full read if the Firebase rules still allow it.
+  async function loadBillsSummaryForResident() {
+    try {
+      const doc = await db.collection('settings').doc('billsSummary').get();
+      if (doc.exists) return doc.data();
+    } catch (e) { console.warn('Bills summary unavailable:', e && e.message); }
+    try {
+      const snap = await db.collection('bills').get();
+      return billsSummaryOf(snap.docs.map(d => d.data()));
+    } catch (e) { return null; }
+  }
+
   function renderResidentDashboard(d) {
     const el = document.getElementById('dashboard-body');
     if (!el) return;
 
-    const paidBills = d.bills.filter(b => b.status === 'paid');
-    const unpaidBills = d.bills.filter(b => b.status === 'unpaid');
-    const inReviewBills = d.bills.filter(b => b.status === 'submitted');
-    const billed = d.bills.reduce((s, b) => s + Number(b.amount || 0), 0);
-    const collectedBills = paidBills.reduce((s, b) => s + Number(b.amount || 0), 0);
+    const soc = d.society || billsSummaryOf(d.bills);
+    const billed = Number(soc.billedTotal || 0);
+    const collectedBills = Number(soc.paidTotal || 0);
     const contribTotal = d.contribs.reduce((s, c) => s + Number(c.amount || 0), 0);
     const spentTotal = d.expenses.reduce((s, x) => s + Number(x.amount || 0), 0);
     const openTickets = d.tickets.filter(t => ['pending', 'in-progress'].includes(t.status)).length;
-    const billsAcct = billsAccountSummary(d.bills, d.expenses, d.transfers);
+    const billsAcct = billsAccountSummary([{ status: 'paid', amount: collectedBills }], d.expenses, d.transfers);
     const fundsAcct = allFundsSummary(d.contribs, d.expenses, d.transfers);
 
     // last 6 months expenses
@@ -5719,7 +6151,7 @@
       </div>`;
 
     el.innerHTML = `
-      ${renderMyHouseCard(d.bills.filter(b => b.uid === auth.currentUser.uid))}
+      ${renderMyHouseCard(d.bills)}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Open Complaints', openTickets, openTickets ? 'var(--info)' : 'var(--text)')}
@@ -5759,7 +6191,7 @@
 
       <div class="card" style="cursor:default;">
         <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Maintenance Bills</div>
-        ${svgDonut(billStatusSegments(paidBills.length, unpaidBills.length, inReviewBills.length), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
+        ${svgDonut(billStatusSegments(soc.paidCount || 0, soc.unpaidCount || 0, soc.submittedCount || 0), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
       </div>
     `;
   }
