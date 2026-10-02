@@ -179,7 +179,7 @@
 
   .stat-strip{display:flex; gap:8px; margin-bottom:14px;}
   .stat-box{flex:1; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;}
-  .stat-box .k{font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); font-weight:700;}
+  .stat-box .k{font-size:12px; text-transform:uppercase; letter-spacing:.2px; color:var(--text-faint); font-weight:700; overflow-wrap:normal; word-break:normal; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .stat-box .v{font-family:var(--font-mono); font-size:15px; font-weight:600; margin-top:4px;}
 
   .chip-row{display:flex; gap:8px; margin-bottom:14px; overflow-x:auto;}
@@ -611,7 +611,7 @@
   let billFilterStatus = null; // null = the role's default chip (see currentBillFilter)
   let billsLoaded = false;
   let billSearch = '';
-  let billFilterMonth = 'all';
+  let billFilterMonth = null; // null = this month (staff); 'all' = every month
   let expenseFilter = { month: 'all', category: 'all', source: 'all' };
   let residentSearch = '';
   let societySettings = null;
@@ -1561,7 +1561,7 @@
             <button class="btn sm primary" style="white-space:nowrap;" onclick="openIssueBillModal()">+ Issue</button>
           </div>` : ''}
         </div>
-        <div class="section-sub">${isAdmin ? escapeHtml(monthLabel(monthKey(new Date()))) : staffView ? 'View only. Admins issue and approve bills.' : 'Maintenance charges issued to your house by management.'}</div>
+        <div class="section-sub">${isAdmin ? 'Bills by month. Needs action, Overdue and In review always cover every month.' : staffView ? 'View only. Admins issue and approve bills.' : 'Maintenance charges issued to your house by management.'}</div>
         <div id="bills-summary"></div>
         ${staffView ? `
           <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -3730,16 +3730,33 @@
     renderBillsList();
   };
 
+  // Staff see one month at a time (this month by default); Needs action,
+  // Overdue and In review are to-do lists, so they always cover every month.
+  function currentBillMonth() {
+    if (!isStaff()) return 'all';
+    return billFilterMonth || monthKey(new Date());
+  }
+  function monthScopedChip(f) {
+    return !['needs', 'overdue', 'submitted', 'topay'].includes(f);
+  }
+
   function renderBillFilterBar() {
+    const m = currentBillMonth();
+    const months = lastTwelveMonths();
+    if (m !== 'all' && !months.includes(m)) months.push(m);
     return `
       <div class="filter-bar">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <button class="dots-btn" style="border-color:var(--border);" onclick="stepBillMonth(-1)" aria-label="Previous month">‹</button>
+          <select onchange="setBillMonth(this.value)" aria-label="Month" style="flex:1; min-width:0; font-weight:700;">
+            ${months.map(k => `<option value="${k}" ${m===k?'selected':''}>${monthLabel(k)}</option>`).join('')}
+            <option value="all" ${m==='all'?'selected':''}>All months</option>
+          </select>
+          <button class="dots-btn" style="border-color:var(--border);" onclick="stepBillMonth(1)" aria-label="Next month" ${m === monthKey(new Date()) ? 'disabled' : ''}>›</button>
+        </div>
         <label for="bill-search">Find bills</label>
         <div style="display:flex; gap:8px;">
-          <input type="search" id="bill-search" placeholder="Name, house or bill no." value="${escapeHtml(billSearch)}" oninput="setBillSearch(this.value)" style="flex:1.4; min-width:0;" />
-          <select onchange="setBillMonth(this.value)" style="flex:1; min-width:0;">
-            <option value="all" ${billFilterMonth==='all'?'selected':''}>All months</option>
-            ${lastTwelveMonths().map(k => `<option value="${k}" ${billFilterMonth===k?'selected':''}>${monthLabel(k)}</option>`).join('')}
-          </select>
+          <input type="search" id="bill-search" placeholder="Name, house or bill no." value="${escapeHtml(billSearch)}" oninput="setBillSearch(this.value)" style="flex:1; min-width:0;" />
         </div>
         <div id="bill-filter-summary" style="font-size:13px; color:var(--text-muted); margin-top:10px;"></div>
       </div>
@@ -3752,9 +3769,18 @@
     renderBillsList();
   };
   window.setBillMonth = function(value) {
-    billFilterMonth = value || 'all';
+    billFilterMonth = value || null;
     delete pageShown['bills'];
+    const bar = document.querySelector('#bill-search') && document.querySelector('#bill-search').closest('.filter-bar');
+    if (bar) bar.outerHTML = renderBillFilterBar();
     renderBillsList();
+  };
+  window.stepBillMonth = function(dir) {
+    const m = currentBillMonth();
+    const base = m === 'all' ? new Date() : new Date(Number(m.slice(0, 4)), Number(m.slice(5)) - 1, 1);
+    const next = monthKey(new Date(base.getFullYear(), base.getMonth() + (m === 'all' ? 0 : dir), 1));
+    if (next > monthKey(new Date())) return;
+    setBillMonth(next);
   };
 
   function billInMonth(b, key) {
@@ -3780,7 +3806,7 @@
     const f = currentBillFilter();
     return billsList.filter(b => {
       if (!billMatchesChip(b, f)) return false;
-      if (!billInMonth(b, billFilterMonth)) return false;
+      if (monthScopedChip(f) && !billInMonth(b, currentBillMonth())) return false;
       if (billSearch) {
         const hay = [b.name, b.house, b.billNo, b.category, b.period].map(v => String(v || '').toLowerCase()).join(' ');
         if (!hay.includes(billSearch)) return false;
@@ -4117,13 +4143,16 @@
     if (summaryEl) {
       if (staffView) {
         const sum = arr => arr.reduce((s, b) => s + Number(b.amount || 0), 0);
-        const collected = sum(billsList.filter(b => billStatus(b) === 'paid'));
-        const outstanding = sum(billsList.filter(b => ['unpaid', 'overdue'].includes(billStatus(b))));
+        const m = currentBillMonth();
+        const inMonth = billsList.filter(b => billInMonth(b, m));
+        const collected = sum(inMonth.filter(b => billStatus(b) === 'paid'));
+        const outstanding = sum(inMonth.filter(b => ['unpaid', 'overdue'].includes(billStatus(b))));
         const review = billsList.filter(b => b.status === 'submitted');
         summaryEl.innerHTML = `
+          <div style="font-size:13px; color:var(--text-muted); font-weight:700; margin-bottom:6px;">${m === 'all' ? 'All months' : escapeHtml(monthLabel(m))}</div>
           <div class="stat-strip">
             <div class="stat-box"><div class="k">Collected</div><div class="v money" style="color:var(--success);">${formatMoney(collected)}</div></div>
-            <div class="stat-box"><div class="k">Outstanding</div><div class="v money" style="color:var(--danger);">${formatMoney(outstanding)}</div></div>
+            <div class="stat-box"><div class="k">Unpaid</div><div class="v money" style="color:var(--danger);">${formatMoney(outstanding)}</div></div>
             <div class="stat-box"><div class="k">In review</div><div class="v" style="color:var(--info);">${review.length} proof${review.length === 1 ? '' : 's'}</div></div>
           </div>`;
       } else {
@@ -4134,13 +4163,13 @@
     // chip counts
     document.querySelectorAll('[data-count]').forEach(el => {
       const f = el.getAttribute('data-count');
-      const n = billsList.filter(b => billMatchesChip(b, f)).length;
+      const n = billsList.filter(b => billMatchesChip(b, f) && (!monthScopedChip(f) || billInMonth(b, currentBillMonth()))).length;
       el.textContent = f === 'all' || !n ? '' : String(n);
     });
 
     const list = filteredBills();
     const filterSummary = document.getElementById('bill-filter-summary');
-    if (filterSummary) filterSummary.textContent = `${list.length} of ${billsList.length} bill(s) · ${formatMoney(sumAmounts(list))} billed · ${formatMoney(sumAmounts(list.filter(isOutstanding)))} outstanding`;
+    if (filterSummary) filterSummary.textContent = `${list.length} bill(s)${monthScopedChip(currentBillFilter()) ? '' : ' from every month'} · ${formatMoney(sumAmounts(list))} billed · ${formatMoney(sumAmounts(list.filter(isOutstanding)))} outstanding`;
     const defaultersBtn = document.getElementById('defaulters-btn');
     if (defaultersBtn) {
       const n = defaultersList().filter(d => d.overdue).length;
