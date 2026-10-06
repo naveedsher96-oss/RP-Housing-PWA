@@ -236,6 +236,8 @@ test('admin: status update with a note appends to the timeline and notifies the 
   await page.click('#admin-ticket-form button[type=submit]');
   await page.waitForFunction(() => window.__mockStore.tickets.get('t1').status === 'in-progress', null, { timeout: 8000 })
     .catch(() => { throw new Error('status did not change'); });
+  await page.waitForFunction(() => [...(window.__mockStore['users/u_res1/notifications'] || new Map()).values()].some(n => /Electrician/.test(n.body)), null, { timeout: 8000 })
+    .catch(() => {});
   const r = await page.evaluate(() => {
     const t = window.__mockStore.tickets.get('t1');
     const notifs = [...(window.__mockStore['users/u_res1/notifications'] || new Map()).values()];
