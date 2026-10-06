@@ -274,6 +274,112 @@ test('resident: can rate a closed complaint once and reopen it', async page => {
   noErrors(page);
 }, 'resident');
 
+// ---------- documents vault & meetings (C3) ----------
+test('resident: sees shared documents, opens an image, and suggests an agenda item', async page => {
+  await page.evaluate(() => selectTab('documents'));
+  await settle(page);
+  let text = await page.evaluate(() => document.getElementById('documents-body').innerText);
+  assert(/Society Bylaws/.test(text) && /Approved Budget/.test(text) && /Gate Pass/.test(text), 'seeded documents should be listed');
+  assert(!/Old parking policy/.test(text), 'archived document must not be shown');
+  assert(await page.locator('#documents-body .dots-btn').count() === 0, 'residents must not get document menus');
+  await page.evaluate(() => setDocCategory('Forms'));
+  text = await page.evaluate(() => document.getElementById('documents-body').innerText);
+  assert(/Gate Pass/.test(text) && !/Society Bylaws/.test(text), 'category chip should filter the list');
+  await page.evaluate(() => openDocument('doc2'));
+  await page.waitForSelector('#ui-sheet img', { timeout: 5000 }).catch(() => { throw new Error('image document should open in a sheet'); });
+  await page.evaluate(() => goBack()); // closes the sheet
+
+  await page.evaluate(() => setDocsView('meetings'));
+  await settle(page);
+  text = await page.evaluate(() => document.getElementById('documents-body').innerText);
+  assert(/Upcoming · 1/i.test(text) && /Minutes of past meetings · 1/i.test(text), `meetings should be grouped, got: ${text.slice(0, 120)}`);
+  assert(/Suggested by Muhammad Usman Khan/.test(text), 'resident suggestions should be credited');
+  assert(/CCTV quotation from SafeVision reviewed/.test(text) && /Approved/.test(text), 'held meeting should show minutes and decision outcomes');
+  assert(await page.locator('#documents-body .agenda-x').count() === 0, 'residents must not be able to remove agenda items');
+  callLater(page, "suggestAgendaItem('m1')");
+  await page.waitForSelector('#ui-sheet-input', { timeout: 5000 });
+  await page.fill('#ui-sheet-input', 'Fix the street lights in Block B');
+  await page.click('#ui-sheet-form button[type=submit]');
+  await page.waitForFunction(() => window.__mockStore.meetings.get('m1').agenda.length === 4, null, { timeout: 8000 })
+    .catch(() => { throw new Error('suggestion was not added to the agenda'); });
+  const last = await page.evaluate(() => window.__mockStore.meetings.get('m1').agenda[3]);
+  assert(last.source === 'resident' && last.byUid === 'u_res1' && last.text === 'Fix the street lights in Block B', `suggestion stored wrongly: ${JSON.stringify(last)}`);
+  await settle(page);
+  text = await page.evaluate(() => document.getElementById('documents-body').innerText);
+  assert(/Fix the street lights in Block B/.test(text) && /\(you\)/.test(text), 'card should show the new suggestion as yours');
+  noErrors(page);
+}, 'resident');
+
+test('admin: adds a document by link and residents are notified', async page => {
+  await page.evaluate(() => selectTab('documents'));
+  await settle(page);
+  const before = await page.evaluate(() => window.__mockStore.documents.size);
+  await page.evaluate(() => openAddDocumentModal());
+  await page.waitForSelector('#doc-form', { timeout: 5000 });
+  await page.fill('#doc-title', 'Water Tanker Rate Card');
+  await page.selectOption('#doc-category', 'Notices & Circulars');
+  await page.fill('#doc-link', 'https://drive.google.com/file/d/tanker/view');
+  await page.click('#doc-form button[type=submit]');
+  await page.waitForFunction(n => window.__mockStore.documents.size === n + 1, before, { timeout: 8000 })
+    .catch(() => { throw new Error('document was not created'); });
+  await page.waitForFunction(() => [...(window.__mockStore['users/u_res1/notifications'] || new Map()).values()].some(n => /Water Tanker Rate Card/.test(n.title)), null, { timeout: 8000 })
+    .catch(() => { throw new Error('residents were not notified about the new document'); });
+  const d = await page.evaluate(() => [...window.__mockStore.documents.values()].find(x => x.title === 'Water Tanker Rate Card'));
+  assert(d.link === 'https://drive.google.com/file/d/tanker/view' && d.category === 'Notices & Circulars' && d.createdBy === 'u_admin', `document stored wrongly: ${JSON.stringify(d)}`);
+  await settle(page);
+  const text = await page.evaluate(() => document.getElementById('documents-body').innerText);
+  assert(/Water Tanker Rate Card/.test(text) && /Open link/.test(text), 'new document should appear with an Open link button');
+  noErrors(page);
+}, 'admin');
+
+test('admin: publishes minutes with linked decisions; meeting moves to past and residents are notified', async page => {
+  await page.evaluate(() => { setDocsView('meetings'); selectTab('documents'); });
+  await settle(page);
+  assert(await page.locator('#documents-body .agenda-x').count() === 3, 'admin should be able to remove each agenda item');
+  await page.evaluate(() => openPublishMinutesModal('m1'));
+  await page.waitForSelector('#minutes-form', { timeout: 5000 });
+  await page.click('#minutes-form button.btn.sm.secondary'); // "Start from the agenda"
+  const prefilled = await page.inputValue('#mn-text');
+  assert(/1\. Approve September accounts/.test(prefilled), 'minutes should prefill from the agenda');
+  await page.fill('#mn-text', prefilled + '\nAccounts approved unanimously.');
+  await page.fill('#mn-attendees', 'Tariq Mehmood, Hina Shahid');
+  await page.check('.mn-dec[value="d1"]');
+  await page.click('#minutes-form button[type=submit]');
+  await page.waitForFunction(() => window.__mockStore.meetings.get('m1').status === 'held', null, { timeout: 8000 })
+    .catch(() => { throw new Error('meeting did not move to held'); });
+  await page.waitForFunction(() => [...(window.__mockStore['users/u_res1/notifications'] || new Map()).values()].some(n => /Minutes published/.test(n.title)), null, { timeout: 8000 })
+    .catch(() => { throw new Error('residents were not notified about the minutes'); });
+  const m = await page.evaluate(() => window.__mockStore.meetings.get('m1'));
+  assert(/Accounts approved unanimously/.test(m.minutes), 'minutes text was not saved');
+  assert(m.decisions.length === 1 && m.decisions[0].id === 'd1' && m.decisions[0].title.includes('CCTV'), `linked decisions wrong: ${JSON.stringify(m.decisions)}`);
+  assert(m.suggestionsOpen === false && m.minutesPublishedAt, 'publishing should close suggestions and stamp the time');
+  await settle(page);
+  const text = await page.evaluate(() => document.getElementById('documents-body').innerText);
+  assert(/Upcoming · 0/i.test(text) && /Minutes of past meetings · 2/i.test(text), `meeting should now be listed under past, got: ${text.slice(0, 160)}`);
+  assert(/Present: Tariq Mehmood, Hina Shahid/.test(text), 'attendees should be shown');
+  noErrors(page);
+}, 'admin');
+
+test('admin: can lodge a complaint of their own', async page => {
+  await page.evaluate(() => selectTab('tickets'));
+  await settle(page);
+  const hasBtn = await page.evaluate(() => /Lodge Ticket/.test(document.querySelector('main .section-title').innerText));
+  assert(hasBtn, 'staff should see the Lodge Ticket button');
+  const before = await page.evaluate(() => window.__mockStore.tickets.size);
+  await page.evaluate(() => openNewTicketModal());
+  await page.waitForSelector('#ticket-form', { timeout: 5000 });
+  await page.selectOption('#ticket-category', 'Security & Gate');
+  await page.fill('#ticket-desc', 'Back gate lock is broken.');
+  await page.click('#ticket-form button[type=submit]');
+  await page.waitForFunction(n => window.__mockStore.tickets.size === n + 1, before, { timeout: 8000 })
+    .catch(() => { throw new Error('staff complaint was not created'); });
+  const t = await page.evaluate(() => [...window.__mockStore.tickets.values()].find(x => x.description === 'Back gate lock is broken.'));
+  assert(t.uid === 'u_admin' && t.status === 'pending', `ticket stored wrongly: ${JSON.stringify(t)}`);
+  await settle(page);
+  assert(/Back gate lock is broken/.test(await page.evaluate(() => document.getElementById('tickets-list').innerText)), 'new complaint should appear in the staff list');
+  noErrors(page);
+}, 'admin');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
