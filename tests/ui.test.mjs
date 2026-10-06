@@ -228,7 +228,8 @@ test('admin: status update with a note appends to the timeline and notifies the 
   assert(/⚠ Open 25 days/.test(list), 'card for the 25-day-old complaint should carry the SLA flag');
   await page.evaluate(() => openTicketDetailModal('t1'));
   await page.waitForSelector('#admin-ticket-form', { timeout: 5000 });
-  assert(await page.locator('#ticket-photos .ticket-photo img').count() === 1, 'detail should show the attached photo');
+  await page.waitForSelector('#ticket-photos .ticket-photo img', { timeout: 5000 }).catch(() => { throw new Error('detail should show the attached photo'); });
+  assert(await page.locator('#ticket-photos .ticket-photo img').count() === 1, 'detail should show exactly one attached photo');
   await page.selectOption('#admin-ticket-status', 'in-progress');
   await page.fill('#admin-ticket-dept', 'Electrical');
   await page.fill('#admin-ticket-note', 'Electrician visiting tomorrow');
