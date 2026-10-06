@@ -131,7 +131,7 @@ service cloud.firestore {
     // ---------- tickets (complaints) ----------
     match /tickets/{id} {
       allow read: if isStaff() || isApprovedResident() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if isApprovedResident() && request.resource.data.uid == request.auth.uid;
+      allow create: if (isApprovedResident() || isStaff()) && request.resource.data.uid == request.auth.uid;
       // Admin manages (status, department, notes, archive); super admin restores;
       // the resident who lodged it may rate or reopen it once resolved/closed.
       allow update: if isAdmin() || superAdminRestore() || residentRates() || residentReopens();
@@ -260,10 +260,46 @@ service cloud.firestore {
     // ---------- payment proof files ----------
     // Bills and contributions keep only proofId; the photo or PDF lives here.
     match /proofs/{id} {
-      allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid);
+      // Files of society documents (kind 'document') are readable by every approved member.
+      allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid)
+        || (isApprovedResident() && resource.data.get('kind', '') == 'document');
       allow create: if isAdmin() || (signedIn() && request.resource.data.uid == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if false;
+    }
+
+    // ---------- documents vault ----------
+    // Society papers every approved member may read; admin, board and super
+    // admin add them, admin/super admin (or the board member who added it) edit
+    // or archive them. Soft delete only.
+    match /documents/{id} {
+      allow read: if isStaff() || isApprovedResident();
+      allow create: if canPublish() && request.resource.data.get('createdBy', '') == request.auth.uid;
+      allow update: if isAdmin() || isSuperAdmin() || ownsPost();
+      allow delete: if false;
+    }
+
+    // ---------- board meetings: agenda & minutes ----------
+    // Staff/board publish and edit; an approved resident may only append one
+    // agenda suggestion (in their own name) while the meeting is upcoming and
+    // suggestions are open.
+    match /meetings/{id} {
+      allow read: if isStaff() || isApprovedResident();
+      allow create: if canPublish() && request.resource.data.get('createdBy', '') == request.auth.uid;
+      allow update: if canPublish() || residentSuggests();
+      allow delete: if false;
+
+      function residentSuggests() {
+        let agenda = request.resource.data.agenda;
+        return isApprovedResident()
+          && resource.data.get('status', 'upcoming') == 'upcoming'
+          && resource.data.get('suspended', false) != true
+          && resource.data.get('suggestionsOpen', true) == true
+          && onlyChanges(['agenda', 'updatedAt'])
+          && agenda.size() == resource.data.get('agenda', []).size() + 1
+          && agenda[agenda.size() - 1].byUid == request.auth.uid
+          && agenda[agenda.size() - 1].source == 'resident';
+      }
     }
 
     // ---------- audit log (immutable) ----------

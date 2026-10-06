@@ -200,6 +200,15 @@
   .timeline{display:flex; flex-direction:column; gap:10px; margin:6px 0 14px;}
   .timeline-item{display:flex; gap:10px; align-items:flex-start;}
   .timeline-item .badge{flex-shrink:0;}
+  .agenda{margin:0; padding:0; list-style:none; counter-reset:agenda; display:flex; flex-direction:column; gap:6px; font-size:14px; line-height:1.45;}
+  .agenda li{display:flex; gap:8px; align-items:flex-start;}
+  .agenda li::before{counter-increment:agenda; content:counter(agenda) '.'; flex:none; min-width:18px; color:var(--accent); font-weight:700;}
+  .agenda-by{font-size:12.5px; color:var(--text-faint); margin-top:1px;}
+  .agenda-x{flex:none; background:none; border:1px solid var(--border); border-radius:8px; color:var(--text-muted); width:28px; height:28px; cursor:pointer; font-size:13px;}
+  .minute-dec{display:flex; gap:8px; align-items:flex-start; font-size:14px; line-height:1.45; margin-bottom:6px;}
+  .minute-dec .badge{flex:none;}
+  .mn-pick{display:flex; flex-direction:column; gap:6px; margin-top:6px;}
+  .mn-row{display:flex; align-items:center; gap:10px; font-size:14px; font-weight:500; text-transform:none; letter-spacing:normal; color:var(--text); padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg-elevated-2); cursor:pointer; margin:0;}
   .star-row{display:flex; gap:6px; margin:6px 0 10px;}
   .star-btn{flex:1; font-size:26px; line-height:1; padding:6px 0; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-elevated-2); color:var(--accent-2); cursor:pointer;}
   .star-btn.on{background:var(--warning-soft);}
@@ -657,6 +666,10 @@
   let billsAccountData = { loaded: false, expenses: [], transfers: [] };
   let volunteersList = [];
   let decisionsList = [];
+  let documentsList = [];
+  let meetingsList = [];
+  let docsView = 'documents'; // 'documents' | 'meetings'
+  let docCategoryFilter = 'all';
   let auditList = [];
   let archivedRecords = [];
   let boardMembersCount = null;
@@ -1565,11 +1578,27 @@
       return `
         <div class="section-title">
           Complaints & Suggestions
-          ${isStaff() ? '' : '<button class="btn sm primary" onclick="openNewTicketModal()">+ Lodge Ticket</button>'}
+          <button class="btn sm primary" onclick="openNewTicketModal()">+ Lodge Ticket</button>
         </div>
         <div class="section-sub">Report maintenance issues or submit feedback.</div>
         ${isAdmin ? renderTicketFilterBar() : ''}
         <div id="tickets-list">Loading complaints directory...</div>
+      `;
+    }
+
+    if (activeTab === 'documents') {
+      const meetings = docsView === 'meetings';
+      return `
+        <div class="section-title">
+          Documents & Minutes
+          ${canPublish() ? `<button class="btn sm primary" onclick="${meetings ? 'openNewMeetingModal()' : 'openAddDocumentModal()'}">${meetings ? '+ New Meeting' : '+ Add Document'}</button>` : ''}
+        </div>
+        <div class="section-sub">Bylaws, budgets, approved decisions and Board meeting agendas & minutes — open to every resident.</div>
+        <div class="chip-row">
+          <button class="chip ${meetings ? '' : 'active'}" onclick="setDocsView('documents')">📁 Documents</button>
+          <button class="chip ${meetings ? 'active' : ''}" onclick="setDocsView('meetings')">🗓 Meetings & Minutes</button>
+        </div>
+        <div id="documents-body">Loading...</div>
       `;
     }
 
@@ -2182,6 +2211,7 @@
         ['dashboard', 'chart', 'Dashboard'],
         ['notices', 'megaphone', 'Announcements'],
         ['polls', 'vote', 'Polls'],
+        ['documents', 'file', 'Documents & Minutes'],
         ['approvals', 'usercheck', 'Approvals'],
         ['board', 'gavel', 'Board Decisions'],
         ['biodata', 'users', 'Residents'],
@@ -2196,6 +2226,7 @@
         ['board', 'gavel', 'Board Votes'],
         ['notices', 'megaphone', 'Announcements'],
         ['polls', 'vote', 'Polls'],
+        ['documents', 'file', 'Documents & Minutes'],
         ['bills', 'receipt', 'Bills'],
         ['funds', 'wallet', 'Funds'],
         ['expenses', 'cash', 'Expenses'],
@@ -2210,6 +2241,7 @@
         ['dashboard', 'chart', 'Dashboard'],
         ['notices', 'megaphone', 'Announcements'],
         ['polls', 'vote', 'Polls'],
+        ['documents', 'file', 'Documents & Minutes'],
         ['tickets', 'wrench', 'Complaints'],
         ['bills', 'receipt', 'Bills'],
         ['funds', 'wallet', 'Funds'],
@@ -2228,6 +2260,7 @@
       ...(isBoard() ? [['board', 'gavel', 'Board Votes']] : []),
       ['notices', 'megaphone', 'Announcements'],
       ['polls', 'vote', 'Polls'],
+      ['documents', 'file', 'Documents & Minutes'],
       ['tickets', 'wrench', 'Complaints'],
       ['bills', 'receipt', 'Bills'],
       ['funds', 'wallet', 'Funds'],
@@ -2244,6 +2277,7 @@
     if (activeTab === 'dashboard' && currentUserProfile.role === 'resident') loadResidentDashboard();
     if (activeTab === 'notices') loadNotices();
     if (activeTab === 'polls') loadPolls();
+    if (activeTab === 'documents') loadDocumentsTab();
     if (activeTab === 'tickets') loadTickets();
     if (activeTab === 'bills') loadBills();
     if (activeTab === 'funds') loadFunds();
@@ -3682,6 +3716,547 @@
         toast("Error updating biodata: " + err.message);
       }
     });
+  };
+
+  // --- DOCUMENTS VAULT & BOARD MEETINGS (AGENDA / MINUTES) ---
+  // documents/{id}: society papers every resident may read (file kept in
+  // proofs/{fileId} with kind 'document', or an external link).
+  // meetings/{id}: agenda before the meeting (residents may suggest items while
+  // suggestionsOpen), minutes + linked Board decisions after it (status 'held').
+  const DOC_CATEGORIES = ['Bylaws & Rules', 'Meeting Minutes', 'Budget & Accounts', 'Board Decisions', 'Notices & Circulars', 'Forms', 'Other'];
+  const tsMs = v => { const d = toDate(v); return d ? d.getTime() : 0; };
+  const byNewest = (a, b) => tsMs(b.createdAt) - tsMs(a.createdAt);
+
+  window.setDocsView = function(v) { docsView = v; render(); };
+  window.setDocCategory = function(c) { docCategoryFilter = c; renderDocumentsBody(); };
+
+  function loadDocumentsTab() {
+    if (!db) return;
+    const q = docsView === 'meetings' ? db.collection('meetings') : db.collection('documents');
+    fetchFast(q, snapshot => {
+      const rows = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.isDeleted);
+      if (docsView === 'meetings') { meetingsList = rows.sort(byNewest); renderMeetingsBody(); }
+      else { documentsList = rows.sort(byNewest); renderDocumentsBody(); }
+    }).catch(e => { console.error('Error loading documents:', e); showLoadError('documents-body', e); });
+  }
+
+  // ----- documents -----
+  function docKindOf(d) { return d.link ? 'link' : d.fileType === 'image' ? 'image' : 'pdf'; }
+  function canManageDoc(d) { return currentUserProfile.role === 'admin' || isSuperAdmin() || (isBoard() && d.createdBy === auth.currentUser.uid); }
+  function fmtBytes(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+
+  function renderDocumentsBody() {
+    const el = document.getElementById('documents-body');
+    if (!el || docsView !== 'documents') return;
+    const catOf = d => d.category || 'Other';
+    const cats = ['all', ...DOC_CATEGORIES.filter(c => documentsList.some(d => catOf(d) === c))];
+    const list = documentsList.filter(d => docCategoryFilter === 'all' || catOf(d) === docCategoryFilter);
+    el.innerHTML = `
+      ${documentsList.length > 1 ? `<div class="chip-row">${cats.map(c => `<button class="chip ${docCategoryFilter === c ? 'active' : ''}" onclick="setDocCategory('${escapeHtml(c)}')">${c === 'all' ? 'All' : escapeHtml(c)}<span class="n">${c === 'all' ? documentsList.length : documentsList.filter(d => catOf(d) === c).length}</span></button>`).join('')}</div>` : ''}
+      ${list.length ? list.map(documentCard).join('') : `<div class="card" style="text-align:center; color:var(--text-muted);">${canPublish() ? 'No documents yet. Add the bylaws, budgets or approved decisions so residents can read them.' : 'No documents have been shared yet.'}</div>`}
+    `;
+  }
+
+  function documentCard(d) {
+    const kind = docKindOf(d);
+    const ico = kind === 'link' ? '🔗' : kind === 'image' ? '🖼' : '📄';
+    const meta = [d.category || 'Other', d.createdByName ? 'by ' + d.createdByName : '', formatDate(d.createdAt), d.fileSize ? fmtBytes(d.fileSize) : ''].filter(Boolean).join(' · ');
+    return `
+      <div class="card" style="cursor:default;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div class="clickable" onclick="openDocument('${d.id}')" style="display:flex; gap:10px; min-width:0; flex:1;">
+            <div style="font-size:26px; line-height:1.1;">${ico}</div>
+            <div style="min-width:0;">
+              <div style="font-weight:700; font-size:15.5px; color:var(--accent-2); word-break:break-word;">${escapeHtml(d.title || 'Untitled')}</div>
+              ${d.description ? `<div style="font-size:13.5px; line-height:1.5; margin-top:2px; white-space:pre-wrap;">${escapeHtml(d.description)}</div>` : ''}
+              <div style="font-size:12.5px; color:var(--text-faint); margin-top:6px;">${escapeHtml(meta)}</div>
+            </div>
+          </div>
+          ${canManageDoc(d) ? `<button class="dots-btn" onclick="openDocumentMenu('${d.id}')" aria-label="More actions">${icon('dots')}</button>` : ''}
+        </div>
+        <button class="btn sm secondary block" style="margin-top:10px;" onclick="openDocument('${d.id}')">${kind === 'link' ? 'Open link' : kind === 'image' ? 'View image' : 'Open PDF'}</button>
+      </div>`;
+  }
+
+  function openDataUrlInNewTab(dataUrl) {
+    const parts = dataUrl.split(',');
+    const mime = (parts[0].match(/data:([^;]+)/) || [])[1] || 'application/octet-stream';
+    const bytes = atob(parts[1]);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    window.open(URL.createObjectURL(new Blob([arr], { type: mime })), '_blank');
+  }
+
+  window.openDocument = async function(id) {
+    const d = documentsList.find(x => x.id === id);
+    if (!d) return;
+    if (d.link) { window.open(d.link, '_blank', 'noopener'); return; }
+    try {
+      const data = await ticketPhotoData(d.fileId);
+      if (!data) { toast('File not found.'); return; }
+      if (d.fileType === 'image') {
+        openUiSheet(`<div class="ui-sheet-title">${escapeHtml(d.title || '')}</div><img src="${data}" alt="${escapeHtml(d.title || 'Document')}" style="width:100%; border-radius:var(--radius-sm); display:block;" />`);
+        return;
+      }
+      openDataUrlInNewTab(data);
+    } catch (e) { toast('Could not open the document: ' + e.message); }
+  };
+
+  function documentFormHtml(d) {
+    return `
+      <label>Title</label>
+      <input type="text" id="doc-title" placeholder="e.g. Society Bylaws 2026" required maxlength="120" value="${escapeHtml(d.title || '')}" />
+      <label>Category</label>
+      <select id="doc-category">${DOC_CATEGORIES.map(c => `<option value="${escapeHtml(c)}" ${(d.category || 'Other') === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>
+      <label>Short description (optional)</label>
+      <textarea id="doc-desc" placeholder="What is this document about?" maxlength="500">${escapeHtml(d.description || '')}</textarea>`;
+  }
+
+  window.openAddDocumentModal = function() {
+    if (!canPublish()) return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Add Document</div>
+      <form id="doc-form">
+        ${documentFormHtml({})}
+        <label>File — PDF or photo, up to 650 KB</label>
+        <input type="file" id="doc-file" accept="image/png,image/jpeg,application/pdf" />
+        <label>…or a link (Google Drive, website)</label>
+        <input type="url" id="doc-link" placeholder="https://" />
+        <div style="font-size:12.5px; color:var(--text-muted); margin-top:4px;">Bigger file? Upload it to Google Drive and paste the share link.</div>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+          <input type="checkbox" id="doc-notify" checked style="width:auto; margin:0;" />
+          <span>Notify all residents</span>
+        </label>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Add to Documents</button>
+      </form>`;
+    openModal();
+
+    document.getElementById('doc-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const title = document.getElementById('doc-title').value.trim();
+      const category = document.getElementById('doc-category').value;
+      const description = document.getElementById('doc-desc').value.trim();
+      const link = document.getElementById('doc-link').value.trim();
+      const file = document.getElementById('doc-file').files[0];
+      const notify = document.getElementById('doc-notify').checked;
+      if (!file && !link) { toast('Attach a file or paste a link.'); return; }
+      if (link && !/^https?:\/\//i.test(link)) { toast('The link must start with http:// or https://'); return; }
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const data = {
+          title, category, description, link: file ? '' : link,
+          ...publisherFields(),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        if (file) {
+          const f = await readProofFile(file);
+          const fileRef = await db.collection('proofs').add({
+            uid: auth.currentUser.uid, kind: 'document', data: f.dataUrl, type: f.type, name: f.name,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          proofCache[fileRef.id] = f.dataUrl;
+          Object.assign(data, { fileId: fileRef.id, fileType: f.type, fileName: f.name, fileSize: Math.round(f.dataUrl.length * 3 / 4) });
+        }
+        const ref = await db.collection('documents').add(data);
+        logAudit('document', ref.id, 'create', `${category}: ${title}`);
+        closeModal();
+        toast('Document added.');
+        loadDocumentsTab();
+        if (notify) broadcastNotification(`New document: ${title}`, `${category} — open Documents & Minutes to read it.`, 'notices');
+      } catch (err) {
+        toast('Error adding document: ' + err.message);
+        btn.disabled = false; btn.textContent = 'Add to Documents';
+      }
+    });
+  };
+
+  window.openDocumentMenu = function(id) {
+    const d = documentsList.find(x => x.id === id);
+    if (!d || !canManageDoc(d)) return;
+    menuSheet(d.title, [
+      { label: 'Edit details', icon: 'edit', run: () => openEditDocumentModal(id) },
+      { label: 'Remove document', icon: 'trash', danger: true, run: () => removeDocument(id) }
+    ]);
+  };
+
+  window.openEditDocumentModal = function(id) {
+    const d = documentsList.find(x => x.id === id);
+    if (!d || !canManageDoc(d)) return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Edit Document</div>
+      <form id="doc-form">
+        ${documentFormHtml(d)}
+        ${d.link ? `<label>Link</label><input type="url" id="doc-link" value="${escapeHtml(d.link)}" required />` : `<div style="font-size:13px; color:var(--text-muted); margin-top:10px;">File: ${escapeHtml(d.fileName || 'attached')} (to replace it, remove this document and add it again)</div>`}
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save changes</button>
+      </form>`;
+    openModal();
+    document.getElementById('doc-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const upd = {
+        title: document.getElementById('doc-title').value.trim(),
+        category: document.getElementById('doc-category').value,
+        description: document.getElementById('doc-desc').value.trim(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      const linkEl = document.getElementById('doc-link');
+      if (linkEl) {
+        const link = linkEl.value.trim();
+        if (!/^https?:\/\//i.test(link)) { toast('The link must start with http:// or https://'); return; }
+        upd.link = link;
+      }
+      try {
+        await db.collection('documents').doc(id).update(upd);
+        logAudit('document', id, 'update', upd.title);
+        closeModal(); toast('Document updated.'); loadDocumentsTab();
+      } catch (err) { toast('Error saving: ' + err.message); }
+    });
+  };
+
+  window.removeDocument = async function(id) {
+    const d = documentsList.find(x => x.id === id);
+    if (!d || !canManageDoc(d)) return;
+    if (!(await confirmSheet({ title: 'Remove this document?', body: `"${d.title || 'Untitled'}" will no longer be visible to residents.`, okLabel: 'Remove', danger: true }))) return;
+    try {
+      await db.collection('documents').doc(id).update({
+        isDeleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp(), deletedBy: currentUserProfile.name || ''
+      });
+      logAudit('document', id, 'delete', d.title || '');
+      toast('Document removed.'); loadDocumentsTab();
+    } catch (err) { toast('Error removing: ' + err.message); }
+  };
+
+  // ----- meetings -----
+  function meetingIsPast(m) { return m.status === 'held'; }
+  function meetingDate(m) { const d = m.date ? new Date(m.date + 'T00:00:00') : null; return d && !isNaN(d.getTime()) ? d : null; }
+  function meetingDateLabel(m) { const d = meetingDate(m); return (d ? formatDate(d) : 'Date to be announced') + (m.time ? ' · ' + m.time : ''); }
+  function outcomeBadge(outcome) {
+    const o = outcome || 'pending';
+    return `<span class="badge ${o === 'approved' ? 'paid' : o === 'rejected' ? 'overdue' : 'pending'}">${escapeHtml(statusLabel(o))}</span>`;
+  }
+
+  function renderMeetingsBody() {
+    const el = document.getElementById('documents-body');
+    if (!el || docsView !== 'meetings') return;
+    if (!meetingsList.length) {
+      el.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">${canPublish() ? 'No meetings yet. Create one to share its agenda and, afterwards, its minutes.' : 'No board meetings have been announced yet.'}</div>`;
+      return;
+    }
+    const upcoming = meetingsList.filter(m => !meetingIsPast(m)).sort((a, b) => String(a.date || '9').localeCompare(String(b.date || '9')));
+    const past = meetingsList.filter(meetingIsPast).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || byNewest(a, b));
+    el.innerHTML = `
+      <div class="group-h">Upcoming · ${upcoming.length}</div>
+      ${upcoming.length ? upcoming.map(meetingCard).join('') : '<div class="card" style="cursor:default; color:var(--text-muted);">No meeting is scheduled right now.</div>'}
+      ${past.length ? `<div class="group-h">Minutes of past meetings · ${past.length}</div>${past.map(meetingCard).join('')}` : ''}
+    `;
+  }
+
+  function meetingCard(m) {
+    const past = meetingIsPast(m);
+    const agenda = m.agenda || [];
+    const open = !past && m.suggestionsOpen !== false;
+    const mine = auth.currentUser.uid;
+    return `
+      <div class="card" style="cursor:default;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+          <span class="badge ${past ? 'closed' : 'notice'}">${past ? 'Minutes published' : 'Upcoming'}</span>
+          <span style="display:flex; align-items:center; gap:6px;">
+            ${past ? `<button class="btn sm secondary" onclick="downloadMinutesPDF('${m.id}')">📄 PDF</button>` : ''}
+            ${canPublish() ? `<button class="dots-btn" onclick="openMeetingMenu('${m.id}')" aria-label="More actions">${icon('dots')}</button>` : ''}
+          </span>
+        </div>
+        <div style="font-weight:700; font-size:16px;">${escapeHtml(m.title || 'Board Meeting')}</div>
+        <div style="font-size:13.5px; color:var(--text-muted); margin-top:2px;">🗓 ${escapeHtml(meetingDateLabel(m))}${m.venue ? ' · 📍 ' + escapeHtml(m.venue) : ''}</div>
+        ${m.description ? `<div style="font-size:14px; margin-top:6px; white-space:pre-wrap; line-height:1.5;">${escapeHtml(m.description)}</div>` : ''}
+        <div class="group-h" style="margin:12px 0 6px;">Agenda · ${agenda.length}</div>
+        ${agenda.length ? `<ol class="agenda">${agenda.map((a, i) => `
+          <li>
+            <div style="flex:1; min-width:0;">
+              <div>${escapeHtml(a.text || '')}</div>
+              ${a.source === 'resident' ? `<div class="agenda-by">Suggested by ${escapeHtml(a.by || 'a resident')}${a.house ? ', ' + escapeHtml(a.house) : ''}${a.byUid === mine ? ' (you)' : ''}</div>` : ''}
+            </div>
+            ${canPublish() && !past ? `<button class="agenda-x" onclick="removeAgendaItem('${m.id}', ${i})" aria-label="Remove agenda item">✕</button>` : ''}
+          </li>`).join('')}</ol>` : '<div style="font-size:13.5px; color:var(--text-muted);">No agenda items yet.</div>'}
+        ${open && !canPublish() ? `<button class="btn sm secondary block" style="margin-top:8px;" onclick="suggestAgendaItem('${m.id}')">+ Suggest an agenda item</button>` : ''}
+        ${!past && !open ? '<div style="font-size:13px; color:var(--text-faint); margin-top:6px;">Agenda is final — suggestions are closed.</div>' : ''}
+        ${past ? renderMinutes(m) : ''}
+        ${canPublish() && !past ? `
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button class="btn sm secondary block" onclick="addAgendaItem('${m.id}')">+ Agenda item</button>
+            <button class="btn sm primary block" onclick="openPublishMinutesModal('${m.id}')">Publish minutes</button>
+          </div>` : ''}
+      </div>`;
+  }
+
+  function renderMinutes(m) {
+    const decs = m.decisions || [];
+    return `
+      <div class="group-h" style="margin:12px 0 6px;">Minutes</div>
+      <div style="font-size:14px; white-space:pre-wrap; line-height:1.55;">${escapeHtml(m.minutes || '')}</div>
+      ${decs.length ? `<div class="group-h" style="margin:12px 0 6px;">Decisions · ${decs.length}</div>${decs.map(d => `<div class="minute-dec">${outcomeBadge(d.outcome)}<span>${escapeHtml(d.title || '')}</span></div>`).join('')}` : ''}
+      ${m.attendees ? `<div style="font-size:13px; color:var(--text-muted); margin-top:10px;">Present: ${escapeHtml(m.attendees)}</div>` : ''}
+      <div style="font-size:12.5px; color:var(--text-faint); margin-top:6px;">Minutes published ${escapeHtml(formatDate(m.minutesPublishedAt))}${m.minutesBy ? ' by ' + escapeHtml(m.minutesBy) : ''}</div>`;
+  }
+
+  function meetingFormHtml(m) {
+    return `
+      <label>Title</label>
+      <input type="text" id="mt-title" placeholder="e.g. Monthly Board Meeting – October" required maxlength="120" value="${escapeHtml(m.title || '')}" />
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div><label>Date</label><input type="date" id="mt-date" value="${escapeHtml(m.date || '')}" required /></div>
+        <div><label>Time</label><input type="text" id="mt-time" placeholder="e.g. 8:00 PM" value="${escapeHtml(m.time || '')}" /></div>
+      </div>
+      <label>Venue</label>
+      <input type="text" id="mt-venue" placeholder="e.g. Community Hall" value="${escapeHtml(m.venue || '')}" />
+      <label>Notes for residents (optional)</label>
+      <textarea id="mt-desc" placeholder="Purpose of the meeting, who should attend…" maxlength="1000">${escapeHtml(m.description || '')}</textarea>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+        <input type="checkbox" id="mt-open" ${m.suggestionsOpen === false ? '' : 'checked'} style="width:auto; margin:0;" />
+        <span>Residents may suggest agenda items</span>
+      </label>`;
+  }
+
+  window.openNewMeetingModal = function() {
+    if (!canPublish()) return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">New Board Meeting</div>
+      <form id="meeting-form">
+        ${meetingFormHtml({})}
+        <label>Agenda items — one per line</label>
+        <textarea id="mt-agenda" placeholder="1. Approve September accounts&#10;2. Gate security contract&#10;3. Any other business"></textarea>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+          <input type="checkbox" id="mt-notify" checked style="width:auto; margin:0;" />
+          <span>Notify all residents</span>
+        </label>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Publish agenda</button>
+      </form>`;
+    openModal();
+
+    document.getElementById('meeting-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const title = document.getElementById('mt-title').value.trim();
+      const date = document.getElementById('mt-date').value;
+      const agenda = document.getElementById('mt-agenda').value.split('\n').map(s => s.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean)
+        .map(text => agendaEntry(text, 'board'));
+      const notify = document.getElementById('mt-notify').checked;
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        const ref = await db.collection('meetings').add({
+          title, date,
+          time: document.getElementById('mt-time').value.trim(),
+          venue: document.getElementById('mt-venue').value.trim(),
+          description: document.getElementById('mt-desc').value.trim(),
+          suggestionsOpen: document.getElementById('mt-open').checked,
+          status: 'upcoming',
+          agenda,
+          ...publisherFields(),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        logAudit('meeting', ref.id, 'create', `${title} on ${date}`);
+        closeModal(); toast('Meeting published.'); loadDocumentsTab();
+        if (notify) broadcastNotification(`Board meeting: ${title}`, `${meetingDateLabel({ date, time: document.getElementById('mt-time').value.trim() })}. See the agenda under Documents & Minutes${document.getElementById('mt-open').checked ? ' and suggest items' : ''}.`, 'notices');
+      } catch (err) { toast('Error saving meeting: ' + err.message); btn.disabled = false; }
+    });
+  };
+
+  function agendaEntry(text, source) {
+    return { text, source, by: currentUserProfile.name || '', byUid: auth.currentUser.uid, house: currentUserProfile.house || '', at: Date.now() };
+  }
+
+  window.suggestAgendaItem = async function(id) {
+    const m = meetingsList.find(x => x.id === id);
+    if (!m || meetingIsPast(m) || m.suggestionsOpen === false) return;
+    const text = await promptSheet({ title: 'Suggest an agenda item', body: 'The Board sees your name with the suggestion.', placeholder: 'e.g. Repair the street lights in Block B', required: true, multiline: true, okLabel: 'Suggest' });
+    if (!text) return;
+    try {
+      await db.collection('meetings').doc(id).update({
+        agenda: [...(m.agenda || []), agendaEntry(text, 'resident')],
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      toast('Thank you — your item was added to the agenda.');
+      loadDocumentsTab();
+      notifyAdmins(`Agenda suggestion: ${m.title || 'Board meeting'}`, `${currentUserProfile.name} (${currentUserProfile.house || 'resident'}): ${text}`, 'info');
+    } catch (err) { toast('Could not add your suggestion: ' + err.message); }
+  };
+
+  window.addAgendaItem = async function(id) {
+    const m = meetingsList.find(x => x.id === id);
+    if (!m || !canPublish()) return;
+    const text = await promptSheet({ title: 'Add agenda item', placeholder: 'e.g. Approve September accounts', required: true, multiline: true, okLabel: 'Add' });
+    if (!text) return;
+    try {
+      await db.collection('meetings').doc(id).update({ agenda: [...(m.agenda || []), agendaEntry(text, 'board')], updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      loadDocumentsTab();
+    } catch (err) { toast('Could not add the item: ' + err.message); }
+  };
+
+  window.removeAgendaItem = async function(id, index) {
+    const m = meetingsList.find(x => x.id === id);
+    if (!m || !canPublish()) return;
+    const agenda = (m.agenda || []).slice();
+    const [item] = agenda.splice(index, 1);
+    if (!item) return;
+    if (!(await confirmSheet({ title: 'Remove this agenda item?', body: item.text || '', okLabel: 'Remove', danger: true }))) return;
+    try {
+      await db.collection('meetings').doc(id).update({ agenda, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      loadDocumentsTab();
+    } catch (err) { toast('Could not remove the item: ' + err.message); }
+  };
+
+  window.openMeetingMenu = function(id) {
+    const m = meetingsList.find(x => x.id === id);
+    if (!m || !canPublish()) return;
+    const past = meetingIsPast(m);
+    const isAdmin = currentUserProfile.role === 'admin' || isSuperAdmin();
+    menuSheet(m.title || 'Board meeting', [
+      { label: 'Edit details', icon: 'edit', run: () => openEditMeetingModal(id) },
+      !past && { label: m.suggestionsOpen === false ? 'Reopen suggestions' : 'Close suggestions (agenda final)', icon: 'check2', run: () => toggleSuggestions(id) },
+      past && { label: 'Edit minutes', icon: 'file', run: () => openPublishMinutesModal(id) },
+      isAdmin && { label: 'Remove meeting', icon: 'trash', danger: true, run: () => removeMeeting(id) }
+    ]);
+  };
+
+  window.toggleSuggestions = async function(id) {
+    const m = meetingsList.find(x => x.id === id);
+    if (!m || !canPublish()) return;
+    try {
+      await db.collection('meetings').doc(id).update({ suggestionsOpen: m.suggestionsOpen === false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      loadDocumentsTab();
+    } catch (err) { toast('Could not update: ' + err.message); }
+  };
+
+  window.openEditMeetingModal = function(id) {
+    const m = meetingsList.find(x => x.id === id);
+    if (!m || !canPublish()) return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Edit Meeting</div>
+      <form id="meeting-form">
+        ${meetingFormHtml(m)}
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save changes</button>
+      </form>`;
+    openModal();
+    document.getElementById('meeting-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        await db.collection('meetings').doc(id).update({
+          title: document.getElementById('mt-title').value.trim(),
+          date: document.getElementById('mt-date').value,
+          time: document.getElementById('mt-time').value.trim(),
+          venue: document.getElementById('mt-venue').value.trim(),
+          description: document.getElementById('mt-desc').value.trim(),
+          suggestionsOpen: document.getElementById('mt-open').checked,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        logAudit('meeting', id, 'update', document.getElementById('mt-title').value.trim());
+        closeModal(); toast('Meeting updated.'); loadDocumentsTab();
+      } catch (err) { toast('Error saving: ' + err.message); }
+    });
+  };
+
+  window.removeMeeting = async function(id) {
+    const m = meetingsList.find(x => x.id === id);
+    if (!m || !(currentUserProfile.role === 'admin' || isSuperAdmin())) return;
+    if (!(await confirmSheet({ title: 'Remove this meeting?', body: `"${m.title || 'Board meeting'}" and its agenda/minutes will be hidden from residents.`, okLabel: 'Remove', danger: true }))) return;
+    try {
+      await db.collection('meetings').doc(id).update({ isDeleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp(), deletedBy: currentUserProfile.name || '' });
+      logAudit('meeting', id, 'delete', m.title || '');
+      toast('Meeting removed.'); loadDocumentsTab();
+    } catch (err) { toast('Error removing: ' + err.message); }
+  };
+
+  // Minutes: free text + the Board decisions taken (copied in by title and
+  // outcome, so residents — who cannot read the decisions queue — still see them).
+  async function decisionsForMinutes() {
+    if (decisionsList.length) return decisionsList;
+    try {
+      const snap = await db.collection('decisions').get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => !d.isDeleted);
+    } catch (_) { return []; }
+  }
+
+  window.openPublishMinutesModal = async function(id) {
+    const m = meetingsList.find(x => x.id === id);
+    if (!m || !canPublish()) return;
+    const decisions = await decisionsForMinutes();
+    const chosen = new Set((m.decisions || []).map(d => d.id));
+    const agendaText = (m.agenda || []).map((a, i) => `${i + 1}. ${a.text}`).join('\n');
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">${meetingIsPast(m) ? 'Edit Minutes' : 'Publish Minutes'}</div>
+      <div style="font-size:13.5px; color:var(--text-muted); margin-bottom:12px;">${escapeHtml(m.title || '')} · ${escapeHtml(meetingDateLabel(m))}</div>
+      <form id="minutes-form">
+        <label>Minutes — what was discussed and decided</label>
+        <textarea id="mn-text" rows="9" required placeholder="${escapeHtml(agendaText || 'Summary of the discussion…')}">${escapeHtml(m.minutes || '')}</textarea>
+        ${agendaText && !m.minutes ? `<button type="button" class="btn sm secondary" style="margin-top:6px;" onclick="document.getElementById('mn-text').value = ${JSON.stringify(agendaText).replace(/"/g, '&quot;')}">Start from the agenda</button>` : ''}
+        <label>Present (names, optional)</label>
+        <input type="text" id="mn-attendees" placeholder="e.g. Tariq Mehmood, Hina Shahid, Bilal Hussain" value="${escapeHtml(m.attendees || '')}" />
+        ${decisions.length ? `
+          <label>Board decisions taken at this meeting</label>
+          <div class="mn-pick">${decisions.map(d => `
+            <label class="mn-row"><input type="checkbox" class="mn-dec" value="${d.id}" ${chosen.has(d.id) ? 'checked' : ''} style="width:auto; margin:0;" />
+              <span style="flex:1; min-width:0;">${escapeHtml(d.title || '')}</span>${outcomeBadge(d.status)}</label>`).join('')}</div>` : ''}
+        <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+          <input type="checkbox" id="mn-notify" ${meetingIsPast(m) ? '' : 'checked'} style="width:auto; margin:0;" />
+          <span>Notify all residents</span>
+        </label>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">${meetingIsPast(m) ? 'Save minutes' : 'Publish minutes'}</button>
+      </form>`;
+    openModal();
+
+    document.getElementById('minutes-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const minutes = document.getElementById('mn-text').value.trim();
+      const picked = [...document.querySelectorAll('.mn-dec:checked')].map(cb => decisions.find(d => d.id === cb.value)).filter(Boolean)
+        .map(d => ({ id: d.id, title: d.title || '', outcome: d.status || 'pending' }));
+      const notify = document.getElementById('mn-notify').checked;
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        const upd = {
+          minutes, decisions: picked,
+          attendees: document.getElementById('mn-attendees').value.trim(),
+          status: 'held', suggestionsOpen: false,
+          minutesBy: currentUserProfile.name || '',
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        if (!meetingIsPast(m)) upd.minutesPublishedAt = firebase.firestore.FieldValue.serverTimestamp();
+        await db.collection('meetings').doc(id).update(upd);
+        logAudit('meeting', id, meetingIsPast(m) ? 'update' : 'publish', `Minutes: ${m.title || ''}`);
+        closeModal(); toast('Minutes published.'); loadDocumentsTab();
+        if (notify) broadcastNotification(`Minutes published: ${m.title || 'Board meeting'}`, `${picked.length ? picked.length + ' decision(s) recorded. ' : ''}Read them under Documents & Minutes.`, 'notices');
+      } catch (err) { toast('Error publishing minutes: ' + err.message); btn.disabled = false; }
+    });
+  };
+
+  window.downloadMinutesPDF = async function(id) {
+    const m = meetingsList.find(x => x.id === id);
+    if (!m) return;
+    try {
+      const { jsPDF } = await ensureJsPDF();
+      const doc = new jsPDF();
+      const W = 180, L = 15;
+      let y = 18;
+      const line = (txt, size, bold) => {
+        doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size);
+        for (const l of doc.splitTextToSize(String(txt || ''), W)) {
+          if (y > 280) { doc.addPage(); y = 18; }
+          doc.text(l, L, y); y += size * 0.5;
+        }
+      };
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+      doc.text('Roshan Pakistan Housing Society', 105, y, { align: 'center' }); y += 8;
+      doc.setFontSize(12); doc.text('Minutes of the Board Meeting', 105, y, { align: 'center' }); y += 10;
+      line(m.title || 'Board Meeting', 14, true); y += 2;
+      line(`${meetingDateLabel(m)}${m.venue ? ' · ' + m.venue : ''}`, 11, false); y += 4;
+      if ((m.agenda || []).length) { line('Agenda', 12, true); (m.agenda || []).forEach((a, i) => line(`${i + 1}. ${a.text}`, 11, false)); y += 4; }
+      line('Minutes', 12, true); line(m.minutes || '', 11, false); y += 4;
+      if ((m.decisions || []).length) { line('Decisions', 12, true); m.decisions.forEach(d => line(`• ${d.title} — ${statusLabel(d.outcome || 'pending')}`, 11, false)); y += 4; }
+      if (m.attendees) line(`Present: ${m.attendees}`, 11, false);
+      y += 4; line(`Published ${formatDate(m.minutesPublishedAt)}${m.minutesBy ? ' by ' + m.minutesBy : ''}`, 10, false);
+      doc.save(`RPHS-Minutes-${(m.date || 'meeting').replace(/[^\w-]/g, '')}.pdf`);
+    } catch (err) { toast('Could not create the PDF: ' + err.message); }
   };
 
   // --- CSV EXPORT ---

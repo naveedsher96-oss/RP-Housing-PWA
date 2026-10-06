@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   doc, setDoc, updateDoc, getDoc, getDocs, addDoc, collection, query, where,
-  arrayUnion, serverTimestamp, runTransaction, setLogLevel, deleteField
+  arrayUnion, serverTimestamp, runTransaction, setLogLevel, deleteField, deleteDoc
 } from 'firebase/firestore';
 
 setLogLevel('silent'); // expected denials otherwise print noisy gRPC errors
@@ -46,7 +46,13 @@ const SEED = {
   'announcements/n1': { title: 'N', createdBy: 'brd', allowComments: true },
   'tickets/t1': { uid: 'r1', status: 'pending' },
   'tickets/td': { uid: 'r1', status: 'resolved', history: [] },
-  'tickets/td2': { uid: 'r2', status: 'closed' }
+  'tickets/td2': { uid: 'r2', status: 'closed' },
+  'documents/doc1': { title: 'Bylaws', createdBy: 'adm' },
+  'documents/docb': { title: 'Form', createdBy: 'brd' },
+  'proofs/docf': { uid: 'adm', kind: 'document', data: 'pdf' },
+  'meetings/m1': { title: 'M', status: 'upcoming', suggestionsOpen: true, agenda: [{ text: 'a', byUid: 'adm', source: 'board' }], createdBy: 'adm' },
+  'meetings/mc': { title: 'M', status: 'upcoming', suggestionsOpen: false, agenda: [], createdBy: 'adm' },
+  'meetings/mh': { title: 'M', status: 'held', agenda: [], minutes: 'x', createdBy: 'adm' }
 };
 
 // ---------- cases: [name, signed-in uid, action(db), should be allowed] ----------
@@ -132,7 +138,9 @@ const CASES = [
 
   // Tickets
   ['admin updates ticket', 'adm', db => updateDoc(doc(db, 'tickets/t1'), { status: 'resolved', department: 'x' }), true],
-  ['board cannot create ticket', 'brd', db => addDoc(collection(db, 'tickets'), { uid: 'brd' }), false],
+  ['board lodges own complaint', 'brd', db => addDoc(collection(db, 'tickets'), { uid: 'brd', status: 'pending' }), true],
+  ['admin lodges own complaint', 'adm', db => addDoc(collection(db, 'tickets'), { uid: 'adm', status: 'pending' }), true],
+  ['admin cannot lodge complaint in a resident\'s name', 'adm', db => addDoc(collection(db, 'tickets'), { uid: 'r1', status: 'pending' }), false],
   ['board reads all tickets', 'brd', db => getDocs(collection(db, 'tickets')), true],
   ['resident lodges complaint with photos + history', 'r1', db => addDoc(collection(db, 'tickets'), { uid: 'r1', status: 'pending', photoIds: ['x'], history: [{ status: 'pending' }] }), true],
   ['resident stores a complaint photo', 'r1', db => addDoc(collection(db, 'proofs'), { uid: 'r1', kind: 'ticket', data: 'x' }), true],
@@ -144,6 +152,34 @@ const CASES = [
   ['resident cannot mark own complaint resolved', 'r1', db => updateDoc(doc(db, 'tickets/t1'), { status: 'resolved' }), false],
   ['resident cannot change department while rating', 'r1', db => updateDoc(doc(db, 'tickets/td'), { rating: { stars: 5, comment: '', at: 1 }, department: 'X' }), false],
   ['admin adds note to history', 'adm', db => updateDoc(doc(db, 'tickets/t1'), { status: 'in-progress', department: 'Plumbing', history: arrayUnion({ status: 'in-progress', note: 'n' }), updatedAt: serverTimestamp() }), true],
+
+  // Documents vault
+  ['resident reads documents', 'r1', db => getDocs(collection(db, 'documents')), true],
+  ['resident reads a document file', 'r1', db => getDoc(doc(db, 'proofs/docf')), true],
+  ['resident still cannot read another resident\'s proof', 'r1', db => getDoc(doc(db, 'proofs/pr2')), false],
+  ['pending resident cannot read documents', 'pend', db => getDocs(collection(db, 'documents')), false],
+  ['resident cannot add a document', 'r1', db => addDoc(collection(db, 'documents'), { title: 'X', createdBy: 'r1' }), false],
+  ['admin adds a document', 'adm', db => addDoc(collection(db, 'documents'), { title: 'X', createdBy: 'adm' }), true],
+  ['board adds a document', 'brd', db => addDoc(collection(db, 'documents'), { title: 'X', createdBy: 'brd' }), true],
+  ['board cannot add a document as someone else', 'brd', db => addDoc(collection(db, 'documents'), { title: 'X', createdBy: 'adm' }), false],
+  ['board edits own document', 'brd', db => updateDoc(doc(db, 'documents/docb'), { title: 'Y' }), true],
+  ['board cannot edit admin\'s document', 'brd', db => updateDoc(doc(db, 'documents/doc1'), { title: 'Y' }), false],
+  ['super admin archives a document', 'sa', db => updateDoc(doc(db, 'documents/doc1'), { isDeleted: true }), true],
+  ['admin cannot hard-delete a document', 'adm', db => deleteDoc(doc(db, 'documents/doc1')), false],
+
+  // Board meetings: agenda & minutes
+  ['resident reads meetings', 'r1', db => getDocs(collection(db, 'meetings')), true],
+  ['resident cannot create a meeting', 'r1', db => addDoc(collection(db, 'meetings'), { title: 'X', createdBy: 'r1' }), false],
+  ['board creates a meeting', 'brd', db => addDoc(collection(db, 'meetings'), { title: 'X', createdBy: 'brd', status: 'upcoming', agenda: [] }), true],
+  ['admin publishes minutes', 'adm', db => updateDoc(doc(db, 'meetings/m1'), { status: 'held', minutes: 'done', decisions: [], suggestionsOpen: false }), true],
+  ['resident suggests an agenda item', 'r1', db => updateDoc(doc(db, 'meetings/m1'), { agenda: arrayUnion({ text: 'b', byUid: 'r1', source: 'resident' }), updatedAt: serverTimestamp() }), true],
+  ['resident cannot suggest in another\'s name', 'r1', db => updateDoc(doc(db, 'meetings/m1'), { agenda: arrayUnion({ text: 'b', byUid: 'r2', source: 'resident' }), updatedAt: serverTimestamp() }), false],
+  ['resident cannot pose as a board item', 'r1', db => updateDoc(doc(db, 'meetings/m1'), { agenda: arrayUnion({ text: 'b', byUid: 'r1', source: 'board' }), updatedAt: serverTimestamp() }), false],
+  ['resident cannot remove agenda items', 'r1', db => updateDoc(doc(db, 'meetings/m1'), { agenda: [], updatedAt: serverTimestamp() }), false],
+  ['resident cannot suggest when suggestions are closed', 'r1', db => updateDoc(doc(db, 'meetings/mc'), { agenda: arrayUnion({ text: 'b', byUid: 'r1', source: 'resident' }), updatedAt: serverTimestamp() }), false],
+  ['resident cannot suggest on a held meeting', 'r1', db => updateDoc(doc(db, 'meetings/mh'), { agenda: arrayUnion({ text: 'b', byUid: 'r1', source: 'resident' }), updatedAt: serverTimestamp() }), false],
+  ['resident cannot edit minutes', 'r1', db => updateDoc(doc(db, 'meetings/mh'), { minutes: 'tampered' }), false],
+  ['resident cannot change the title while suggesting', 'r1', db => updateDoc(doc(db, 'meetings/m1'), { title: 'Z', agenda: arrayUnion({ text: 'b', byUid: 'r1', source: 'resident' }) }), false],
 
   // Audit log
   ['audit entry as self', 'r1', db => addDoc(collection(db, 'audit_log'), { performedByUid: 'r1' }), true],

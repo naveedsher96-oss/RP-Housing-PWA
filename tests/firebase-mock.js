@@ -229,6 +229,43 @@
   coll('settings').set('recurringBill', { enabled: true, amount: 2500, category: 'Monthly Maintenance', dueDay: 20, notes: '', lastRun: { at: daysAgo(0, 0), issued: 12, period: 'October 2026', skippedBilled: 0, skippedExempt: 1 } });
   coll('settings').set('monthlySummary', { enabled: true });
 
+  // documents vault (file kept in proofs/{fileId} with kind 'document')
+  const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  coll('proofs').set('doc_f1', { uid: 'u_admin', kind: 'document', type: 'pdf', name: 'bylaws-2026.pdf', data: 'data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKCg==', createdAt: daysAgo(60, 10) });
+  coll('proofs').set('doc_f2', { uid: 'u_admin', kind: 'document', type: 'image', name: 'budget-2026.png', data: PX, createdAt: daysAgo(25, 10) });
+  const docs = coll('documents');
+  docs.set('doc1', { title: 'Society Bylaws & House Rules (2026 edition)', category: 'Bylaws & Rules', description: 'Membership, maintenance charges, construction rules and penalties.', fileId: 'doc_f1', fileType: 'pdf', fileName: 'bylaws-2026.pdf', fileSize: 412000, createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdByRole: 'management', createdAt: daysAgo(60, 10) });
+  docs.set('doc2', { title: 'Approved Budget 2026-27', category: 'Budget & Accounts', description: 'Approved by the Board on 12 Sep.', fileId: 'doc_f2', fileType: 'image', fileName: 'budget-2026.png', fileSize: 98000, createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdByRole: 'management', createdAt: daysAgo(25, 10) });
+  docs.set('doc3', { title: 'Gate Pass Request Form', category: 'Forms', description: '', link: 'https://drive.google.com/file/d/rphs-gate-pass/view', createdBy: 'u_r4', createdByName: 'Bilal Hussain', createdByRole: 'board', createdAt: daysAgo(12, 10) });
+  docs.set('doc4', { title: 'Old parking policy', category: 'Notices & Circulars', link: 'https://example.com/old', createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdAt: daysAgo(200), isDeleted: true, deletedAt: daysAgo(100), deletedBy: 'Tariq Mehmood' });
+
+  // board meetings: one upcoming (agenda open to suggestions), one held (minutes)
+  const meetings = coll('meetings');
+  const at = (d) => daysAgo(d, 18).toDate().getTime();
+  meetings.set('m1', {
+    title: 'Monthly Board Meeting – October', date: iso(-6), time: '8:00 PM', venue: 'Community Hall', description: 'All residents welcome as observers.',
+    status: 'upcoming', suggestionsOpen: true,
+    agenda: [
+      { text: 'Approve September accounts', source: 'board', by: 'Tariq Mehmood', byUid: 'u_admin', house: 'House 1, Block A', at: at(4) },
+      { text: 'Gate security contract renewal', source: 'board', by: 'Tariq Mehmood', byUid: 'u_admin', house: 'House 1, Block A', at: at(4) },
+      { text: 'Speed breakers near the park', source: 'resident', by: 'Muhammad Usman Khan', byUid: 'u_r2', house: 'House 3, Block A', at: at(2) }
+    ],
+    createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdByRole: 'management', createdAt: daysAgo(4, 18), updatedAt: daysAgo(2, 18)
+  });
+  meetings.set('m2', {
+    title: 'Monthly Board Meeting – September', date: iso(22), time: '8:00 PM', venue: 'Community Hall',
+    status: 'held', suggestionsOpen: false,
+    agenda: [
+      { text: 'CCTV installation quotation', source: 'board', by: 'Tariq Mehmood', byUid: 'u_admin', at: at(30) },
+      { text: 'Park development fund', source: 'board', by: 'Tariq Mehmood', byUid: 'u_admin', at: at(30) }
+    ],
+    minutes: '1. CCTV quotation from SafeVision reviewed; Board approved 9 cameras at three gates.\n2. PKR 25,000 moved from the bills account to the Park Development fund as seed money.\n3. Next meeting: first week of October.',
+    decisions: [{ id: 'd1', title: 'Approve CCTV installation – PKR 180,000', outcome: 'approved' }, { id: 'd3', title: 'Transfer PKR 25,000 to Park Development', outcome: 'approved' }],
+    attendees: 'Tariq Mehmood, Hina Shahid, Bilal Hussain, Hassan Raza',
+    minutesPublishedAt: daysAgo(21, 10), minutesBy: 'Tariq Mehmood',
+    createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdByRole: 'management', createdAt: daysAgo(30, 18), updatedAt: daysAgo(21, 10)
+  });
+
   // audit log
   const audit = coll('audit_log');
   [['bill', 'update', 'Bill BILL-302112 marked paid', 1], ['member', 'update', 'Membership approved: Mehwish Tariq', 4], ['fund', 'create', 'Fund "Park Development" started', 12], ['expense', 'create', 'Expense Mosque PKR 48,000 recorded', 12], ['tickets', 'archive', 'Complaint TKT-4600 archived', 38]]
