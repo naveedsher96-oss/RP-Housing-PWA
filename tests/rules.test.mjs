@@ -44,7 +44,9 @@ const SEED = {
   'volunteer_programs/v1': { title: 'V', participants: [] },
   'volunteer_programs/v2': { title: 'V', participants: [{ uid: 'r1' }] },
   'announcements/n1': { title: 'N', createdBy: 'brd', allowComments: true },
-  'tickets/t1': { uid: 'r1', status: 'pending' }
+  'tickets/t1': { uid: 'r1', status: 'pending' },
+  'tickets/td': { uid: 'r1', status: 'resolved', history: [] },
+  'tickets/td2': { uid: 'r2', status: 'closed' }
 };
 
 // ---------- cases: [name, signed-in uid, action(db), should be allowed] ----------
@@ -132,6 +134,16 @@ const CASES = [
   ['admin updates ticket', 'adm', db => updateDoc(doc(db, 'tickets/t1'), { status: 'resolved', department: 'x' }), true],
   ['board cannot create ticket', 'brd', db => addDoc(collection(db, 'tickets'), { uid: 'brd' }), false],
   ['board reads all tickets', 'brd', db => getDocs(collection(db, 'tickets')), true],
+  ['resident lodges complaint with photos + history', 'r1', db => addDoc(collection(db, 'tickets'), { uid: 'r1', status: 'pending', photoIds: ['x'], history: [{ status: 'pending' }] }), true],
+  ['resident stores a complaint photo', 'r1', db => addDoc(collection(db, 'proofs'), { uid: 'r1', kind: 'ticket', data: 'x' }), true],
+  ['resident rates own resolved complaint', 'r1', db => updateDoc(doc(db, 'tickets/td'), { rating: { stars: 4, comment: 'ok', at: 1 }, history: arrayUnion({ status: 'resolved', note: 'Rated 4/5' }), updatedAt: serverTimestamp() }), true],
+  ['resident cannot rate a pending complaint', 'r1', db => updateDoc(doc(db, 'tickets/t1'), { rating: { stars: 4, comment: '', at: 1 } }), false],
+  ['resident cannot rate another resident complaint', 'r1', db => updateDoc(doc(db, 'tickets/td2'), { rating: { stars: 1, comment: '', at: 1 } }), false],
+  ['resident cannot give 6 stars', 'r1', db => updateDoc(doc(db, 'tickets/td'), { rating: { stars: 6, comment: '', at: 1 } }), false],
+  ['resident reopens own resolved complaint', 'r1', db => updateDoc(doc(db, 'tickets/td'), { status: 'pending', history: arrayUnion({ status: 'pending', note: 'Reopened' }), updatedAt: serverTimestamp(), reopenedAt: serverTimestamp(), reopenCount: 1 }), true],
+  ['resident cannot mark own complaint resolved', 'r1', db => updateDoc(doc(db, 'tickets/t1'), { status: 'resolved' }), false],
+  ['resident cannot change department while rating', 'r1', db => updateDoc(doc(db, 'tickets/td'), { rating: { stars: 5, comment: '', at: 1 }, department: 'X' }), false],
+  ['admin adds note to history', 'adm', db => updateDoc(doc(db, 'tickets/t1'), { status: 'in-progress', department: 'Plumbing', history: arrayUnion({ status: 'in-progress', note: 'n' }), updatedAt: serverTimestamp() }), true],
 
   // Audit log
   ['audit entry as self', 'r1', db => addDoc(collection(db, 'audit_log'), { performedByUid: 'r1' }), true],

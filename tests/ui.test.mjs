@@ -153,6 +153,7 @@ test('board: residents directory shows the ⋮ menu buttons', async page => {
 }, 'board');
 
 test('resident: one proof covers two bills and is stored once', async page => {
+  const filesBefore = await page.evaluate(() => (window.__mockStore.proofs || new Map()).size);
   await page.evaluate(() => openUploadProofModal('b302114'));
   await page.waitForSelector('.proof-bill', { timeout: 5000 });
   await page.evaluate(() => {
@@ -170,7 +171,7 @@ test('resident: one proof covers two bills and is stored once', async page => {
   });
   assert(r.same, 'bills do not share one proof');
   assert(!r.inline, 'proof photo was stored inside the bill');
-  assert(r.files === 1, `expected 1 stored proof file, found ${r.files}`);
+  assert(r.files === filesBefore + 1, `expected 1 new stored proof file, found ${r.files - filesBefore}`);
   noErrors(page);
 }, 'resident');
 
@@ -187,6 +188,88 @@ test('admin: approving a shared proof marks every bill in it paid', async page =
     .catch(() => { throw new Error('both bills in the shared proof should be paid'); });
   noErrors(page);
 }, 'admin');
+
+// ---------- complaints: photos, timeline, rating ----------
+const PNG1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+test('resident: lodging a complaint with a photo stores the photo separately and starts the timeline', async page => {
+  await page.evaluate(() => { selectTab('tickets'); });
+  await settle(page);
+  const before = await page.evaluate(() => ({ tickets: window.__mockStore.tickets.size, proofs: window.__mockStore.proofs.size }));
+  await page.evaluate(() => openNewTicketModal());
+  await page.waitForSelector('#ticket-form', { timeout: 5000 });
+  await page.selectOption('#ticket-category', 'Water Supply');
+  await page.fill('#ticket-desc', 'No water in Block B since morning.');
+  await page.setInputFiles('#ticket-photo-file', { name: 'tap.png', mimeType: 'image/png', buffer: PNG1 });
+  await page.waitForSelector('#ticket-photo-preview .ticket-photo', { timeout: 5000 });
+  await page.click('#ticket-form button[type=submit]');
+  await page.waitForFunction(n => window.__mockStore.tickets.size === n + 1, before.tickets, { timeout: 8000 })
+    .catch(() => { throw new Error('ticket was not created'); });
+  const r = await page.evaluate(() => {
+    const t = [...window.__mockStore.tickets.values()].find(x => x.description === 'No water in Block B since morning.');
+    return { photos: (t.photoIds || []).length, inline: JSON.stringify(t).includes('base64'), history: (t.history || []).length, proofs: window.__mockStore.proofs.size, status: t.status };
+  });
+  assert(r.photos === 1, `expected 1 photo id, got ${r.photos}`);
+  assert(!r.inline, 'photo data was stored inside the ticket');
+  assert(r.proofs === before.proofs + 1, 'photo was not stored in proofs');
+  assert(r.history === 1 && r.status === 'pending', 'timeline should start with one "lodged" entry');
+  await settle(page);
+  const card = await page.evaluate(() => document.getElementById('tickets-list').innerText);
+  assert(/1 photo/.test(card), 'card should show the photo count');
+  noErrors(page);
+}, 'resident');
+
+test('admin: status update with a note appends to the timeline and notifies the resident', async page => {
+  await page.evaluate(() => { selectTab('tickets'); });
+  await settle(page);
+  const summary = await page.evaluate(() => document.getElementById('ticket-filter-summary').innerText);
+  assert(/Over 7 days: 2/.test(summary), `admin summary should flag complaints open over 7 days, got: ${summary}`);
+  const list = await page.evaluate(() => document.getElementById('tickets-list').innerText);
+  assert(/⚠ Open 25 days/.test(list), 'card for the 25-day-old complaint should carry the SLA flag');
+  await page.evaluate(() => openTicketDetailModal('t1'));
+  await page.waitForSelector('#admin-ticket-form', { timeout: 5000 });
+  assert(await page.locator('#ticket-photos .ticket-photo img').count() === 1, 'detail should show the attached photo');
+  await page.selectOption('#admin-ticket-status', 'in-progress');
+  await page.fill('#admin-ticket-dept', 'Electrical');
+  await page.fill('#admin-ticket-note', 'Electrician visiting tomorrow');
+  await page.click('#admin-ticket-form button[type=submit]');
+  await page.waitForFunction(() => window.__mockStore.tickets.get('t1').status === 'in-progress', null, { timeout: 8000 })
+    .catch(() => { throw new Error('status did not change'); });
+  const r = await page.evaluate(() => {
+    const t = window.__mockStore.tickets.get('t1');
+    const notifs = [...(window.__mockStore['users/u_res1/notifications'] || new Map()).values()];
+    return { history: t.history.map(h => h.status), note: t.history[t.history.length - 1].note, notified: notifs.some(n => /RPHS|TKT-4821/.test(n.title) && /Electrician/.test(n.body)) };
+  });
+  assert(r.history.join(',') === 'pending,in-progress', `timeline is ${r.history.join(',')}`);
+  assert(r.note === 'Electrician visiting tomorrow', 'note was not kept in the timeline');
+  assert(r.notified, 'resident did not get the note in a notification');
+  noErrors(page);
+}, 'admin');
+
+test('resident: can rate a closed complaint once and reopen it', async page => {
+  await page.evaluate(() => { selectTab('tickets'); });
+  await settle(page);
+  await page.evaluate(() => openTicketDetailModal('t4'));
+  await page.waitForSelector('#ticket-rate-form', { timeout: 5000 });
+  await page.click('#ticket-stars .star-btn[data-n="4"]');
+  await page.fill('#ticket-rate-comment', 'Guard was posted the same week.');
+  await page.click('#ticket-rate-form button[type=submit]');
+  await page.waitForFunction(() => (window.__mockStore.tickets.get('t4').rating || {}).stars === 4, null, { timeout: 8000 })
+    .catch(() => { throw new Error('rating was not saved'); });
+  await settle(page);
+  await page.evaluate(() => openTicketDetailModal('t4'));
+  await page.waitForSelector('#modal-view.active', { timeout: 5000 });
+  assert(await page.locator('#ticket-rate-form').count() === 0, 'rating form should disappear once rated');
+  await callLater(page, "reopenTicket('t4')");
+  await page.waitForSelector('#ui-sheet-input', { timeout: 5000 });
+  await page.fill('#ui-sheet-input', 'The motorbike is back again.');
+  await page.click('#ui-sheet-form button[type=submit]');
+  await page.waitForFunction(() => window.__mockStore.tickets.get('t4').status === 'pending', null, { timeout: 8000 })
+    .catch(() => { throw new Error('complaint was not reopened'); });
+  const h = await page.evaluate(() => window.__mockStore.tickets.get('t4').history.map(x => x.status).join(','));
+  assert(/pending$/.test(h), `timeline after reopen is ${h}`);
+  noErrors(page);
+}, 'resident');
 
 // ---------- run ----------
 let passed = 0, failed = 0;
