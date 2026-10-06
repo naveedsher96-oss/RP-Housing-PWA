@@ -144,7 +144,7 @@ service cloud.firestore {
         return resource.data.get('status', '') in ['resolved', 'closed'];
       }
       function residentRates() {
-        return ownsTicket() && ticketDone()
+        return ownsTicket() && ticketDone() && !('rating' in resource.data)
           && onlyChanges(['rating', 'history', 'updatedAt'])
           && request.resource.data.rating.stars is int
           && request.resource.data.rating.stars >= 1 && request.resource.data.rating.stars <= 5;
