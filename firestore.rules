@@ -132,8 +132,28 @@ service cloud.firestore {
     match /tickets/{id} {
       allow read: if isStaff() || isApprovedResident() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if isApprovedResident() && request.resource.data.uid == request.auth.uid;
-      allow update: if isAdmin() || superAdminRestore(); // status changes / archive / restore
+      // Admin manages (status, department, notes, archive); super admin restores;
+      // the resident who lodged it may rate or reopen it once resolved/closed.
+      allow update: if isAdmin() || superAdminRestore() || residentRates() || residentReopens();
       allow delete: if false;    // soft delete only
+
+      function ownsTicket() {
+        return signedIn() && resource.data.get('uid', '') == request.auth.uid;
+      }
+      function ticketDone() {
+        return resource.data.get('status', '') in ['resolved', 'closed'];
+      }
+      function residentRates() {
+        return ownsTicket() && ticketDone() && !('rating' in resource.data)
+          && onlyChanges(['rating', 'history', 'updatedAt'])
+          && request.resource.data.rating.stars is int
+          && request.resource.data.rating.stars >= 1 && request.resource.data.rating.stars <= 5;
+      }
+      function residentReopens() {
+        return ownsTicket() && ticketDone()
+          && onlyChanges(['status', 'history', 'updatedAt', 'reopenedAt', 'reopenCount'])
+          && request.resource.data.status == 'pending';
+      }
     }
 
     // ---------- bills ----------

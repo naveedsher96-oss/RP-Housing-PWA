@@ -193,6 +193,16 @@
 
   input[type="file"]{width:100%; padding:10px 12px; margin-top:6px; background:var(--bg-elevated-2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-muted); font-size:13px; font-family:var(--font-body);}
   input[type="file"]::file-selector-button{background:var(--bg-elevated-3); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 12px; margin-right:10px; font-size:13px; font-weight:700; cursor:pointer;}
+  .ticket-photos{display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px;}
+  .ticket-photo{position:relative; width:84px; height:84px; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--border); background:var(--bg-elevated-2); cursor:pointer;}
+  .ticket-photo img{width:100%; height:100%; object-fit:cover; display:block;}
+  .ticket-photo-x{position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; border:none; background:rgba(0,0,0,0.65); color:#fff; font-size:12px; cursor:pointer;}
+  .timeline{display:flex; flex-direction:column; gap:10px; margin:6px 0 14px;}
+  .timeline-item{display:flex; gap:10px; align-items:flex-start;}
+  .timeline-item .badge{flex-shrink:0;}
+  .star-row{display:flex; gap:6px; margin:6px 0 10px;}
+  .star-btn{flex:1; font-size:26px; line-height:1; padding:6px 0; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-elevated-2); color:var(--accent-2); cursor:pointer;}
+  .star-btn.on{background:var(--warning-soft);}
   .proof-thumb{max-width:100%; border-radius:var(--radius-sm); border:1px solid var(--border); display:block; margin:8px 0;}
   .progress{height:8px; background:var(--bg-elevated-2); border:1px solid var(--border-soft); border-radius:6px; overflow:hidden; margin:8px 0 6px;}
   .progress .fill{height:100%; background:linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius:6px;}
@@ -3102,6 +3112,7 @@
             <option value="in-progress" ${ticketFilterStatus==='in-progress'?'selected':''}>In Progress</option>
             <option value="resolved" ${ticketFilterStatus==='resolved'?'selected':''}>Resolved</option>
             <option value="closed" ${ticketFilterStatus==='closed'?'selected':''}>Closed</option>
+            <option value="sla" ${ticketFilterStatus==='sla'?'selected':''}>Open over ${TICKET_SLA_DAYS} days</option>
           </select>
         </div>
         <div id="ticket-filter-summary" style="font-size:13px; color:var(--text-muted); margin-top:10px;"></div>
@@ -3112,7 +3123,8 @@
 
   function filteredTickets() {
     return ticketsList.filter(t => {
-      if (ticketFilterStatus !== 'all' && (t.status || 'pending') !== ticketFilterStatus) return false;
+      if (ticketFilterStatus === 'sla') { if (!ticketOverSla(t)) return false; }
+      else if (ticketFilterStatus !== 'all' && (t.status || 'pending') !== ticketFilterStatus) return false;
       if (ticketFilterMonth !== 'all') {
         const d = toDate(t.createdAt);
         if (!d || monthKey(d) !== ticketFilterMonth) return false;
@@ -3220,7 +3232,28 @@
       doc.text("Description:", 25, y);
       y += 8;
       doc.setFont("helvetica", "normal");
-      doc.text(doc.splitTextToSize(t.description || 'N/A', 160), 25, y);
+      const descLines = doc.splitTextToSize(t.description || 'N/A', 160);
+      doc.text(descLines, 25, y);
+      y += descLines.length * 5 + 8;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Progress:", 25, y);
+      y += 7;
+      doc.setFont("helvetica", "normal");
+      ticketHistoryOf(t).forEach(h => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        const line = doc.splitTextToSize(`${formatDate(h.at)}  ${statusLabel(h.status)}${h.note ? ' - ' + h.note : ''}${h.by ? ' (' + h.by + ')' : ''}`, 160);
+        doc.text(line, 25, y);
+        y += line.length * 5 + 2;
+      });
+      if (t.rating) {
+        y += 4;
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFont("helvetica", "bold");
+        doc.text("Resident rating:", 25, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${t.rating.stars} / 5${t.rating.comment ? ' - ' + t.rating.comment : ''}`, 75, y);
+      }
 
       doc.save(`Complaint_${(t.ticketNo || 'Record').replace(/\s+/g, '_')}.pdf`);
     } catch(err) {
@@ -3238,7 +3271,9 @@
     const summaryEl = document.getElementById('ticket-filter-summary');
     if (summaryEl) {
       const count = status => list.filter(t => (t.status || 'pending') === status).length;
-      summaryEl.innerHTML = `Showing <strong>${list.length}</strong> of ${ticketsList.length} complaints — Pending: ${count('pending')} | In Progress: ${count('in-progress')} | Resolved: ${count('resolved')} | Closed: ${count('closed')}`;
+      const over = list.filter(ticketOverSla).length;
+      summaryEl.innerHTML = `Showing <strong>${list.length}</strong> of ${ticketsList.length} complaints — Pending: ${count('pending')} | In Progress: ${count('in-progress')} | Resolved: ${count('resolved')} | Closed: ${count('closed')}`
+        + (over ? ` | <span style="color:var(--danger); font-weight:700;">⚠ Over ${TICKET_SLA_DAYS} days: ${over}</span>` : '');
     }
 
     if (!list.length) {
@@ -3247,9 +3282,9 @@
     }
 
     listEl.innerHTML = pageOf('tickets', list, renderTicketsList).map(t => `
-      <div class="card" style="cursor:default;" onclick="openTicketDetailModal('${t.id}')">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-          <div>
+      <div class="card" style="cursor:pointer;" onclick="openTicketDetailModal('${t.id}')">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; gap:8px;">
+          <div style="min-width:0;">
             <span class="ticket-no">${escapeHtml(t.ticketNo || 'TICKET')}</span>
             <span style="font-weight:700; font-size:15px; color:var(--accent-2); margin-left:6px;">${escapeHtml(t.category)}</span>
           </div>
@@ -3257,8 +3292,14 @@
         </div>
         <div style="font-size:13px; color:var(--text); line-height:1.4; margin-bottom:8px;">${escapeHtml(t.description)}</div>
         <div style="font-size:13px; color:var(--text-muted);">${escapeHtml(t.name || 'Resident')} · ${houseHtml(t.house)}</div>
-        <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Lodged: ${escapeHtml(formatDate(t.createdAt))}</div>
-        ${t.department ? `<div style="font-size:13px; color:var(--info); margin-top:4px;">Assigned Dept: ${escapeHtml(t.department)}</div>` : ''}
+        <div style="font-size:13px; color:var(--text-faint); margin-top:4px; display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center;">
+          <span>Lodged: ${escapeHtml(formatDate(t.createdAt))}</span>
+          ${(t.photoIds || []).length ? `<span>📷 ${t.photoIds.length} photo${t.photoIds.length > 1 ? 's' : ''}</span>` : ''}
+          ${ticketSlaHtml(t)}
+          ${t.rating ? `<span style="color:var(--accent-2); letter-spacing:1px;">${starsText(t.rating.stars)}</span>` : ''}
+        </div>
+        ${t.department ? `<div style="font-size:13px; color:var(--info); margin-top:4px;">Assigned: ${escapeHtml(t.department)}</div>` : ''}
+        ${!isStaff() && ticketDone(t) && !t.rating ? `<div style="font-size:13px; color:var(--accent-2); margin-top:6px; font-weight:600;">Tap to rate how this was handled</div>` : ''}
         ${isAdmin ? `<div style="margin-top:12px; display:flex; gap:8px;">
           <button class="btn sm secondary" onclick="event.stopPropagation(); downloadTicketPDF('${t.id}')">Export PDF</button>
           <span style="flex:1;"></span>
@@ -3268,7 +3309,90 @@
     `).join('') + showMoreButton('tickets', list.length);
   }
 
+  // --- complaints: photos, progress timeline, SLA flag, resident rating ---
+  const TICKET_SLA_DAYS = 7;
+  const TICKET_MAX_PHOTOS = 3;
+  function ticketDone(t) { return ['resolved', 'closed'].includes(t.status || 'pending'); }
+  function ticketOpenDays(t) {
+    const d = toDate(t.createdAt);
+    return d ? Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000)) : 0;
+  }
+  function ticketOverSla(t) { return !ticketDone(t) && ticketOpenDays(t) >= TICKET_SLA_DAYS; }
+  function ticketSlaHtml(t) {
+    if (ticketDone(t)) return '';
+    const days = ticketOpenDays(t);
+    const over = days >= TICKET_SLA_DAYS;
+    return `<span style="font-weight:600; color:${over ? 'var(--danger)' : 'var(--text-muted)'};">${over ? '⚠ ' : ''}Open ${days} day${days === 1 ? '' : 's'}</span>`;
+  }
+  function starsText(n) { n = Math.max(0, Math.min(5, Number(n) || 0)); return '★'.repeat(n) + '☆'.repeat(5 - n); }
+  function ticketHistoryOf(t) {
+    const h = Array.isArray(t.history) ? t.history.slice() : [];
+    if (!h.length) h.push({ status: 'pending', note: 'Complaint lodged', by: t.name || 'Resident', at: toDate(t.createdAt) });
+    return h;
+  }
+  function historyEntry(status, note) {
+    return { status, note: note || '', by: currentUserProfile.name || 'User', byUid: auth.currentUser.uid, at: Date.now() };
+  }
+  function renderTicketTimeline(t) {
+    return `<div class="timeline">${ticketHistoryOf(t).slice().reverse().map(h => `
+      <div class="timeline-item">
+        <span class="badge ${escapeHtml(h.status || 'pending')}">${escapeHtml(statusLabel(h.status))}</span>
+        <div style="flex:1; min-width:0;">
+          ${h.note ? `<div style="font-size:13.5px; line-height:1.4;">${escapeHtml(h.note)}</div>` : ''}
+          <div style="font-size:12px; color:var(--text-faint); margin-top:2px;">${escapeHtml(h.by || '')}${h.at ? ' · ' + escapeHtml(formatDate(h.at)) : ''}</div>
+        </div>
+      </div>`).join('')}</div>`;
+  }
+
+  // Complaint photos live in proofs/{id} (kind 'ticket'); the ticket keeps photoIds.
+  let ticketPhotoDraft = [];
+  window.onTicketPhotosPicked = async function(input) {
+    const files = Array.from(input.files || []);
+    input.value = '';
+    for (const f of files) {
+      if (ticketPhotoDraft.length >= TICKET_MAX_PHOTOS) { toast(`You can attach up to ${TICKET_MAX_PHOTOS} photos.`); break; }
+      if (f.type !== 'image/png' && f.type !== 'image/jpeg') { toast('Only JPG or PNG photos can be attached.'); continue; }
+      try { ticketPhotoDraft.push(await readProofFile(f)); } catch (e) { toast(e.message); }
+    }
+    renderTicketPhotoDraft();
+  };
+  window.removeTicketPhoto = function(i) { ticketPhotoDraft.splice(i, 1); renderTicketPhotoDraft(); };
+  function renderTicketPhotoDraft() {
+    const el = document.getElementById('ticket-photo-preview');
+    if (!el) return;
+    el.innerHTML = ticketPhotoDraft.map((p, i) => `
+      <div class="ticket-photo"><img src="${p.dataUrl}" alt="Photo ${i + 1}" /><button type="button" class="ticket-photo-x" onclick="removeTicketPhoto(${i})" aria-label="Remove photo">✕</button></div>`).join('');
+    const btn = document.getElementById('ticket-photo-btn');
+    if (btn) btn.textContent = ticketPhotoDraft.length ? `📷 Add another photo (${ticketPhotoDraft.length}/${TICKET_MAX_PHOTOS})` : '📷 Add photo (optional)';
+  }
+  async function ticketPhotoData(photoId) {
+    if (proofCache[photoId]) return proofCache[photoId];
+    const doc = await db.collection('proofs').doc(photoId).get();
+    const data = doc.exists ? doc.data().data : null;
+    if (data) proofCache[photoId] = data;
+    return data;
+  }
+  async function hydrateTicketPhotos(t) {
+    const el = document.getElementById('ticket-photos');
+    if (!el || !(t.photoIds || []).length) return;
+    const parts = await Promise.all(t.photoIds.map(async id => {
+      try {
+        const d = await ticketPhotoData(id);
+        return d ? `<div class="ticket-photo" onclick="viewTicketPhoto('${id}')"><img src="${d}" alt="Complaint photo" /></div>` : '';
+      } catch (e) { return ''; }
+    }));
+    if (document.getElementById('ticket-photos')) el.innerHTML = parts.join('') || '<span style="font-size:13px; color:var(--text-muted);">Photos could not be loaded.</span>';
+  }
+  window.viewTicketPhoto = async function(photoId) {
+    try {
+      const data = await ticketPhotoData(photoId);
+      if (!data) { toast('Photo not found.'); return; }
+      openUiSheet(`<img src="${data}" alt="Complaint photo" style="width:100%; border-radius:var(--radius-sm); display:block;" />`);
+    } catch (e) { toast('Could not open the photo: ' + e.message); }
+  };
+
   window.openNewTicketModal = function() {
+    ticketPhotoDraft = [];
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Lodge Complaint / Ticket</div>
       <form id="ticket-form">
@@ -3282,6 +3406,11 @@
         </select>
         <label>Description</label>
         <textarea id="ticket-desc" placeholder="Describe your complaint or request..." required></textarea>
+        <label>Photos</label>
+        <div id="ticket-photo-preview" class="ticket-photos"></div>
+        <input type="file" id="ticket-photo-file" accept="image/png,image/jpeg" multiple style="display:none;" onchange="onTicketPhotosPicked(this)" />
+        <button type="button" id="ticket-photo-btn" class="btn sm secondary block" onclick="document.getElementById('ticket-photo-file').click()">📷 Add photo (optional)</button>
+        <div style="font-size:12.5px; color:var(--text-muted); margin-top:6px;">Up to ${TICKET_MAX_PHOTOS} photos help the team find and fix the problem faster.</div>
         <button type="submit" class="btn primary block" style="margin-top:16px;">Submit Ticket</button>
       </form>
     `;
@@ -3289,11 +3418,22 @@
 
     document.getElementById('ticket-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const btn = e.target.querySelector('button[type=submit]');
       const category = document.getElementById('ticket-category').value;
       const description = document.getElementById('ticket-desc').value.trim();
       const ticketNo = 'RPHS-' + Math.floor(100000 + Math.random() * 900000);
+      btn.disabled = true; btn.textContent = 'Submitting…';
 
       try {
+        const photoIds = [];
+        for (const p of ticketPhotoDraft) {
+          const ref = await db.collection('proofs').add({
+            uid: auth.currentUser.uid, kind: 'ticket', data: p.dataUrl, type: 'image', name: p.name,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          proofCache[ref.id] = p.dataUrl;
+          photoIds.push(ref.id);
+        }
         await db.collection('tickets').add({
           ticketNo,
           category,
@@ -3302,20 +3442,61 @@
           uid: auth.currentUser.uid,
           name: currentUserProfile.name,
           house: currentUserProfile.house,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          photoIds,
+          history: [historyEntry('pending', 'Complaint lodged')],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
+        notifyAdmins(`New complaint ${ticketNo}`, `${currentUserProfile.name} (${currentUserProfile.house}): ${category}`, 'info');
+        ticketPhotoDraft = [];
         closeModal();
+        toast('Your complaint has been lodged.');
         loadTickets();
       } catch(err) {
         toast("Error submitting ticket: " + err.message);
+        btn.disabled = false; btn.textContent = 'Submit Ticket';
       }
     });
+  };
+
+  window.pickTicketStar = function(n) {
+    const hidden = document.getElementById('ticket-rate-stars');
+    if (hidden) hidden.value = String(n);
+    document.querySelectorAll('#ticket-stars .star-btn').forEach(b => {
+      const on = Number(b.getAttribute('data-n')) <= n;
+      b.classList.toggle('on', on);
+      b.textContent = on ? '★' : '☆';
+    });
+  };
+
+  window.reopenTicket = async function(ticketId) {
+    const t = ticketsList.find(item => item.id === ticketId);
+    if (!t) return;
+    const reason = await promptSheet({ title: 'Reopen this complaint?', body: 'Tell the management what is still wrong and they will look at it again.', label: 'What is still wrong?', multiline: true, okLabel: 'Reopen', required: true });
+    if (reason === null) return;
+    try {
+      await db.collection('tickets').doc(ticketId).update({
+        status: 'pending',
+        history: firebase.firestore.FieldValue.arrayUnion(historyEntry('pending', 'Reopened: ' + reason.trim())),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        reopenedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        reopenCount: firebase.firestore.FieldValue.increment(1)
+      });
+      notifyAdmins(`Complaint ${t.ticketNo} reopened`, `${currentUserProfile.name} (${currentUserProfile.house}): ${reason.trim()}`, 'warning');
+      closeModal();
+      toast('Complaint reopened. The management has been notified.');
+      loadTickets();
+    } catch (err) {
+      toast('Could not reopen the complaint: ' + err.message);
+    }
   };
 
   window.openTicketDetailModal = function(ticketId) {
     const t = ticketsList.find(item => item.id === ticketId);
     if (!t) return;
     const isAdmin = currentUserProfile.role === 'admin';
+    const mine = auth.currentUser && t.uid === auth.currentUser.uid;
+    const photos = t.photoIds || [];
 
     document.getElementById('modal-body').innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -3323,8 +3504,22 @@
         <span class="badge ${t.status || 'pending'}">${escapeHtml(statusLabel(t.status))}</span>
       </div>
       <div style="font-family:var(--font-display); font-size:18px; font-weight:600; color:var(--accent-2); margin-bottom:6px;">${escapeHtml(t.category)}</div>
-      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Lodged by: ${escapeHtml(t.name)} (${escapeHtml(t.house)})</div>
-      <div style="background:var(--bg-elevated-2); padding:12px; border-radius:10px; font-size:13.5px; line-height:1.5; margin-bottom:16px;">${escapeHtml(t.description)}</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">Lodged by: ${escapeHtml(t.name)} (${escapeHtml(t.house)})</div>
+      <div style="font-size:13px; color:var(--text-faint); margin-bottom:12px; display:flex; flex-wrap:wrap; gap:4px 12px;">
+        <span>Lodged: ${escapeHtml(formatDate(t.createdAt))}</span>
+        ${ticketSlaHtml(t)}
+        ${t.department ? `<span style="color:var(--info);">Assigned: ${escapeHtml(t.department)}</span>` : ''}
+      </div>
+      <div style="background:var(--bg-elevated-2); padding:12px; border-radius:10px; font-size:13.5px; line-height:1.5; margin-bottom:14px;">${escapeHtml(t.description)}</div>
+      ${photos.length ? `<label>Photos</label><div id="ticket-photos" class="ticket-photos">${photos.map(() => '<div class="ticket-photo"></div>').join('')}</div>` : ''}
+      <label>Progress</label>
+      ${renderTicketTimeline(t)}
+      ${t.rating ? `
+        <div style="background:var(--bg-elevated-2); padding:12px; border-radius:10px; margin-bottom:14px;">
+          <div style="font-size:13px; color:var(--text-muted);">Resident rating</div>
+          <div style="font-size:20px; color:var(--accent-2); letter-spacing:2px; margin:2px 0;">${starsText(t.rating.stars)}</div>
+          ${t.rating.comment ? `<div style="font-size:13.5px; line-height:1.4;">${escapeHtml(t.rating.comment)}</div>` : ''}
+        </div>` : ''}
 
       ${isAdmin ? `
         <button class="btn secondary block" onclick="downloadTicketPDF('${t.id}')">Export This Complaint as PDF</button>
@@ -3337,28 +3532,80 @@
             <option value="closed" ${t.status==='closed'?'selected':''}>Closed</option>
           </select>
 
-          <label>Assign Department / Note</label>
+          <label>Assign Department</label>
           <input type="text" id="admin-ticket-dept" value="${escapeHtml(t.department || '')}" placeholder="e.g. Maintenance Crew" />
+
+          <label>Note to resident (optional)</label>
+          <textarea id="admin-ticket-note" placeholder="e.g. Plumber visiting on Monday morning"></textarea>
 
           <button type="submit" class="btn primary block" style="margin-top:16px;">Save Ticket Update</button>
         </form>
       ` : ''}
+
+      ${mine && !isAdmin && ticketDone(t) && !t.rating ? `
+        <form id="ticket-rate-form" style="margin-top:4px;">
+          <label>How was this handled?</label>
+          <div class="star-row" id="ticket-stars">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="star-btn" data-n="${n}" onclick="pickTicketStar(${n})" aria-label="${n} star${n > 1 ? 's' : ''}">☆</button>`).join('')}</div>
+          <input type="hidden" id="ticket-rate-stars" value="0" />
+          <textarea id="ticket-rate-comment" placeholder="Any comments? (optional)"></textarea>
+          <div id="ticket-rate-err" style="display:none; color:var(--danger); font-size:13.5px; font-weight:600; margin-top:6px;">Please tap a star first.</div>
+          <button type="submit" class="btn primary block" style="margin-top:12px;">Submit rating</button>
+        </form>
+      ` : ''}
+      ${mine && !isAdmin && ticketDone(t) ? `<button class="btn secondary block" style="margin-top:10px;" onclick="reopenTicket('${t.id}')">Not fixed — reopen</button>` : ''}
     `;
     openModal();
+    hydrateTicketPhotos(t);
 
     if (isAdmin) {
       document.getElementById('admin-ticket-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const status = document.getElementById('admin-ticket-status').value;
         const department = document.getElementById('admin-ticket-dept').value.trim();
+        const note = document.getElementById('admin-ticket-note').value.trim();
+        const label = statusLabel(status);
 
         try {
-          await db.collection('tickets').doc(ticketId).update({ status, department });
-          await sendNotification(t.uid, `Ticket Updated (${t.ticketNo})`, `Your complaint status is now: ${statusLabel(status)}`, 'info');
+          const update = {
+            status, department,
+            history: firebase.firestore.FieldValue.arrayUnion(historyEntry(status, note || (department && department !== (t.department || '') ? `Assigned to ${department}` : `Status set to ${label}`))),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          if (status === 'resolved') update.resolvedAt = firebase.firestore.FieldValue.serverTimestamp();
+          if (status === 'closed') update.closedAt = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection('tickets').doc(ticketId).update(update);
+          await sendNotification(t.uid, `Complaint ${t.ticketNo}: ${label}`, note ? `${label} — ${note}` : `Your complaint status is now: ${label}`, 'info', 'complaints');
+          logAudit('tickets', ticketId, 'update', `Complaint ${t.ticketNo}: ${label}${department ? ' · ' + department : ''}${note ? ' · ' + note : ''}`);
           closeModal();
+          toast('Complaint updated and the resident has been notified.');
           loadTickets();
         } catch(err) {
           toast("Error updating ticket: " + err.message);
+        }
+      });
+    }
+
+    const rateForm = document.getElementById('ticket-rate-form');
+    if (rateForm) {
+      rateForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const stars = Number(document.getElementById('ticket-rate-stars').value) || 0;
+        const comment = document.getElementById('ticket-rate-comment').value.trim();
+        const err = document.getElementById('ticket-rate-err');
+        if (!stars) { err.style.display = 'block'; return; }
+        err.style.display = 'none';
+        try {
+          await db.collection('tickets').doc(ticketId).update({
+            rating: { stars, comment, at: Date.now() },
+            history: firebase.firestore.FieldValue.arrayUnion(historyEntry(t.status || 'resolved', `Rated ${stars}/5${comment ? ': ' + comment : ''}`)),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          notifyAdmins(`Complaint ${t.ticketNo} rated ${stars}/5`, `${currentUserProfile.name} (${currentUserProfile.house})${comment ? ': ' + comment : ''}`, 'info');
+          closeModal();
+          toast('Thank you for your feedback.');
+          loadTickets();
+        } catch (e2) {
+          toast('Could not save your rating: ' + e2.message);
         }
       });
     }

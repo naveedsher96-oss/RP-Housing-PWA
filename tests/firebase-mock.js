@@ -112,6 +112,20 @@
     ['t5', 'TKT-4688', 'Suggestion', 'Please plant more trees in the park and install a few benches for elderly residents.', 'u_r7', 'pending', 25, ''],
     ['t6', 'TKT-4650', 'Electricity', 'Transformer near the mosque makes loud noise and sparks during rain.', 'u_r2', 'in-progress', 33, 'Electrical']
   ].forEach(([id, no, cat, desc, uid, status, d, dept]) => tickets.set(id, { ticketNo: no, category: cat, subject: cat, description: desc, uid, name: byUid[uid].name, house: byUid[uid].house, status, department: dept, createdAt: daysAgo(d, 9) }));
+  // complaint photos (proofs kind 'ticket'), progress history and a rating
+  const ticketProofs = coll('proofs');
+  ticketProofs.set('ph_t1', { uid: 'u_res1', kind: 'ticket', type: 'image', name: 'light.jpg', data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', createdAt: daysAgo(1, 9) });
+  tickets.get('t1').photoIds = ['ph_t1'];
+  tickets.get('t1').history = [{ status: 'pending', note: 'Complaint lodged', by: 'Ayesha Siddiqui', at: daysAgo(1, 9).toDate().getTime() }];
+  tickets.get('t2').history = [
+    { status: 'pending', note: 'Complaint lodged', by: 'Hina Shahid', at: daysAgo(4, 9).toDate().getTime() },
+    { status: 'in-progress', note: 'Plumber visiting Monday morning', by: 'Tariq Mehmood', at: daysAgo(3, 11).toDate().getTime() }
+  ];
+  tickets.get('t3').history = [
+    { status: 'pending', note: 'Complaint lodged', by: 'Bilal Hussain', at: daysAgo(9, 9).toDate().getTime() },
+    { status: 'resolved', note: 'Collection resumed; contractor warned', by: 'Tariq Mehmood', at: daysAgo(7, 16).toDate().getTime() }
+  ];
+  tickets.get('t3').rating = { stars: 4, comment: 'Fixed quickly, thanks.', at: daysAgo(6, 10).toDate().getTime() };
   tickets.set('t7', { ticketNo: 'TKT-4600', category: 'Other', subject: 'Duplicate', description: 'Duplicate entry', uid: 'u_r3', name: 'Fatima Zahra', house: 'House 7, Block A', status: 'closed', createdAt: daysAgo(40), isDeleted: true, deletedAt: daysAgo(38), deletedBy: 'Tariq Mehmood' });
 
   // bills: Aug (mostly paid), Sep (mix: paid/unpaid overdue (due 20 Sep)/submitted), Oct (unpaid, due 20 Oct)
