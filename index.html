@@ -4952,7 +4952,9 @@
 
   function billInMonth(b, key) {
     if (key === 'all') return true;
-    if (b.period === monthLabel(key)) return true;
+    // A bill's month is its billing period ("September 2026"), even when it falls
+    // due the next month; the due date only places bills without a month period.
+    if (/^[a-z]+ \d{4}$/i.test(String(b.period || '').trim())) return b.period.trim() === monthLabel(key);
     const due = toDate(b.dueDate);
     return !!due && monthKey(due) === key;
   }

@@ -455,6 +455,23 @@ test('admin: duplicate bills are listed and the extras removed, keeping the paid
   noErrors(page);
 }, 'admin');
 
+test('admin: a September bill due in October stays under September', async page => {
+  await page.evaluate(() => {
+    const s = window.__mockStore.bills;
+    const [, b] = [...s.entries()].find(([, v]) => v.status === 'paid' && v.period === 'September 2026');
+    s.set('lateSep', Object.assign({}, b, { billNo: 'BILL-LATESEP', name: 'Zed Latesep', dueDate: '2026-10-20' }));
+    selectTab('bills');
+  });
+  await settle(page);
+  await page.evaluate(() => { setBillFilter('paid'); setBillMonth('2026-10'); });
+  await page.waitForTimeout(500);
+  assert(!(await page.locator('#bills-list').innerText()).includes('Zed Latesep'), 'September bill shows under October');
+  await page.evaluate(() => setBillMonth('2026-09'));
+  await page.waitForTimeout(500);
+  assert((await page.locator('#bills-list').innerText()).includes('Zed Latesep'), 'September bill missing under September');
+  noErrors(page);
+}, 'admin');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
