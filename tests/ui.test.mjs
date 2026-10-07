@@ -435,6 +435,26 @@ test('admin: issuing a bill never doubles up the same month', async page => {
   noErrors(page);
 }, 'admin');
 
+test('admin: duplicate bills are listed and the extras removed, keeping the paid one', async page => {
+  const ids = await page.evaluate(() => {
+    const s = window.__mockStore.bills;
+    const [paidId, b] = [...s.entries()].find(([, v]) => v.status === 'paid' && v.period === 'September 2026');
+    s.set('dupA', Object.assign({}, b, { billNo: 'BILL-DUP001', status: 'unpaid', paidAt: null }));
+    selectTab('bills');
+    return { paidId };
+  });
+  await settle(page);
+  await page.waitForSelector('#dup-bills-banner >> text=1 duplicate bill', { timeout: 8000 });
+  await page.evaluate(() => openDuplicateBillsModal());
+  await page.click('#dup-remove-btn');
+  await page.click('[data-ui="ok"]');
+  await page.waitForFunction(() => window.__mockStore.bills.get('dupA').isDeleted === true, null, { timeout: 8000 })
+    .catch(() => { throw new Error('the duplicate bill was not removed'); });
+  const kept = await page.evaluate(id => window.__mockStore.bills.get(id), ids.paidId);
+  assert(!kept.isDeleted && kept.status === 'paid', 'the paid bill was removed instead of the duplicate');
+  noErrors(page);
+}, 'admin');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
