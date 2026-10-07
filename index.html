@@ -649,6 +649,7 @@
   let billsLoaded = false;
   let billSearch = '';
   let billFilterMonth = null; // null = this month (staff); 'all' = every month
+  const billFilters = { category: 'all', block: 'all', method: 'all' };
   let expenseFilter = { month: 'all', category: 'all', source: 'all' };
   let residentSearch = '';
   let societySettings = null;
@@ -1618,7 +1619,7 @@
             <button class="btn sm primary" style="white-space:nowrap;" onclick="openIssueBillModal()">+ Issue</button>
           </div>` : ''}
         </div>
-        <div class="section-sub">${isAdmin ? 'Bills by month. Needs action, Overdue and In review always cover every month.' : staffView ? 'View only. Admins issue and approve bills.' : 'Maintenance charges issued to your house by management.'}</div>
+        <div class="section-sub">${isAdmin ? 'Bills by month. Pick "All months" to see every bill; Needs action always covers every month.' : staffView ? 'View only. Admins issue and approve bills.' : 'Maintenance charges issued to your house by management.'}</div>
         <div id="bills-summary"></div>
         ${staffView ? `
           <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -4778,7 +4779,9 @@
     return billFilterMonth || monthKey(new Date());
   }
   function monthScopedChip(f) {
-    return !['needs', 'overdue', 'submitted', 'topay'].includes(f);
+    // Needs action is the admin's to-do list, so it keeps every month; every
+    // other tab (All, Due, Overdue, In review, Paid) follows the month picker.
+    return !['needs', 'topay'].includes(f);
   }
 
   function renderBillFilterBar() {
@@ -4795,14 +4798,62 @@
           </select>
           <button class="dots-btn" style="border-color:var(--border);" onclick="stepBillMonth(1)" aria-label="Next month" ${m === monthKey(new Date()) ? 'disabled' : ''}>›</button>
         </div>
-        <label for="bill-search">Find bills</label>
-        <div style="display:flex; gap:8px;">
-          <input type="search" id="bill-search" placeholder="Name, house or bill no." value="${escapeHtml(billSearch)}" oninput="setBillSearch(this.value)" style="flex:1; min-width:0;" />
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <select onchange="setBillFilterField('category', this.value)" aria-label="Category" style="min-width:0;">
+            <option value="all">All charges</option>
+            ${billFilterOptions('category').map(c => `<option value="${escapeHtml(c)}" ${billFilters.category === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          </select>
+          <select onchange="setBillFilterField('block', this.value)" aria-label="Block or street" style="min-width:0;">
+            <option value="all">All blocks</option>
+            ${billFilterOptions('block').map(c => `<option value="${escapeHtml(c)}" ${billFilters.block === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          </select>
+          <select onchange="setBillFilterField('method', this.value)" aria-label="Paid by" style="min-width:0;">
+            <option value="all">Any payment method</option>
+            ${PAYMENT_METHODS.map(c => `<option value="${escapeHtml(c)}" ${billFilters.method === c ? 'selected' : ''}>Paid by ${escapeHtml(c)}</option>`).join('')}
+          </select>
+          <input type="search" id="bill-search" placeholder="Name, house, bill no." value="${escapeHtml(billSearch)}" oninput="setBillSearch(this.value)" style="min-width:0;" />
         </div>
-        <div id="bill-filter-summary" style="font-size:13px; color:var(--text-muted); margin-top:10px;"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px;">
+          <div id="bill-filter-summary" style="font-size:13px; color:var(--text-muted);"></div>
+          ${billFiltersActive() ? `<button class="btn sm secondary" style="white-space:nowrap;" onclick="clearBillFilters()">Clear filters</button>` : ''}
+        </div>
       </div>
     `;
   }
+
+  // Block or street from a free-typed house label, e.g. "House 14, Block B" -> "Block B".
+  function billBlock(b) {
+    const h = String(b.house || '');
+    const m = h.match(/\b(block|sector|phase|street|st\.?|lane)\s*[-#:]?\s*([a-z0-9]+)/i);
+    if (!m) return 'Other';
+    const kind = /^st/i.test(m[1]) ? 'Street' : m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
+    return `${kind} ${m[2].toUpperCase()}`;
+  }
+  function billFilterOptions(field) {
+    const vals = new Set(billsList.map(b => field === 'block' ? billBlock(b) : (b.category || 'Other')));
+    if (billFilters[field] !== 'all') vals.add(billFilters[field]);
+    return [...vals].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }
+  function billFiltersActive() {
+    return billFilters.category !== 'all' || billFilters.block !== 'all' || billFilters.method !== 'all' || !!billSearch;
+  }
+  function refreshBillFilterBar() {
+    const bar = document.querySelector('#bill-search') && document.querySelector('#bill-search').closest('.filter-bar');
+    if (bar) bar.outerHTML = renderBillFilterBar();
+  }
+  window.setBillFilterField = function(field, value) {
+    billFilters[field] = value || 'all';
+    delete pageShown['bills'];
+    refreshBillFilterBar();
+    renderBillsList();
+  };
+  window.clearBillFilters = function() {
+    billFilters.category = billFilters.block = billFilters.method = 'all';
+    billSearch = '';
+    delete pageShown['bills'];
+    refreshBillFilterBar();
+    renderBillsList();
+  };
 
   window.setBillSearch = function(value) {
     billSearch = String(value || '').trim().toLowerCase();
@@ -4812,8 +4863,7 @@
   window.setBillMonth = function(value) {
     billFilterMonth = value || null;
     delete pageShown['bills'];
-    const bar = document.querySelector('#bill-search') && document.querySelector('#bill-search').closest('.filter-bar');
-    if (bar) bar.outerHTML = renderBillFilterBar();
+    refreshBillFilterBar();
     renderBillsList();
   };
   window.stepBillMonth = function(dir) {
@@ -4848,6 +4898,9 @@
     return billsList.filter(b => {
       if (!billMatchesChip(b, f)) return false;
       if (monthScopedChip(f) && !billInMonth(b, currentBillMonth())) return false;
+      if (billFilters.category !== 'all' && (b.category || 'Other') !== billFilters.category) return false;
+      if (billFilters.block !== 'all' && billBlock(b) !== billFilters.block) return false;
+      if (billFilters.method !== 'all' && b.paymentMethod !== billFilters.method) return false;
       if (billSearch) {
         const hay = [b.name, b.house, b.billNo, b.category, b.period].map(v => String(v || '').toLowerCase()).join(' ');
         if (!hay.includes(billSearch)) return false;
@@ -5983,10 +6036,37 @@
         return;
       }
 
-      const targets = target === '__all__' ? residents : billables.filter(r => r.uid === target);
+      let targets = target === '__all__' ? residents : billables.filter(r => r.uid === target);
       if (!targets.length) {
         toast("No resident selected.");
         return;
+      }
+
+      // Never bill someone twice for the same charge and month (e.g. a manual
+      // October bill on top of the automatic one): bulk issue skips them, and a
+      // single bill asks first and points at the bill they already have.
+      const norm = s => String(s || '').trim().toLowerCase();
+      let existing = [];
+      try {
+        const snap = await db.collection('bills').where('period', '==', period).get();
+        existing = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .filter(x => !x.isDeleted && x.status !== 'cancelled' && norm(x.category) === norm(category));
+      } catch (err) { console.warn('Duplicate check failed:', err && err.message); }
+      const already = uid => existing.find(x => x.uid === uid);
+      let skipped = 0;
+      if (target === '__all__') {
+        const before = targets.length;
+        targets = targets.filter(r => !already(r.uid));
+        skipped = before - targets.length;
+        if (!targets.length) { toast(`Everyone already has a ${category} bill for ${period}. Nothing issued.`); return; }
+      } else if (already(target)) {
+        const x = already(target);
+        const ok = await confirmSheet({
+          title: 'Already billed for this month',
+          body: `${x.name || 'This resident'} already has a ${category} bill for ${period}: ${x.billNo} (${statusLabel(billStatus(x))}, ${formatMoney(x.amount)}). To record their payment, open that bill and mark it paid instead. Issue a second bill anyway?`,
+          okLabel: 'Issue a second bill', cancelLabel: "Don't issue", danger: true
+        });
+        if (!ok) return;
       }
 
       try {
@@ -6011,6 +6091,7 @@
         }
         closeModal();
         afterBillWrite();
+        toast(`Issued ${targets.length} bill${targets.length === 1 ? '' : 's'}` + (skipped ? `; skipped ${skipped} already billed for ${period}` : '') + '.');
       } catch(err) {
         toast("Error issuing bill: " + err.message);
       }
