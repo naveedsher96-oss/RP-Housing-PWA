@@ -1626,6 +1626,7 @@
             <button class="btn sm secondary" style="flex:1;" id="defaulters-btn" onclick="openDefaultersModal()">Defaulters</button>
             <button class="btn sm secondary" style="flex:1;" onclick="openBillsShareMenu()">${icon('share')} Share list</button>
           </div>
+          ${isAdmin ? '<div id="dup-bills-banner"></div>' : ''}
           ${renderBillFilterBar()}
         ` : ''}
         <div class="chip-row">
@@ -2652,6 +2653,81 @@
     if (!(await confirmSheet({ title: `Cancel bill ${b ? b.billNo : ''}?`, body: 'It will be archived (kept for audit) and hidden from the list.', okLabel: 'Cancel bill', cancelLabel: 'Keep bill', danger: true }))) return;
     archiveRecord('bills', id, loadBills);
   };
+
+  // Duplicate bills: the same person billed twice for the same charge and month
+  // (e.g. a manual October bill on top of the automatic one). Keep the bill that
+  // carries the payment (paid, then in review, then unpaid; earliest first) and
+  // archive the rest. One-time charges can legitimately repeat, so they are skipped.
+  function duplicateBillGroups() {
+    const norm = s => String(s || '').trim().toLowerCase();
+    const ms = v => { const d = toDate(v); return d ? d.getTime() : Infinity; };
+    const rank = b => ({ paid: 0, submitted: 1 })[b.status] ?? 2;
+    const groups = {};
+    billsList.forEach(b => {
+      if (b.isDeleted || b.status === 'cancelled' || !b.uid) return;
+      const p = norm(b.period);
+      if (!p || p === 'one-time') return;
+      const k = [b.uid, p, norm(b.category)].join('|');
+      (groups[k] = groups[k] || []).push(b);
+    });
+    return Object.values(groups).filter(g => g.length > 1).map(g => {
+      const sorted = g.slice().sort((a, b) => rank(a) - rank(b) || ms(a.paidAt) - ms(b.paidAt) || ms(a.createdAt) - ms(b.createdAt));
+      return { keep: sorted[0], remove: sorted.slice(1) };
+    }).sort((a, b) => String(a.keep.period).localeCompare(String(b.keep.period)) || String(a.keep.name || '').localeCompare(String(b.keep.name || '')));
+  }
+
+  window.openDuplicateBillsModal = function() {
+    if (currentUserProfile.role !== 'admin') return;
+    const groups = duplicateBillGroups();
+    const n = groups.reduce((s, g) => s + g.remove.length, 0);
+    const line = (b, keep) => `
+      <div style="display:flex; justify-content:space-between; gap:8px; font-size:13px; padding:4px 0; ${keep ? '' : 'color:var(--danger); text-decoration:line-through;'}">
+        <span>${escapeHtml(b.billNo || 'BILL')} · ${escapeHtml(statusLabel(billStatus(b)))} · issued ${escapeHtml(formatDate(b.createdAt))}</span>
+        <span style="white-space:nowrap;">${keep ? 'Keep' : 'Remove'}</span>
+      </div>`;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:6px;">Duplicate bills</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">${n ? `${n} extra bill${n === 1 ? '' : 's'} for the same person, charge and month. The paid one is kept; the extras are archived (still visible in Audit &amp; Archive). Untick anyone who really paid twice, e.g. in advance.` : 'No duplicate bills.'}</div>
+      ${groups.map((g, i) => `
+        <div class="card" style="cursor:default; margin-bottom:8px;">
+          <label style="display:flex; align-items:center; gap:8px; margin:0; font-weight:700;"><input type="checkbox" data-dup="${i}" checked style="width:18px; height:18px; margin:0;"> ${escapeHtml(g.keep.name || 'Resident')}</label>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">${escapeHtml(g.keep.house || '')} · ${escapeHtml(g.keep.category || '')} · ${escapeHtml(g.keep.period || '')}</div>
+          ${line(g.keep, true)}${g.remove.map(b => line(b, false)).join('')}
+        </div>`).join('')}
+      ${n ? `<button class="btn danger block" id="dup-remove-btn" style="margin-top:12px;">Remove ${n} duplicate${n === 1 ? '' : 's'}</button>` : ''}
+    `;
+    openModal();
+    const btn = document.getElementById('dup-remove-btn');
+    if (!btn) return;
+    const picked = () => groups.filter((g, i) => document.querySelector(`[data-dup="${i}"]`).checked);
+    document.querySelectorAll('[data-dup]').forEach(cb => cb.onchange = () => {
+      const k = picked().reduce((s, g) => s + g.remove.length, 0);
+      btn.textContent = `Remove ${k} duplicate${k === 1 ? '' : 's'}`;
+      btn.disabled = !k;
+    });
+    btn.onclick = () => { const p = picked(); if (p.length) removeDuplicateBills(p); };
+  };
+
+  async function removeDuplicateBills(groups) {
+    const extras = groups.flatMap(g => g.remove.map(b => ({ b, keep: g.keep })));
+    if (!(await confirmSheet({ title: `Remove ${extras.length} duplicate bill${extras.length === 1 ? '' : 's'}?`, body: 'Each one is archived (kept for audit) and stops counting in collections and Due.', okLabel: 'Remove', cancelLabel: 'Keep all', danger: true }))) return;
+    let done = 0;
+    for (const { b, keep } of extras) {
+      try {
+        await db.collection('bills').doc(b.id).update({
+          isDeleted: true,
+          deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          deletedBy: currentUserProfile.name,
+          deletedReason: `Duplicate of ${keep.billNo || keep.id}`
+        });
+        logAudit('bills', b.id, 'soft_delete', `Duplicate of ${keep.billNo || keep.id} (${b.billNo || ''}, ${b.period || ''}, ${b.name || ''}) removed`);
+        done++;
+      } catch (err) { console.error('Could not remove duplicate', b.id, err); }
+    }
+    closeModal();
+    afterBillWrite();
+    toast(done === extras.length ? `Removed ${done} duplicate bill${done === 1 ? '' : 's'}.` : `Removed ${done} of ${extras.length}; try again for the rest.`);
+  }
 
   window.archiveFund = async function(id) {
     const f = fundsList.find(item => item.id === id);
@@ -5362,6 +5438,15 @@
     if (defaultersBtn) {
       const n = defaultersList().filter(d => d.overdue).length;
       defaultersBtn.textContent = n ? `Defaulters (${n})` : 'Defaulters';
+    }
+    const dupBanner = document.getElementById('dup-bills-banner');
+    if (dupBanner) {
+      const extra = duplicateBillGroups().reduce((s, g) => s + g.remove.length, 0);
+      dupBanner.innerHTML = extra ? `
+        <button class="card" style="width:100%; text-align:left; display:flex; align-items:center; gap:10px; border-color:var(--warning); margin-bottom:12px;" onclick="openDuplicateBillsModal()">
+          <span style="flex:1;"><b>${extra} duplicate bill${extra === 1 ? '' : 's'}</b><br><span style="font-size:13px; color:var(--text-muted);">Same person, charge and month billed twice. Tap to review and remove.</span></span>
+          <span style="color:var(--warning); font-weight:700;">Review</span>
+        </button>` : '';
     }
 
     if (!list.length) {
