@@ -5680,16 +5680,29 @@
     const reason = await promptSheet({ title: 'Reject this proof?', body: `${b.name || ''} · ${b.billNo || ''} · ${formatMoney(b.amount)}`, label: 'Reason they will see', placeholder: 'e.g. The screenshot does not show the amount', multiline: true, required: true, okLabel: 'Reject proof', danger: true });
     if (reason === null) return;
 
+    let rejected = 0;
     try {
       for (const x of proofSiblings(b)) {
-        await db.collection('bills').doc(x.id).update({
-          status: 'unpaid',
-          proofRejectedReason: reason.trim()
+        // Only a proof still waiting for review can be rejected; never undo a payment
+        // another admin has approved in the meantime.
+        const ref = db.collection('bills').doc(x.id);
+        const done = await db.runTransaction(async tx => {
+          const doc = await tx.get(ref);
+          if (!doc.exists || doc.data().status !== 'submitted') return doc.exists ? doc.data().status : 'missing';
+          tx.update(ref, { status: 'unpaid', proofRejectedReason: reason.trim() });
+          return 'ok';
         });
+        if (done !== 'ok') {
+          toast(`${x.billNo} was not rejected: it is already ${statusLabel(done)}.`, 'bad');
+          afterBillWrite(x.id, done === 'missing' ? null : { status: done });
+          continue;
+        }
+        rejected++;
         logAudit('bill', x.id, 'update', `Payment proof rejected — ${x.billNo}: ${reason.trim()}`);
         afterBillWrite(x.id, { status: 'unpaid', proofRejectedReason: reason.trim() });
       }
       closeModal();
+      if (!rejected) return;
       toast('Proof rejected');
       await sendNotification(b.uid, `Payment Proof Rejected (${b.billNo})`, `Reason: ${reason.trim()}. Please upload a valid proof for ${formatMoney(b.amount)} — ${b.period}.`, 'error');
     } catch(err) {
@@ -5996,15 +6009,51 @@
         e.preventDefault();
         const newStatus = document.getElementById('admin-bill-status').value;
         const paymentRef = document.getElementById('admin-bill-ref').value.trim();
+        // The status this form was opened with. The status is only written when
+        // the admin picks a different one, so saving a reference (or saving from
+        // an old screen) can never undo a payment someone else recorded.
+        const shownStatus = b.status || 'unpaid';
+        const statusChanged = newStatus !== shownStatus;
+        if (statusChanged && shownStatus === 'paid' && !(await confirmSheet({
+          title: 'Undo this payment?', body: `${b.billNo} is marked paid. It will go back to ${statusLabel(newStatus)}.`, okLabel: 'Undo payment', danger: true
+        }))) return;
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
 
         try {
-          const update = { status: newStatus, paymentRef };
-          if (newStatus === 'paid') update.paidAt = firebase.firestore.FieldValue.serverTimestamp();
-          await db.collection('bills').doc(billId).update(update);
-          afterBillWrite(billId, { status: newStatus, paymentRef });
+          const ref = db.collection('bills').doc(billId);
+          const result = await db.runTransaction(async tx => {
+            const doc = await tx.get(ref);
+            const current = (doc.exists && doc.data().status) || 'unpaid';
+            if (statusChanged && current !== shownStatus) return { conflict: current };
+            const update = { paymentRef };
+            if (statusChanged) {
+              update.status = newStatus;
+              if (newStatus === 'paid') {
+                update.paidAt = firebase.firestore.FieldValue.serverTimestamp();
+                update.verifiedBy = currentUserProfile.name;
+              }
+            }
+            tx.update(ref, update);
+            return { current };
+          });
+          if (result.conflict) {
+            toast(`Not saved: this bill was already changed to ${statusLabel(result.conflict)}. Please check it again.`, 'bad');
+            afterBillWrite(billId, { status: result.conflict });
+            closeModal();
+            return;
+          }
+          const patch = { paymentRef };
+          if (statusChanged) { patch.status = newStatus; if (newStatus === 'paid') { patch.paidAt = new Date(); patch.verifiedBy = currentUserProfile.name; } }
+          logAudit('bill', billId, 'update', statusChanged
+            ? `Bill ${b.billNo} status changed from ${statusLabel(shownStatus)} to ${statusLabel(newStatus)}${paymentRef ? ' (ref ' + paymentRef + ')' : ''}`
+            : `Bill ${b.billNo} payment reference set to "${paymentRef}"`);
+          afterBillWrite(billId, patch);
           closeModal();
-          await sendNotification(b.uid, `Bill Updated (${b.billNo})`, `Your bill for ${b.period} is now marked: ${newStatus.toUpperCase()}`, 'info');
+          toast(statusChanged ? `Bill marked ${statusLabel(newStatus)}` : 'Bill saved');
+          if (statusChanged) await sendNotification(b.uid, `Bill Updated (${b.billNo})`, `Your bill for ${b.period} is now marked: ${statusLabel(newStatus).toUpperCase()}`, newStatus === 'paid' ? 'success' : 'info', 'bills');
         } catch(err) {
+          submitBtn.disabled = false;
           toast("Error updating bill: " + err.message);
         }
       });

@@ -380,6 +380,24 @@ test('admin: can lodge a complaint of their own', async page => {
   noErrors(page);
 }, 'admin');
 
+test('admin: saving an old View bill screen never undoes a payment', async page => {
+  await page.evaluate(() => selectTab('bills'));
+  await settle(page);
+  const id = await page.evaluate(() => {
+    const [id] = [...window.__mockStore.bills.entries()].find(([, v]) => v.status === 'unpaid' && v.uid !== 'u_admin');
+    openBillDetailModal(id);
+    Object.assign(window.__mockStore.bills.get(id), { status: 'paid' }); // another admin approves meanwhile
+    return id;
+  });
+  await page.fill('#admin-bill-ref', 'HBL 123');
+  await page.click('#admin-bill-form button[type=submit]');
+  await page.waitForFunction(id => window.__mockStore.bills.get(id).paymentRef === 'HBL 123', id, { timeout: 8000 })
+    .catch(() => { throw new Error('payment reference was not saved'); });
+  const st = await page.evaluate(id => window.__mockStore.bills.get(id).status, id);
+  assert(st === 'paid', `bill went back to "${st}" after saving an old screen`);
+  noErrors(page);
+}, 'admin');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
