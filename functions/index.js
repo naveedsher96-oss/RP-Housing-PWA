@@ -228,6 +228,8 @@ async function getRecurringSettings(db) {
 // uids that already hold a non-archived bill of the recurring category for the
 // month: matched by the recurringMonth stamp, the period label, or a due date
 // inside that month. Other categories (e.g. a one-off repair) don't count.
+// The due date only counts for bills without a month period: a "September 2026"
+// bill issued late in September falls due on 20 October but is not October's.
 async function uidsBilledForMonth(db, monthKey, period, category) {
   const cat = String(category || "").trim().toLowerCase();
   const start = `${monthKey}-01`;
@@ -238,7 +240,9 @@ async function uidsBilledForMonth(db, monthKey, period, category) {
     db.collection("bills").where("recurringMonth", "==", monthKey).get(),
   ]);
   const uids = new Set();
-  [...byDue.docs, ...byPeriod.docs, ...byStamp.docs].forEach((d) => {
+  const isMonthPeriod = (p) => /^[a-z]+ \d{4}$/i.test(String(p || "").trim());
+  const dueOnly = byDue.docs.filter((d) => !isMonthPeriod(d.data().period));
+  [...dueOnly, ...byPeriod.docs, ...byStamp.docs].forEach((d) => {
     const b = d.data();
     if (b.isDeleted || !b.uid || b.status === "cancelled") return;
     const sameCat = String(b.category || "").trim().toLowerCase() === cat;

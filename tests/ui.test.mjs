@@ -421,7 +421,7 @@ test('admin: issuing a bill never doubles up the same month', async page => {
   assert(await count() === before, 'a second September bill was issued after "Don\'t issue"');
   await page.evaluate(() => closeModal());
   await fill('__all__');
-  await page.waitForSelector('text=/skipped \\d+ already billed/', { timeout: 8000 })
+  await page.waitForSelector('text=/skipped \\d+ already billed|Everyone already has/', { timeout: 8000 })
     .catch(() => { throw new Error('bulk issue did not skip residents already billed'); });
   const dupes = await page.evaluate(() => {
     const seen = {}; let d = 0;
@@ -469,6 +469,31 @@ test('admin: a September bill due in October stays under September', async page 
   await page.evaluate(() => setBillMonth('2026-09'));
   await page.waitForTimeout(500);
   assert((await page.locator('#bills-list').innerText()).includes('Zed Latesep'), 'September bill missing under September');
+  noErrors(page);
+}, 'admin');
+
+test('admin: bulk issue leaves out members exempt from the monthly bill', async page => {
+  await page.evaluate(() => {
+    window.__mockStore.users.get('u_res1').billExempt = true;
+    selectTab('bills');
+  });
+  await settle(page);
+  await page.evaluate(() => openIssueBillModal());
+  await page.waitForSelector('#bill-form');
+  await page.evaluate(() => {
+    document.getElementById('bill-resident').value = '__all__';
+    document.getElementById('bill-category').value = 'Monthly Maintenance';
+    document.getElementById('bill-period').value = 'December 2026';
+  });
+  await page.fill('#bill-amount', '500');
+  await page.click('#bill-form button[type=submit]');
+  await page.waitForSelector('text=/Issued \\d+ bill/', { timeout: 8000 });
+  const r = await page.evaluate(() => {
+    const dec = [...window.__mockStore.bills.values()].filter(b => b.period === 'December 2026');
+    return { n: dec.length, exempt: dec.some(b => b.uid === 'u_res1') };
+  });
+  assert(r.n > 0, 'no December bills were issued');
+  assert(!r.exempt, 'an exempt member was billed by the bulk issue');
   noErrors(page);
 }, 'admin');
 

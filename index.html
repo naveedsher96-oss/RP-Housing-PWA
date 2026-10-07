@@ -6060,11 +6060,12 @@
   window.openIssueBillModal = async function() {
     if (currentUserProfile.role !== 'admin') return;
 
-    let residents = [], staffMembers = [];
+    let residents = [], staffMembers = [], exemptCount = 0;
     try {
       const snap = await db.collection('users').where('approved', '==', true).get();
       const all = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(r => r.suspended !== true);
       residents = all.filter(r => r.role === 'resident');
+      exemptCount = residents.filter(r => r.billExempt === true).length;
       staffMembers = all.filter(r => r.role !== 'resident');
     } catch(e) {
       console.error("Error loading residents for billing:", e);
@@ -6084,7 +6085,7 @@
       <form id="bill-form">
         <label>Resident / House</label>
         ${pickerHtml('bill-resident', [
-          { value: '__all__', label: 'All approved residents', sub: `Bulk issue · ${residents.length} resident${residents.length === 1 ? '' : 's'}, one bill each`, initials: '☰', avatarClass: 'all', group: 'Bulk' },
+          { value: '__all__', label: 'All approved residents', sub: `Bulk issue · ${residents.length - exemptCount} resident${residents.length - exemptCount === 1 ? '' : 's'}, one bill each` + (exemptCount ? ` · ${exemptCount} exempt skipped` : ''), initials: '☰', avatarClass: 'all', group: 'Bulk' },
           ...residents.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).map(r => ({ value: r.uid, label: r.name || 'Resident', sub: r.house || 'House not set', group: 'Residents' })),
           ...staffMembers.map(r => ({ value: r.uid, label: (r.name || 'Staff') + (r.uid === auth.currentUser.uid ? ' (you)' : ''), sub: r.house || 'House not set', tag: r.role, avatarClass: 'staff', group: 'Management' }))
         ], { value: residents[0] ? residents[0].uid : '__all__', placeholder: 'Choose a resident', searchPlaceholder: 'Search by name or house…' })}
@@ -6123,7 +6124,9 @@
         return;
       }
 
-      let targets = target === '__all__' ? residents : billables.filter(r => r.uid === target);
+      // Bulk issue follows the recurring bill: members exempted in the Residents
+      // Directory are left out (a single bill can still be issued to them).
+      let targets = target === '__all__' ? residents.filter(r => r.billExempt !== true) : billables.filter(r => r.uid === target);
       if (!targets.length) {
         toast("No resident selected.");
         return;
