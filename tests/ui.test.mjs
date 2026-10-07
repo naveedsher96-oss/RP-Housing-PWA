@@ -398,6 +398,43 @@ test('admin: saving an old View bill screen never undoes a payment', async page 
   noErrors(page);
 }, 'admin');
 
+test('admin: issuing a bill never doubles up the same month', async page => {
+  await page.evaluate(() => selectTab('bills'));
+  await settle(page);
+  const fill = async who => {
+    await page.evaluate(() => openIssueBillModal());
+    await page.waitForSelector('#bill-form');
+    await page.evaluate(who => {
+      document.getElementById('bill-resident').value = who;
+      document.getElementById('bill-category').value = 'Monthly Maintenance';
+      document.getElementById('bill-period').value = 'September 2026';
+    }, who);
+    await page.fill('#bill-amount', '2500');
+    await page.click('#bill-form button[type=submit]');
+  };
+  const count = () => page.evaluate(() => window.__mockStore.bills.size);
+  const before = await count();
+  await fill('u_res1'); // already has a September bill
+  await page.waitForSelector('text=Already billed for this month', { timeout: 8000 });
+  await page.click("text=Don't issue");
+  await page.waitForTimeout(500);
+  assert(await count() === before, 'a second September bill was issued after "Don\'t issue"');
+  await page.evaluate(() => closeModal());
+  await fill('__all__');
+  await page.waitForSelector('text=/skipped \\d+ already billed/', { timeout: 8000 })
+    .catch(() => { throw new Error('bulk issue did not skip residents already billed'); });
+  const dupes = await page.evaluate(() => {
+    const seen = {}; let d = 0;
+    for (const b of window.__mockStore.bills.values()) {
+      if (b.isDeleted || b.status === 'cancelled' || b.period !== 'September 2026' || b.category !== 'Monthly Maintenance') continue;
+      if (seen[b.uid]) d++; seen[b.uid] = 1;
+    }
+    return d;
+  });
+  assert(dupes === 0, `${dupes} resident(s) got two September bills`);
+  noErrors(page);
+}, 'admin');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
