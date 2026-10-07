@@ -1623,7 +1623,7 @@
         ${staffView ? `
           <div style="display:flex; gap:8px; margin-bottom:12px;">
             <button class="btn sm secondary" style="flex:1;" id="defaulters-btn" onclick="openDefaultersModal()">Defaulters</button>
-            ${isAdmin ? `<button class="btn sm secondary" style="flex:1;" onclick="exportBillsCSV()">Export CSV</button>` : ''}
+            <button class="btn sm secondary" style="flex:1;" onclick="openBillsShareMenu()">${icon('share')} Share list</button>
           </div>
           ${renderBillFilterBar()}
         ` : ''}
@@ -4872,6 +4872,100 @@
     downloadCSV(`RPHS_Bills_${dateStamp()}.csv`,
       ['Bill No', 'Resident', 'House', 'Category', 'Period', 'Amount (PKR)', 'Status', 'Issued', 'Due', 'Paid On', 'Payment Ref', 'Method', 'Verified By', 'Issued By', 'Notes'],
       rows, 'bills_csv');
+  };
+
+  // --- SHARE THE CURRENT BILLS LIST AS A FILE (STAFF) ---
+  // Whatever the chip and month show (e.g. Due · October 2026) goes into a PDF or
+  // CSV that the phone's share sheet sends to WhatsApp, email and so on.
+  function billsListTitle() {
+    const f = currentBillFilter();
+    const chip = (document.querySelector(`.chip[data-filter="${f}"]`) || {}).firstChild;
+    const label = chip && chip.textContent ? chip.textContent.trim() : 'Bills';
+    const m = currentBillMonth();
+    return `${label} bills${monthScopedChip(f) && m !== 'all' ? ' · ' + monthLabel(m) : ''}`;
+  }
+  async function shareOrSaveFile(file) {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: file.name }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url; a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast('Saved ' + file.name + '. Attach it in WhatsApp or email.');
+  }
+  window.openBillsShareMenu = function() {
+    if (!isStaff()) return;
+    const n = filteredBills().length;
+    if (!n) return toast('No bills in this list to share.');
+    menuSheet(`${billsListTitle()} (${n})`, [
+      { label: 'Share as PDF (WhatsApp, email…)', icon: 'file', run: () => shareBillsListPDF() },
+      { label: 'Share as Excel / CSV file', icon: 'share', run: () => shareBillsListCSV() }
+    ]);
+  };
+  window.shareBillsListPDF = async function() {
+    const list = filteredBills().slice().sort((a, b) => String(a.house || '').localeCompare(String(b.house || ''), undefined, { numeric: true }));
+    if (!list.length) return toast('No bills in this list to share.');
+    try {
+      const { jsPDF } = await ensureJsPDF();
+      const doc = new jsPDF();
+      const title = billsListTitle();
+      const cols = [['#', 14], ['Name', 22], ['House', 72], ['Bill No', 112], ['Period', 136], ['Due', 162], ['Amount', 196]];
+      let y = 0;
+      const header = () => {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+        cols.forEach(([h, x]) => doc.text(h, x, y, h === 'Amount' ? { align: 'right' } : undefined));
+        doc.line(14, y + 2, 196, y + 2);
+        doc.setFont('helvetica', 'normal');
+        y += 8;
+      };
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+      doc.text('Roshan Pakistan Housing Society', 105, 16, { align: 'center' });
+      doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+      doc.text(title, 105, 23, { align: 'center' });
+      doc.setFontSize(8);
+      doc.text(`Prepared ${formatDate(new Date())} by ${currentUserProfile.name || 'Management'}`, 105, 28, { align: 'center' });
+      y = 38; header();
+      const clip = (s, w) => { const t = doc.splitTextToSize(String(s || ''), w); return t.length > 1 ? t[0].replace(/.$/, '…') : (t[0] || ''); };
+      let total = 0;
+      list.forEach((b, i) => {
+        if (y > 280) { doc.addPage(); y = 16; header(); }
+        doc.setFontSize(9);
+        doc.text(String(i + 1), 14, y);
+        doc.text(clip(b.name, 48), 22, y);
+        doc.text(clip(houseLabel(b.house), 38), 72, y);
+        doc.text(String(b.billNo || ''), 112, y);
+        doc.text(clip(b.period, 24), 136, y);
+        doc.text(b.dueDate ? formatDate(b.dueDate) : '', 162, y);
+        doc.text(formatMoney(b.amount).replace('PKR ', ''), 196, y, { align: 'right' });
+        total += Number(b.amount || 0);
+        y += 7;
+      });
+      if (y > 270) { doc.addPage(); y = 20; }
+      doc.line(14, y - 3, 196, y - 3);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+      doc.text(`${list.length} bill${list.length === 1 ? '' : 's'}`, 22, y + 3);
+      doc.text(`Total ${formatMoney(total)}`, 196, y + 3, { align: 'right' });
+      const name = `RPHS_${title.replace(/[^\w]+/g, '_').replace(/_+$/, '')}.pdf`;
+      await shareOrSaveFile(new File([doc.output('blob')], name, { type: 'application/pdf' }));
+      logExport('bills_pdf', name);
+    } catch (err) {
+      toast('Could not make the PDF: ' + err.message);
+    }
+  };
+  window.shareBillsListCSV = async function() {
+    const list = filteredBills();
+    if (!list.length) return toast('No bills in this list to share.');
+    const rows = [['Bill No', 'Resident', 'House', 'Category', 'Period', 'Amount (PKR)', 'Status', 'Due', 'Paid On', 'Payment Ref']].concat(list.map(b => [
+      b.billNo, b.name, b.house, b.category, b.period, Number(b.amount || 0), billStatus(b),
+      isoDate(b.dueDate), b.status === 'paid' ? isoDate(b.paidAt) : '', b.paymentRef
+    ]));
+    const name = `RPHS_${billsListTitle().replace(/[^\w]+/g, '_').replace(/_+$/, '')}.csv`;
+    const text = '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+    await shareOrSaveFile(new File([text], name, { type: 'text/csv' }));
+    logExport('bills_csv', name);
   };
 
   // --- DEFAULTERS (STAFF) ---
