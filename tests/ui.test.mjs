@@ -689,6 +689,38 @@ test('resident: Preferences → text size and appearance (dark / light / auto) a
   noErrors(page);
 }, 'resident');
 
+test('resident: Urdu mode translates navigation, titles, badges, buttons and placeholders live, and switches back to English', async page => {
+  await page.evaluate(() => toggleLanguage());
+  await settle(page);
+  await page.waitForFunction(() => document.documentElement.classList.contains('lang-ur'), null, { timeout: 5000 });
+  let labels = await page.$$eval('nav.tabbar .lbl', els => els.map(e => e.textContent.trim()));
+  assert(labels.includes('ڈیش بورڈ') && labels.includes('بل') && labels.includes('شکایات'), `bottom tabs should be Urdu, got ${labels}`);
+  assert(await page.evaluate(() => document.querySelector('nav.tabbar .lbl').classList.contains('ur-txt')), 'translated nodes get the Urdu font class');
+  await page.evaluate(() => selectTab('bills'));
+  await settle(page);
+  const bills = await page.evaluate(() => document.querySelector('main').innerText);
+  assert(/میرے بل/.test(bills) && /ثبوت اپ لوڈ کریں/.test(bills) && /آخری تاریخ \u2068?20 Oct 2026/.test(bills), 'bills screen should be Urdu with dates kept: ' + bills.slice(0, 200));
+  assert(/BILL-302115/.test(bills), 'bill numbers stay as-is');
+  await page.evaluate(() => selectTab('tickets'));
+  await settle(page);
+  const ph = await page.$eval('#new-ticket-desc, textarea', el => el.getAttribute('placeholder')).catch(() => null);
+  const main = await page.evaluate(() => document.querySelector('main').innerText);
+  assert(/شکایات و تجاویز/.test(main) && /زیرِ التوا/.test(main), 'complaints screen should be Urdu: ' + main.slice(0, 160));
+  await page.evaluate(() => openMoreSheet());
+  await settle(page);
+  const more = await page.evaluate(() => document.getElementById('modal-view').innerText);
+  assert(/لاگ آؤٹ/.test(more) && /اطلاعات/.test(more) && /English/.test(more), 'More sheet should be Urdu with an English switch: ' + more.slice(0, 160));
+  await page.evaluate(() => toast('Copied'));
+  await page.waitForSelector('.ui-toast');
+  assert(/کاپی ہو گیا/.test(await page.$eval('.ui-toast', el => el.textContent)), 'toasts are translated');
+  await page.evaluate(() => toggleLanguage());
+  await settle(page);
+  assert(!(await page.evaluate(() => document.documentElement.classList.contains('lang-ur'))), 'lang-ur removed');
+  labels = await page.$$eval('nav.tabbar .lbl', els => els.map(e => e.textContent.trim()));
+  assert(labels.includes('Dashboard') && labels.includes('Bills'), `tabs back to English, got ${labels}`);
+  noErrors(page);
+}, 'resident');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
