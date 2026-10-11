@@ -485,6 +485,11 @@
   .group-h{ font-size:13px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--text-muted); margin:16px 0 8px; }
   .money, .nowrap{ white-space:nowrap; font-variant-numeric:tabular-nums; }
   .ur{ font-family:'Noto Nastaliq Urdu', var(--font-body); line-height:2; }
+  .ur-txt{ font-family:'Noto Nastaliq Urdu', var(--font-body); line-height:1.9; font-size:1.06em; }
+  .ur-txt .money, .ur-txt bdi, .ur-txt .ticket-no{ font-family:var(--font-body); unicode-bidi:isolate; direction:ltr; line-height:1.4; }
+  html.lang-ur .badge.ur-txt, html.lang-ur .chip.ur-txt{ text-transform:none; letter-spacing:0; font-size:12.5px; line-height:1.5; }
+  html.lang-ur .tab-btn .lbl.ur-txt{ font-size:12px; line-height:1.4; }
+  html.lang-ur .section-title, html.lang-ur .dash-h, html.lang-ur h2{ line-height:1.8; }
   .ur .money, .ur bdi{ font-family:var(--font-body); unicode-bidi:isolate; direction:ltr; line-height:1.4; }
 
   .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
@@ -2128,7 +2133,8 @@
     const el = document.createElement('div');
     el.className = 'ui-toast' + (bad ? ' bad' : '');
     el.setAttribute('role', bad ? 'alert' : 'status');
-    el.innerHTML = `${icon(bad ? 'alert' : 'check2')}<span>${escapeHtml(msg)}</span>`;
+    const shown = (uiLang === 'ur' && typeof urText === 'function' && urText(msg)) || msg;
+    el.innerHTML = `${icon(bad ? 'alert' : 'check2')}<span class="${shown !== msg ? 'ur-txt' : ''}">${escapeHtml(shown)}</span>`;
     el.addEventListener('click', () => el.remove());
     document.body.appendChild(el);
     toastTimer = setTimeout(() => el.remove(), Math.min(8000, 2600 + msg.length * 35));
@@ -2285,6 +2291,7 @@
     if (uiLang === 'ur') loadUrduFont();
     closeModal();
     render();
+    applyUrduUi();
   };
   // rphs.textLg: '0' normal, '1' large, '2' extra large (older builds stored only '0'/'1').
   function textSizePref() { const v = lsGet('rphs.textLg'); return v === '1' || v === '2' ? v : '0'; }
@@ -7820,6 +7827,144 @@
     const raw = dict[key] != null ? dict[key] : (I18N.en[key] || key);
     return escapeHtml(raw).replace(/\{(\w+)\}/g, (m, k) => vars && vars[k] != null ? `<bdi>${escapeHtml(vars[k])}</bdi>` : m);
   }
+
+  // --- URDU UI (B2) ---
+  // The app renders English; when Urdu is on, every text node / placeholder /
+  // aria-label under #app, #modal and #ui-sheet is looked up in UR below after
+  // each render (MutationObserver). Phrases with {x} match a variable part
+  // (dates, counts, names) which is kept as-is. Unknown text stays English.
+  const UR = {
+    // chrome & navigation
+    'Dashboard': 'ڈیش بورڈ', 'Announcements': 'اعلانات', 'Announce\u00adments': 'اعلانات', 'Polls': 'رائے شماری', 'Bills': 'بل', 'My Bills': 'میرے بل',
+    'Complaints': 'شکایات', 'Complaints & Suggestions': 'شکایات و تجاویز', 'More': 'مزید', 'Notifications': 'اطلاعات', 'Profile': 'پروفائل', 'My Profile': 'میرا پروفائل',
+    'Documents & Minutes': 'دستاویزات و کارروائی', 'Lost & Found / Classifieds': 'گمشدہ و ملی اشیاء / اشتہارات', 'Community Funds': 'کمیونٹی فنڈز', 'Community Expenses': 'کمیونٹی اخراجات',
+    'Reports': 'رپورٹس', 'Volunteer Programs': 'رضاکار پروگرام', 'Volunteers': 'رضاکار', 'Board Decisions': 'بورڈ کے فیصلے', 'Board Votes': 'بورڈ ووٹنگ', 'Residents': 'رہائشی', 'Approvals': 'منظوریاں', 'Audit & Archive': 'آڈٹ و آرکائیو',
+    'Back': 'واپس', 'Close': 'بند کریں', 'Close app': 'ایپ بند کریں', 'Log out': 'لاگ آؤٹ', 'Main screens': 'مرکزی اسکرینیں', 'Cancel': 'منسوخ', 'OK': 'ٹھیک ہے', 'Save': 'محفوظ کریں', 'Done': 'ہو گیا', 'Loading...': 'لوڈ ہو رہا ہے…',
+    'Are you sure?': 'کیا آپ کو یقین ہے؟', 'Yes': 'جی ہاں', 'No': 'نہیں', 'Share': 'شیئر کریں', 'Copy': 'کاپی', 'Copied': 'کاپی ہو گیا', 'Call': 'کال', 'WhatsApp': 'واٹس ایپ', 'View': 'دیکھیں', 'Edit': 'ترمیم', 'Delete': 'حذف کریں', 'Remove': 'ہٹائیں', 'Search': 'تلاش',
+    '☀️ Light mode': '☀️ روشن موڈ', '🌙 Dark mode': '🌙 گہرا موڈ', 'English': 'English',
+    "You're offline — showing saved data. Changes need a connection.": 'آپ آف لائن ہیں — محفوظ شدہ ڈیٹا دکھایا جا رہا ہے۔ تبدیلیوں کے لیے انٹرنیٹ درکار ہے۔',
+    'Get alerts for bills and notices on this phone.': 'اس فون پر بلوں اور اعلانات کی اطلاعات حاصل کریں۔', 'Turn on': 'آن کریں', 'Not now': 'ابھی نہیں',
+    // dashboard
+    'Society finances': 'سوسائٹی کے مالی معاملات', 'Open Complaints': 'زیرِ التوا شکایات', 'Total Collected': 'کل وصولی', 'Total Spent': 'کل اخراجات', 'Bills Account Balance': 'بل اکاؤنٹ بیلنس', 'Funds Balance': 'فنڈز بیلنس',
+    'Monthly Expenses — last 6 months': 'ماہانہ اخراجات — پچھلے 6 ماہ', 'Where the Money Went — by Category': 'رقم کہاں خرچ ہوئی — زمرہ وار', 'Paid From — Bills Account vs Funds': 'ادائیگی کا ذریعہ — بل اکاؤنٹ بمقابلہ فنڈز',
+    'Recent Spending': 'حالیہ اخراجات', 'Every expense recorded by management, newest first.': 'انتظامیہ کا درج کردہ ہر خرچ، تازہ ترین پہلے۔', 'No expenses recorded yet.': 'ابھی کوئی خرچ درج نہیں۔', 'Maintenance Bills': 'مینٹیننس بل',
+    'Spent': 'خرچ', 'Billed': 'بل شدہ', 'Paid': 'ادا شدہ', 'Due / overdue': 'واجب / تاخیر شدہ', 'In review': 'زیرِ جائزہ', 'Bills account': 'بل اکاؤنٹ', 'Fund: {x}': 'فنڈ: {x}', 'Other': 'دیگر',
+    'Welfare': 'فلاح و بہبود', 'Security': 'سیکیورٹی', 'Mosque': 'مسجد', 'Utilities': 'یوٹیلیٹیز', 'Maintenance': 'مینٹیننس', 'Sanitation': 'صفائی', 'Events': 'تقریبات', 'Development': 'ترقیاتی کام', 'Zakat': 'زکوٰۃ', 'Salaries': 'تنخواہیں',
+    'Monthly Financial Summaries': 'ماہانہ مالی خلاصے', 'Posted automatically on the 1st of every month: what came in, what was spent and the closing balances. Amounts in PKR.': 'ہر مہینے کی پہلی تاریخ کو خودکار طور پر شائع: کیا آیا، کیا خرچ ہوا اور اختتامی بیلنس۔ رقوم روپوں میں۔',
+    'In': 'آمد', 'Out': 'خرچ', 'Net': 'خالص', 'Generate': 'تیار کریں', 'Breakdown': 'تفصیل', '📊 Breakdown': '📊 تفصیل', '📄 PDF': '📄 PDF',
+    // emergency
+    'Emergency Contacts': 'ہنگامی رابطے', '📞 Emergency contacts': '📞 ہنگامی رابطے', 'Tap Call — works even when the app is offline.': 'کال دبائیں — ایپ آف لائن ہونے پر بھی کام کرتا ہے۔', 'All {x} contacts': 'تمام {x} رابطے', 'Mark resolved': 'حل شدہ نشان زد کریں',
+    'Posted by Management · {x}': 'انتظامیہ کی جانب سے · {x}', 'Posted by Board · {x}': 'بورڈ کی جانب سے · {x}', 'Posted by {x}': '{x} کی جانب سے', '✓ Resolved': '✓ حل ہو گیا', 'Resolved': 'حل شدہ',
+    // notices / polls
+    'Official community news and circulars.': 'سوسائٹی کی سرکاری خبریں اور اطلاع نامے۔', 'No announcements posted yet.': 'ابھی کوئی اعلان نہیں۔', 'Read more': 'مزید پڑھیں', 'Share on WhatsApp': 'واٹس ایپ پر شیئر کریں',
+    '💬 No comments': '💬 کوئی تبصرہ نہیں', '💬 No comments · closed': '💬 کوئی تبصرہ نہیں · بند', '💬 {x} comments': '💬 {x} تبصرے', '💬 1 comment': '💬 1 تبصرہ', 'Comments': 'تبصرے', 'Write a comment…': 'تبصرہ لکھیں…', 'Post': 'بھیجیں',
+    'Community Polls': 'کمیونٹی رائے شماری', 'Vote on society decisions and proposals.': 'سوسائٹی کے فیصلوں اور تجاویز پر ووٹ دیں۔', 'No polls yet.': 'ابھی کوئی رائے شماری نہیں۔', 'Vote': 'ووٹ دیں', 'Change': 'بدلیں', '✓ Your vote': '✓ آپ کا ووٹ',
+    'Total Votes: {x} · Posted by Management': 'کل ووٹ: {x} · انتظامیہ کی جانب سے', 'Total Votes: {x} · Posted by Board': 'کل ووٹ: {x} · بورڈ کی جانب سے', 'Total Votes: {x} · Posted by Board · You can change your vote': 'کل ووٹ: {x} · بورڈ کی جانب سے · آپ اپنا ووٹ بدل سکتے ہیں', 'Total Votes: {x} · Posted by Management · You can change your vote': 'کل ووٹ: {x} · انتظامیہ کی جانب سے · آپ اپنا ووٹ بدل سکتے ہیں',
+    // bills
+    'Maintenance charges issued to your house by management.': 'انتظامیہ کی جانب سے آپ کے گھر کو جاری کردہ مینٹیننس چارجز۔', 'All': 'سب', 'To pay': 'ادا کرنا ہے', 'Due': 'واجب', 'Overdue': 'تاخیر شدہ', 'Unpaid': 'غیر ادا شدہ', 'Cancelled': 'منسوخ شدہ', 'Submitted': 'جمع شدہ', 'Verified': 'تصدیق شدہ', 'Rejected': 'مسترد',
+    'Due {x}': 'آخری تاریخ {x}', 'Upload proof': 'ثبوت اپ لوڈ کریں', 'Receipt': 'رسید', 'Receipt PDF': 'رسید PDF', 'Proof sent. Being checked.': 'ثبوت بھیج دیا گیا۔ جانچ جاری ہے۔', 'One-time': 'یک وقتی', 'Monthly Maintenance': 'ماہانہ مینٹیننس',
+    'Your proof was rejected: {x}. Please upload it again.': 'آپ کا ثبوت مسترد ہو گیا: {x}۔ براہِ کرم دوبارہ اپ لوڈ کریں۔', 'Loading bills...': 'بل لوڈ ہو رہے ہیں…', 'No maintenance bills issued to you yet.': 'ابھی آپ کو کوئی مینٹیننس بل جاری نہیں ہوا۔',
+    'Download my statement (PDF)': 'میرا گوشوارہ ڈاؤن لوڈ کریں (PDF)', 'Society Maintenance Account': 'سوسائٹی مینٹیننس اکاؤنٹ', 'Society bank details': 'سوسائٹی کے بینک کی تفصیلات', 'Bank:': 'بینک:', 'Title:': 'عنوان:', 'Account #:': 'اکاؤنٹ نمبر:', 'IBAN:': 'IBAN:', 'Account title': 'اکاؤنٹ کا عنوان', 'Account number': 'اکاؤنٹ نمبر', 'Bank': 'بینک',
+    'Write your house number in the transfer remarks.': 'ٹرانسفر کے ریمارکس میں اپنا مکان نمبر لکھیں۔', 'Pay your dues to this account, then upload the payment proof on your bill.': 'اپنے واجبات اس اکاؤنٹ میں جمع کرائیں، پھر اپنے بل پر ادائیگی کا ثبوت اپ لوڈ کریں۔',
+    'Management has not added the account details yet.': 'انتظامیہ نے ابھی اکاؤنٹ کی تفصیلات شامل نہیں کیں۔', 'Upload payment proof': 'ادائیگی کا ثبوت اپ لوڈ کریں', 'Amount (PKR)': 'رقم (روپے)', 'Payment method': 'ادائیگی کا طریقہ', 'Transaction ID / reference': 'ٹرانزیکشن آئی ڈی / حوالہ', 'Submit proof': 'ثبوت جمع کریں', 'Choose screenshot or photo': 'اسکرین شاٹ یا تصویر منتخب کریں',
+    'Bill': 'بل', 'Amount': 'رقم', 'Status': 'حیثیت', 'Due date': 'آخری تاریخ', 'Period': 'مدت', 'Issued by': 'جاری کنندہ', 'Issued on': 'جاری ہونے کی تاریخ', 'Paid on': 'ادائیگی کی تاریخ', 'Bill no.': 'بل نمبر', 'Late fee': 'جرمانہ',
+    // complaints
+    '+ Lodge Ticket': '+ شکایت درج کریں', 'Report maintenance issues or submit feedback.': 'مینٹیننس کے مسائل رپورٹ کریں یا رائے دیں۔', 'Loading complaints directory...': 'شکایات لوڈ ہو رہی ہیں…', 'No complaints lodged yet.': 'ابھی کوئی شکایت درج نہیں۔', 'You have not lodged any complaints yet.': 'آپ نے ابھی کوئی شکایت درج نہیں کی۔',
+    'Pending': 'زیرِ التوا', 'In Progress': 'کارروائی جاری', 'In progress': 'کارروائی جاری', 'Assigned': 'تفویض شدہ', 'Closed': 'بند', 'Lodged: {x}': 'درج: {x}', 'Open {x} day': '{x} دن سے کھلا', 'Open {x} days': '{x} دن سے کھلی', '⚠ Open {x} days': '⚠ {x} دن سے کھلی', 'Assigned: {x}': 'تفویض: {x}', '📷 {x} photo': '📷 {x} تصویر', '📷 {x} photos': '📷 {x} تصاویر',
+    'Tap to rate how this was handled': 'بتائیں کہ یہ معاملہ کیسے نمٹایا گیا', 'Describe your complaint or request...': 'اپنی شکایت یا درخواست بیان کریں…', 'Category': 'زمرہ', 'Description': 'تفصیل', 'Lodge Complaint': 'شکایت درج کریں', 'Submit': 'جمع کریں', 'Add photos (up to 3)': 'تصاویر شامل کریں (زیادہ سے زیادہ 3)', 'Photos': 'تصاویر',
+    'Street Lights': 'اسٹریٹ لائٹس', 'Water Supply': 'پانی کی فراہمی', 'Garbage': 'کوڑا کرکٹ', 'Roads': 'سڑکیں', 'Sewerage': 'سیوریج', 'Noise': 'شور', 'Parking': 'پارکنگ', 'Suggestion': 'تجویز', 'Progress': 'پیش رفت', 'Complaint lodged': 'شکایت درج ہوئی', 'Not fixed — reopen': 'حل نہیں ہوا — دوبارہ کھولیں', 'Rate this complaint': 'اس شکایت کی درجہ بندی کریں',
+    // documents / meetings
+    'Bylaws, budgets, approved decisions and Board meeting agendas & minutes — open to every resident.': 'ضوابط، بجٹ، منظور شدہ فیصلے اور بورڈ اجلاس کے ایجنڈے و کارروائی — ہر رہائشی کے لیے۔', '📁 Documents': '📁 دستاویزات', '🗓 Meetings & Minutes': '🗓 اجلاس و کارروائی',
+    'Bylaws & Rules': 'ضوابط و قواعد', 'Budget & Accounts': 'بجٹ و حسابات', 'Forms': 'فارم', 'Open link': 'لنک کھولیں', 'Open PDF': 'PDF کھولیں', 'View image': 'تصویر دیکھیں', 'Upcoming': 'آئندہ', 'Upcoming · {x}': 'آئندہ · {x}', 'Agenda · {x}': 'ایجنڈا · {x}', 'Agenda': 'ایجنڈا', 'Minutes': 'کارروائی', 'Minutes · {x}': 'کارروائی · {x}',
+    '+ Suggest an agenda item': '+ ایجنڈے کے لیے تجویز دیں', 'Minutes of past meetings · {x}': 'گزشتہ اجلاسوں کی کارروائی · {x}', 'Minutes published': 'کارروائی شائع شدہ', 'Decisions · {x}': 'فیصلے · {x}', 'Approved': 'منظور شدہ', 'Suggested by {x}': 'تجویز: {x}', 'All residents welcome as observers.': 'تمام رہائشی بطور مبصر شریک ہو سکتے ہیں۔', 'No documents yet.': 'ابھی کوئی دستاویز نہیں۔',
+    // listings
+    '+ Post': '+ پوسٹ کریں', 'Lost or found something? Selling, renting or offering a service? Post it here for RPHS residents. Tap a post to see details and contact the poster.': 'کچھ کھویا یا ملا؟ کچھ بیچنا، کرائے پر دینا یا کوئی خدمت پیش کرنی ہے؟ یہاں پوسٹ کریں۔ تفصیل اور رابطے کے لیے پوسٹ پر ٹیپ کریں۔',
+    'Lost & Found': 'گمشدہ و ملی اشیاء', 'Buy · Sell · Rent': 'خرید · فروخت · کرایہ', 'My posts': 'میری پوسٹس', '🔍 Lost': '🔍 گمشدہ', '🎁 Found': '🎁 ملی', '🏷️ For sale': '🏷️ برائے فروخت', '🏠 For rent': '🏠 برائے کرایہ', '🙋 Wanted': '🙋 درکار', '🛠️ Service': '🛠️ خدمت', '💚 Free': '💚 مفت',
+    'Lost': 'گمشدہ', 'Found': 'ملی', 'For sale': 'برائے فروخت', 'For rent': 'برائے کرایہ', 'Wanted': 'درکار', 'Service': 'خدمت', 'Free': 'مفت', 'Mark as returned': 'واپس مل گیا', 'Mark as sold / done': 'فروخت / مکمل', 'Repost': 'دوبارہ پوسٹ کریں', 'No posts yet.': 'ابھی کوئی پوسٹ نہیں۔',
+    'Title': 'عنوان', 'Details': 'تفصیلات', 'Price (PKR)': 'قیمت (روپے)', 'Location': 'مقام', 'Contact number': 'رابطہ نمبر', 'Alert all residents about this lost / found item': 'اس گمشدہ / ملی چیز کے بارے میں تمام رہائشیوں کو مطلع کریں', 'Posted by': 'پوسٹ کنندہ', '{x} day ago': '{x} دن پہلے', '{x} days ago': '{x} دن پہلے', '{x} hrs ago': '{x} گھنٹے پہلے', 'Just now': 'ابھی ابھی',
+    // funds / expenses / reports / volunteers
+    'Society fundraisers you can contribute to.': 'سوسائٹی کی فنڈ ریزنگ جس میں آپ حصہ ڈال سکتے ہیں۔', 'Active': 'فعال', 'Contribute': 'حصہ ڈالیں', 'Spent:': 'خرچ:', 'Balance:': 'بیلنس:', 'Collected:': 'وصولی:', 'Your contribution is under review': 'آپ کا عطیہ زیرِ جائزہ ہے', '{x}% of {y}': '{y} کا {x}%',
+    'Society expenditure records.': 'سوسائٹی کے اخراجات کا ریکارڈ۔', 'Loading expenses...': 'اخراجات لوڈ ہو رہے ہیں…', 'Loading funds...': 'فنڈز لوڈ ہو رہے ہیں…', 'Loading announcements...': 'اعلانات لوڈ ہو رہے ہیں…', 'Loading polls...': 'رائے شماری لوڈ ہو رہی ہے…', 'Loading dashboard...': 'ڈیش بورڈ لوڈ ہو رہا ہے…',
+    'Your payment history and community fund utilization.': 'آپ کی ادائیگیوں کی تاریخ اور کمیونٹی فنڈ کا استعمال۔', 'Year to date': 'رواں سال', 'All time': 'مجموعی', 'Fund utilization by category': 'زمرہ وار فنڈ کا استعمال', 'Total': 'کل', 'My Payments ({x})': 'میری ادائیگیاں ({x})', 'Monthly Collections': 'ماہانہ وصولیاں', 'Month': 'مہینہ', 'Collected': 'وصول شدہ', 'Running total': 'مجموعی میزان', 'Export Report as PDF': 'رپورٹ PDF میں حاصل کریں',
+    'Join a volunteer program to help with relief and community work.': 'امدادی اور کمیونٹی کاموں میں مدد کے لیے رضاکار پروگرام میں شامل ہوں۔', 'Join as Volunteer': 'رضاکار بنیں', 'Leave program': 'پروگرام چھوڑیں', '✔ You have joined': '✔ آپ شامل ہیں', '🤝 {x} volunteers joined': '🤝 {x} رضاکار شامل', '🤝 1 volunteer joined': '🤝 1 رضاکار شامل',
+    // profile & preferences
+    'Your registered society details on file.': 'سوسائٹی میں آپ کی درج شدہ تفصیلات۔', 'resident': 'رہائشی', 'Resident': 'رہائشی', 'House / Plot:': 'مکان / پلاٹ:', 'CNIC:': 'شناختی کارڈ:', 'Phone:': 'فون:', 'Email:': 'ای میل:', 'Blood Group:': 'بلڈ گروپ:', 'Occupancy Type:': 'رہائش کی نوعیت:', 'Owner': 'مالک', 'Tenant': 'کرایہ دار', 'Family / Dependents:': 'خاندان / زیرِ کفالت:', 'Update Biodata': 'کوائف اپ ڈیٹ کریں',
+    'Preferences': 'ترجیحات', 'Your house card on the Dashboard': 'ڈیش بورڈ پر آپ کے گھر کا کارڈ', 'Text size': 'متن کا سائز', 'Bigger text is easier to read on this phone.': 'بڑا متن اس فون پر پڑھنے میں آسان ہے۔', 'Normal': 'عام', 'Large': 'بڑا', 'Extra large': 'بہت بڑا',
+    'Appearance': 'ظاہری شکل', "Dark is easier on the eyes at night; Light is clearer in sunlight. Auto follows your phone's setting.": 'گہرا موڈ رات میں آنکھوں کے لیے بہتر ہے؛ روشن موڈ دھوپ میں صاف نظر آتا ہے۔ آٹو آپ کے فون کی سیٹنگ پر چلتا ہے۔', '🌙 Dark': '🌙 گہرا', '☀️ Light': '☀️ روشن', '📱 Auto': '📱 آٹو',
+    'Bill and notice alerts': 'بل اور اعلانات کی اطلاعات', 'Blocked in your phone settings. Allow notifications for RPHS there.': 'آپ کے فون کی سیٹنگز میں بند ہیں۔ وہاں RPHS کے لیے اطلاعات کی اجازت دیں۔', 'This browser cannot show alerts.': 'یہ براؤزر اطلاعات نہیں دکھا سکتا۔', 'Notifications on this phone': 'اس فون پر اطلاعات',
+    // notification centre
+    'Notification settings': 'اطلاعات کی ترتیبات', 'Mark all as read': 'سب پڑھی ہوئی نشان زد کریں', 'Clear read': 'پڑھی ہوئی صاف کریں', 'No notifications yet.': 'ابھی کوئی اطلاع نہیں۔', 'Unread': 'غیر پڑھی', 'Emergency': 'ہنگامی', 'General': 'عمومی', 'Muted': 'خاموش', 'Mute': 'خاموش کریں', 'Unmute': 'آواز کھولیں', 'Earlier': 'پہلے', 'Today': 'آج', 'Yesterday': 'کل',
+    // toasts
+    'Saved': 'محفوظ ہو گیا', 'Deleted': 'حذف ہو گیا', 'Vote recorded': 'ووٹ درج ہو گیا', 'Proof uploaded. Management will verify it.': 'ثبوت اپ لوڈ ہو گیا۔ انتظامیہ تصدیق کرے گی۔', 'Complaint lodged.': 'شکایت درج ہو گئی۔', 'Could not copy. Press and hold to copy it instead.': 'کاپی نہیں ہو سکا۔ دبا کر رکھیں اور کاپی کریں۔', 'Please fill in all fields.': 'براہِ کرم تمام خانے پُر کریں۔'
+  };
+  const UR_PATTERNS = Object.keys(UR).filter(k => k.includes('{')).map(k => {
+    const vars = [];
+    const re = new RegExp('^' + k.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{(\w+)\}/g, (m, v) => { vars.push(v); return '(.+?)'; }) + '$');
+    return { re, vars, out: UR[k] };
+  });
+  function urText(src) {
+    const str = String(src);
+    const trimmed = str.trim();
+    if (!trimmed || !/[A-Za-z]/.test(trimmed)) return null;
+    let out = UR[trimmed];
+    if (out == null) {
+      for (const pt of UR_PATTERNS) {
+        const m = trimmed.match(pt.re);
+        if (!m) continue;
+        out = pt.out;
+        pt.vars.forEach((v, i) => { out = out.replace('{' + v + '}', '\u2068' + m[i + 1] + '\u2069'); });
+        break;
+      }
+    }
+    if (out == null) return null;
+    const lead = str.match(/^\s*/)[0], tail = str.match(/\s*$/)[0];
+    return lead + out + tail;
+  }
+  const UR_ATTRS = ['placeholder', 'aria-label', 'title'];
+  function translateTree(root) {
+    if (uiLang !== 'ur' || !root) return;
+    if (root.nodeType === Node.TEXT_NODE) { translateTextNode(root); return; }
+    if (root.nodeType !== Node.ELEMENT_NODE) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: n => {
+        const el = n.parentElement;
+        if (!el || /^(SCRIPT|STYLE|TEXTAREA|OPTION)$/.test(el.tagName) || el.closest('[lang="ur"],[data-no-ur]')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const nodes = [];
+    let n; while ((n = walker.nextNode())) nodes.push(n);
+    nodes.forEach(translateTextNode);
+    const els = root.querySelectorAll ? root.querySelectorAll('[placeholder],[aria-label],[title]') : [];
+    els.forEach(el => UR_ATTRS.forEach(a => { const v = el.getAttribute(a); const t2 = v && urText(v); if (t2) el.setAttribute(a, t2); }));
+  }
+  function translateTextNode(n) {
+    const t2 = urText(n.nodeValue);
+    if (t2 == null) return;
+    n.nodeValue = t2;
+    const el = n.parentElement;
+    if (el && !el.classList.contains('ur-txt') && !el.classList.contains('ur')) el.classList.add('ur-txt');
+  }
+  let urObserver = null;
+  function applyUrduUi() {
+    document.documentElement.classList.toggle('lang-ur', uiLang === 'ur');
+    if (uiLang !== 'ur') { if (urObserver) { urObserver.disconnect(); urObserver = null; } return; }
+    loadUrduFont();
+    ['app', 'modal-view', 'ui-sheet'].forEach(id => translateTree(document.getElementById(id)));
+    if (urObserver) return;
+    let pending = false;
+    urObserver = new MutationObserver(muts => {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        pending = false;
+        ['app', 'modal-view', 'ui-sheet'].forEach(id => translateTree(document.getElementById(id)));
+      });
+    });
+    ['app', 'modal-view', 'ui-sheet'].forEach(id => { const el = document.getElementById(id); if (el) urObserver.observe(el, { childList: true, subtree: true, characterData: true }); });
+  }
+  window.addEventListener('DOMContentLoaded', applyUrduUi);
+  if (document.readyState !== 'loading') applyUrduUi();
 
   function renderMyHouseCard(myBills) {
     const owing = myBills.filter(b => ['unpaid', 'overdue'].includes(billStatus(b)));
