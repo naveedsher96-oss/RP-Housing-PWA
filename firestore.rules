@@ -268,7 +268,7 @@ service cloud.firestore {
     match /proofs/{id} {
       // Files of society documents (kind 'document') are readable by every approved member.
       allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid)
-        || (isApprovedResident() && resource.data.get('kind', '') == 'document');
+        || (isApprovedResident() && resource.data.get('kind', '') in ['document', 'listing']);
       allow create: if isAdmin() || (signedIn() && request.resource.data.uid == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if false;
@@ -282,6 +282,18 @@ service cloud.firestore {
       allow read: if isStaff() || isApprovedResident();
       allow create: if canPublish() && request.resource.data.get('createdBy', '') == request.auth.uid;
       allow update: if isAdmin() || isSuperAdmin() || ownsPost();
+      allow delete: if false;
+    }
+
+    // ---------- lost & found / classifieds ----------
+    // Any approved member posts in their own name and edits/closes/deletes
+    // their own post; staff (admin, board, super admin) may moderate any post.
+    // Soft delete only.
+    match /listings/{id} {
+      allow read: if isStaff() || isApprovedResident();
+      allow create: if (isStaff() || isApprovedResident())
+        && request.resource.data.get('createdBy', '') == request.auth.uid;
+      allow update: if isStaff() || (isApprovedResident() && resource.data.get('createdBy', '') == request.auth.uid);
       allow delete: if false;
     }
 

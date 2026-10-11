@@ -197,6 +197,23 @@
   .ticket-photo{position:relative; width:84px; height:84px; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--border); background:var(--bg-elevated-2); cursor:pointer;}
   .ticket-photo img{width:100%; height:100%; object-fit:cover; display:block;}
   .ticket-photo-x{position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; border:none; background:rgba(0,0,0,0.65); color:#fff; font-size:12px; cursor:pointer;}
+  .listing-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .listing-card{padding:0; overflow:hidden; display:flex; flex-direction:column;}
+  .listing-card.closed{opacity:0.72;}
+  .listing-thumb{aspect-ratio:4/3; background:var(--bg-elevated-2); display:flex; align-items:center; justify-content:center; font-size:38px;}
+  .listing-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .listing-body{padding:10px 12px 12px; display:flex; flex-direction:column; gap:4px;}
+  .listing-tags{display:flex; flex-wrap:wrap; gap:4px;}
+  .listing-kind{font-size:11px; font-weight:800; letter-spacing:0.3px; padding:2px 8px; border-radius:999px; background:var(--bg-elevated-3); color:var(--text-muted); white-space:nowrap;}
+  .listing-kind.k-lost{background:rgba(239,68,68,0.18); color:#fca5a5;}
+  .listing-kind.k-found{background:rgba(34,197,94,0.18); color:#86efac;}
+  .listing-kind.k-sell,.listing-kind.k-rent{background:rgba(245,158,11,0.18); color:#fcd34d;}
+  .listing-kind.k-wanted,.listing-kind.k-service{background:rgba(59,130,246,0.18); color:#93c5fd;}
+  .listing-kind.k-free{background:rgba(16,185,129,0.18); color:#6ee7b7;}
+  .listing-kind.k-closed{background:var(--bg-elevated-3); color:var(--text);}
+  .listing-title{font-weight:700; font-size:14.5px; line-height:1.3; color:var(--accent-2); word-break:break-word;}
+  .listing-price{font-weight:800; font-size:14px; color:var(--text);}
+  .listing-meta{font-size:12px; color:var(--text-faint); line-height:1.4;}
   .timeline{display:flex; flex-direction:column; gap:10px; margin:6px 0 14px;}
   .timeline-item{display:flex; gap:10px; align-items:flex-start;}
   .timeline-item .badge{flex-shrink:0;}
@@ -694,6 +711,7 @@
   let meetingsList = [];
   let docsView = 'documents'; // 'documents' | 'meetings'
   let docCategoryFilter = 'all';
+  let listingsList = [], listingFilter = 'all', listingPhotoDraft = [], listingKindPick = 'lost';
   let auditList = [];
   let archivedRecords = [];
   let boardMembersCount = null;
@@ -1626,6 +1644,17 @@
       `;
     }
 
+    if (activeTab === 'market') {
+      return `
+        <div class="section-title">
+          Lost & Found / Classifieds
+          <button class="btn sm primary" onclick="openNewListingModal()">+ Post</button>
+        </div>
+        <div class="section-sub">Lost or found something? Selling, renting or offering a service? Post it here for RPHS residents. Tap a post to see details and contact the poster.</div>
+        <div id="listings-body">Loading...</div>
+      `;
+    }
+
     if (activeTab === 'bills') {
       const staffView = isStaff();
       const filters = isAdmin
@@ -2036,6 +2065,7 @@
     archive:'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v12h14V8M10 12h4"/>',
     logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
     file:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+    tag:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
     copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
     bank:'<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>'
   };
@@ -2237,6 +2267,7 @@
         ['notices', 'megaphone', 'Announcements'],
         ['polls', 'vote', 'Polls'],
         ['documents', 'file', 'Documents & Minutes'],
+        ['market', 'tag', 'Lost & Found / Classifieds'],
         ['approvals', 'usercheck', 'Approvals'],
         ['board', 'gavel', 'Board Decisions'],
         ['biodata', 'users', 'Residents'],
@@ -2252,6 +2283,7 @@
         ['notices', 'megaphone', 'Announcements'],
         ['polls', 'vote', 'Polls'],
         ['documents', 'file', 'Documents & Minutes'],
+        ['market', 'tag', 'Lost & Found / Classifieds'],
         ['bills', 'receipt', 'Bills'],
         ['funds', 'wallet', 'Funds'],
         ['expenses', 'cash', 'Expenses'],
@@ -2267,6 +2299,7 @@
         ['notices', 'megaphone', 'Announcements'],
         ['polls', 'vote', 'Polls'],
         ['documents', 'file', 'Documents & Minutes'],
+        ['market', 'tag', 'Lost & Found / Classifieds'],
         ['tickets', 'wrench', 'Complaints'],
         ['bills', 'receipt', 'Bills'],
         ['funds', 'wallet', 'Funds'],
@@ -2286,6 +2319,7 @@
       ['notices', 'megaphone', 'Announcements'],
       ['polls', 'vote', 'Polls'],
       ['documents', 'file', 'Documents & Minutes'],
+      ['market', 'tag', 'Lost & Found / Classifieds'],
       ['tickets', 'wrench', 'Complaints'],
       ['bills', 'receipt', 'Bills'],
       ['funds', 'wallet', 'Funds'],
@@ -2303,6 +2337,7 @@
     if (activeTab === 'notices') loadNotices();
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'documents') loadDocumentsTab();
+    if (activeTab === 'market') loadListings();
     if (activeTab === 'tickets') loadTickets();
     if (activeTab === 'bills') loadBills();
     if (activeTab === 'funds') loadFunds();
@@ -4301,6 +4336,287 @@
       });
       logAudit('document', id, 'delete', d.title || '');
       toast('Document removed.'); loadDocumentsTab();
+    } catch (err) { toast('Error removing: ' + err.message); }
+  };
+
+  // ----- lost & found / classifieds (listings/{id}; photos in proofs/{id} kind 'listing') -----
+  const LISTING_KINDS = [
+    ['lost', 'Lost', '🔍', 'I lost something'],
+    ['found', 'Found', '🎁', 'I found something'],
+    ['sell', 'For sale', '🏷️', 'Selling an item'],
+    ['rent', 'For rent', '🏠', 'House / room / shop for rent'],
+    ['wanted', 'Wanted', '🙋', 'Looking to buy or borrow'],
+    ['service', 'Service', '🛠️', 'Offering a service (tuition, repairs, tailoring…)'],
+    ['free', 'Free', '💚', 'Giving away for free']
+  ];
+  const LISTING_MAX_PHOTOS = 3;
+  const kindMeta = k => LISTING_KINDS.find(x => x[0] === k) || LISTING_KINDS[2];
+  const isLostFound = k => k === 'lost' || k === 'found';
+  const listingClosedLabel = l => l.kind === 'lost' || l.kind === 'found' ? 'Returned' : l.kind === 'wanted' ? 'Found one' : l.kind === 'rent' ? 'Rented out' : l.kind === 'service' ? 'No longer offered' : 'Sold / gone';
+  function canModerateListings() { return isStaff(); }
+  function ownsListing(l) { return auth.currentUser && l.createdBy === auth.currentUser.uid; }
+  function listingIsClosed(l) { return l.status === 'closed'; }
+
+  window.setListingFilter = function(f) { listingFilter = f; renderListingsBody(); };
+
+  function loadListings() {
+    if (!db) return;
+    fetchFast(db.collection('listings'), snapshot => {
+      const cutoff = Date.now() - 30 * 86400000;
+      listingsList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(l => !l.isDeleted && !(listingIsClosed(l) && tsMs(l.closedAt || l.updatedAt) && tsMs(l.closedAt || l.updatedAt) < cutoff))
+        .sort(byNewest);
+      renderListingsBody();
+    }).catch(e => { console.error('Error loading listings:', e); showLoadError('listings-body', e); });
+  }
+
+  function renderListingsBody() {
+    const el = document.getElementById('listings-body');
+    if (!el) return;
+    const open = listingsList.filter(l => !listingIsClosed(l));
+    const counts = { all: open.length, lostfound: open.filter(l => isLostFound(l.kind)).length, market: open.filter(l => !isLostFound(l.kind)).length, mine: listingsList.filter(ownsListing).length, closed: listingsList.filter(listingIsClosed).length };
+    const chips = [['all', 'All'], ['lostfound', 'Lost & Found'], ['market', 'Buy · Sell · Rent'], ['mine', 'My posts'], ['closed', 'Resolved']];
+    const list = listingFilter === 'mine' ? listingsList.filter(ownsListing)
+      : listingFilter === 'closed' ? listingsList.filter(listingIsClosed)
+      : open.filter(l => listingFilter === 'all' || (listingFilter === 'lostfound' ? isLostFound(l.kind) : !isLostFound(l.kind)));
+    el.innerHTML = `
+      <div class="chip-row">${chips.map(([f, lbl]) => `<button class="chip ${listingFilter === f ? 'active' : ''}" onclick="setListingFilter('${f}')">${lbl}<span class="n">${counts[f]}</span></button>`).join('')}</div>
+      ${list.length ? `<div class="listing-grid">${list.map(listingCard).join('')}</div>` : `<div class="card" style="text-align:center; color:var(--text-muted);">${listingFilter === 'mine' ? 'You have not posted anything yet.' : listingFilter === 'closed' ? 'Nothing resolved in the last 30 days.' : 'Nothing here yet — be the first to post.'}</div>`}
+    `;
+    list.forEach(l => { if ((l.photoIds || []).length) hydrateListingThumb(l); });
+  }
+
+  async function hydrateListingThumb(l) {
+    try {
+      const d = await ticketPhotoData(l.photoIds[0]);
+      const el = document.getElementById('lthumb-' + l.id);
+      if (el && d) el.innerHTML = `<img src="${d}" alt="" />`;
+    } catch (e) { /* thumbnail is optional */ }
+  }
+
+  function listingPrice(l) {
+    if (isLostFound(l.kind) || l.kind === 'free') return l.kind === 'free' ? 'Free' : '';
+    if (!l.price) return l.kind === 'wanted' ? '' : 'Price on request';
+    return 'PKR ' + Number(l.price).toLocaleString() + (l.kind === 'rent' ? ' / month' : '');
+  }
+
+  function listingCard(l) {
+    const [kind, label, emoji] = kindMeta(l.kind);
+    const closed = listingIsClosed(l);
+    const price = listingPrice(l);
+    return `
+      <div class="card listing-card ${closed ? 'closed' : ''} clickable" onclick="openListingDetail('${l.id}')">
+        <div class="listing-thumb" id="lthumb-${l.id}">${(l.photoIds || []).length ? '' : `<span>${emoji}</span>`}</div>
+        <div class="listing-body">
+          <div class="listing-tags"><span class="listing-kind k-${kind}">${emoji} ${label}</span>${closed ? `<span class="listing-kind k-closed">✓ ${escapeHtml(listingClosedLabel(l))}</span>` : ''}</div>
+          <div class="listing-title">${escapeHtml(l.title || 'Untitled')}</div>
+          ${price ? `<div class="listing-price">${escapeHtml(price)}</div>` : ''}
+          <div class="listing-meta">${escapeHtml(l.createdByName || 'Resident')}${l.createdByHouse ? ' · ' + escapeHtml(l.createdByHouse) : ''} · ${escapeHtml(timeAgo(l.createdAt))}</div>
+        </div>
+      </div>`;
+  }
+
+  window.openListingDetail = async function(id) {
+    const l = listingsList.find(x => x.id === id);
+    if (!l) return;
+    const [kind, label, emoji] = kindMeta(l.kind);
+    const closed = listingIsClosed(l);
+    const mine = ownsListing(l);
+    const price = listingPrice(l);
+    const phone = l.contactPhone || '';
+    const waText = `Assalam-o-Alaikum ${l.createdByName || ''}, I am contacting you about your RPHS post "${l.title}".`;
+    openUiSheet(`
+      <div id="listing-detail">
+        <div class="listing-tags"><span class="listing-kind k-${kind}">${emoji} ${label}</span>${closed ? `<span class="listing-kind k-closed">✓ ${escapeHtml(listingClosedLabel(l))}</span>` : ''}</div>
+        <div class="ui-sheet-title" style="margin-top:8px;">${escapeHtml(l.title || 'Untitled')}</div>
+        ${price ? `<div class="listing-price" style="font-size:18px;">${escapeHtml(price)}</div>` : ''}
+        ${(l.photoIds || []).length ? `<div id="ticket-photos" class="ticket-photos" style="margin-top:10px;">${l.photoIds.map(() => '<div class="ticket-photo"></div>').join('')}</div>` : ''}
+        <div style="background:var(--bg-elevated-2); padding:12px; border-radius:10px; font-size:14px; line-height:1.55; margin:10px 0; white-space:pre-wrap;">${escapeHtml(l.description || '')}</div>
+        ${l.location ? `<div style="font-size:13.5px; margin-bottom:6px;">📍 ${escapeHtml(l.location)}</div>` : ''}
+        <div class="listing-meta">Posted by ${escapeHtml(l.createdByName || 'Resident')}${l.createdByHouse ? ' · ' + escapeHtml(l.createdByHouse) : ''} · ${escapeHtml(formatDate(l.createdAt))}</div>
+        ${!mine && !closed ? `
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            ${phone ? `<a class="btn primary" style="flex:1; text-align:center; text-decoration:none;" href="tel:${escapeHtml(phone)}">📞 Call</a>
+            <a class="btn secondary" style="flex:1; text-align:center; text-decoration:none;" href="${whatsappLink(phone, waText)}" target="_blank" rel="noopener">WhatsApp</a>` : '<div style="font-size:13px; color:var(--text-muted);">No contact number was shared — ask at the office.</div>'}
+          </div>` : ''}
+        ${mine && !closed ? `
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            <button class="btn primary" style="flex:1;" onclick="closeListing('${l.id}')">✓ Mark as ${escapeHtml(listingClosedLabel(l).toLowerCase())}</button>
+            <button class="btn secondary" style="flex:1;" onclick="openEditListingModal('${l.id}')">Edit</button>
+          </div>` : ''}
+        ${mine && closed ? `<button class="btn secondary block" style="margin-top:14px;" onclick="reopenListing('${l.id}')">Post it again</button>` : ''}
+        ${(mine || canModerateListings()) ? `<button class="btn sm secondary block" style="margin-top:10px; color:var(--danger);" onclick="removeListing('${l.id}')">${mine ? 'Delete my post' : 'Remove post (moderation)'}</button>` : ''}
+      </div>`);
+    hydrateTicketPhotos(l);
+  };
+
+  window.onListingPhotosPicked = async function(input) {
+    const files = Array.from(input.files || []);
+    input.value = '';
+    for (const f of files) {
+      if (listingPhotoDraft.length >= LISTING_MAX_PHOTOS) { toast(`You can attach up to ${LISTING_MAX_PHOTOS} photos.`); break; }
+      if (f.type !== 'image/png' && f.type !== 'image/jpeg') { toast('Only JPG or PNG photos can be attached.'); continue; }
+      try { listingPhotoDraft.push(await readProofFile(f)); } catch (e) { toast(e.message); }
+    }
+    renderListingPhotoDraft();
+  };
+  window.removeListingPhoto = function(i) { listingPhotoDraft.splice(i, 1); renderListingPhotoDraft(); };
+  function renderListingPhotoDraft() {
+    const el = document.getElementById('listing-photo-preview');
+    if (!el) return;
+    el.innerHTML = listingPhotoDraft.map((p, i) => `<div class="ticket-photo"><img src="${p.dataUrl}" alt="Photo ${i + 1}" /><button type="button" class="ticket-photo-x" onclick="removeListingPhoto(${i})" aria-label="Remove photo">✕</button></div>`).join('');
+    const btn = document.getElementById('listing-photo-btn');
+    if (btn) btn.textContent = listingPhotoDraft.length ? `📷 Add another photo (${listingPhotoDraft.length}/${LISTING_MAX_PHOTOS})` : '📷 Add photo (optional)';
+  }
+  window.pickListingKind = function(k) {
+    listingKindPick = k;
+    document.querySelectorAll('#listing-kinds .chip').forEach(c => c.classList.toggle('active', c.dataset.k === k));
+    const priceRow = document.getElementById('listing-price-row');
+    if (priceRow) priceRow.style.display = isLostFound(k) || k === 'free' ? 'none' : '';
+    const notifyRow = document.getElementById('listing-notify-row');
+    if (notifyRow) notifyRow.style.display = isLostFound(k) ? '' : 'none';
+    const hint = document.getElementById('listing-kind-hint');
+    if (hint) hint.textContent = kindMeta(k)[3];
+  };
+
+  function listingFormHtml(l) {
+    return `
+      <label>What is it?</label>
+      <div class="chip-row" id="listing-kinds" style="margin-top:6px;">${LISTING_KINDS.map(([k, lbl, em]) => `<button type="button" class="chip ${(l.kind || listingKindPick) === k ? 'active' : ''}" data-k="${k}" onclick="pickListingKind('${k}')">${em} ${lbl}</button>`).join('')}</div>
+      <div id="listing-kind-hint" style="font-size:12.5px; color:var(--text-muted); margin:-4px 0 8px;">${escapeHtml(kindMeta(l.kind || listingKindPick)[3])}</div>
+      <label>Title</label>
+      <input type="text" id="listing-title" placeholder="e.g. Black cat missing since Friday / Honda CD70 for sale" required maxlength="80" value="${escapeHtml(l.title || '')}" />
+      <label>Details</label>
+      <textarea id="listing-desc" placeholder="Describe it — colour, size, condition, when and where…" required maxlength="800">${escapeHtml(l.description || '')}</textarea>
+      <div id="listing-price-row" style="${isLostFound(l.kind || listingKindPick) || (l.kind || listingKindPick) === 'free' ? 'display:none;' : ''}">
+        <label>Price (PKR) — leave empty for "price on request"</label>
+        <input type="number" id="listing-price" min="0" step="1" inputmode="numeric" placeholder="e.g. 15000" value="${l.price || ''}" />
+      </div>
+      <label>Where? (optional)</label>
+      <input type="text" id="listing-location" placeholder="e.g. Near the park, Block B" maxlength="80" value="${escapeHtml(l.location || '')}" />
+      <label>Contact number shown to residents</label>
+      <input type="tel" id="listing-phone" placeholder="03xx-xxxxxxx" maxlength="20" value="${escapeHtml(l.contactPhone != null ? l.contactPhone : (currentUserProfile.phone || ''))}" />`;
+  }
+
+  window.openNewListingModal = function() {
+    listingPhotoDraft = [];
+    listingKindPick = listingFilter === 'market' ? 'sell' : 'lost';
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">New post</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Visible to approved RPHS residents only. Management can remove posts that are not appropriate.</div>
+      <form id="listing-form">
+        ${listingFormHtml({})}
+        <label>Photos</label>
+        <div id="listing-photo-preview" class="ticket-photos"></div>
+        <input type="file" id="listing-photo-file" accept="image/png,image/jpeg" multiple style="display:none;" onchange="onListingPhotosPicked(this)" />
+        <button type="button" id="listing-photo-btn" class="btn sm secondary block" onclick="document.getElementById('listing-photo-file').click()">📷 Add photo (optional)</button>
+        <label id="listing-notify-row" style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+          <input type="checkbox" id="listing-notify" checked style="width:auto; margin:0;" />
+          <span>Alert all residents (lost & found only)</span>
+        </label>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Post</button>
+      </form>`;
+    openModal();
+    document.getElementById('listing-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type=submit]');
+      const kind = listingKindPick;
+      const title = document.getElementById('listing-title').value.trim();
+      const description = document.getElementById('listing-desc').value.trim();
+      const price = Number(document.getElementById('listing-price').value) || 0;
+      const location = document.getElementById('listing-location').value.trim();
+      const contactPhone = document.getElementById('listing-phone').value.trim();
+      const notify = isLostFound(kind) && document.getElementById('listing-notify').checked;
+      btn.disabled = true; btn.textContent = 'Posting…';
+      try {
+        const photoIds = [];
+        for (const p of listingPhotoDraft) {
+          const ref = await db.collection('proofs').add({
+            uid: auth.currentUser.uid, kind: 'listing', data: p.dataUrl, type: 'image', name: p.name,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          proofCache[ref.id] = p.dataUrl;
+          photoIds.push(ref.id);
+        }
+        const ref = await db.collection('listings').add({
+          kind, title, description, price: isLostFound(kind) || kind === 'free' ? 0 : price, location, contactPhone, photoIds,
+          status: 'open',
+          createdBy: auth.currentUser.uid, createdByName: currentUserProfile.name || '', createdByHouse: currentUserProfile.house || '',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        logAudit('listing', ref.id, 'create', `${kind}: ${title}`);
+        listingPhotoDraft = [];
+        closeModal();
+        toast('Posted.');
+        loadListings();
+        if (notify) broadcastNotification(`${kind === 'lost' ? '🔍 Lost' : '🎁 Found'}: ${title}`, `${currentUserProfile.name || 'A resident'}${currentUserProfile.house ? ' (' + currentUserProfile.house + ')' : ''}${location ? ' · ' + location : ''} — open Lost & Found to help.`, 'general');
+      } catch (err) {
+        toast('Error posting: ' + err.message);
+        btn.disabled = false; btn.textContent = 'Post';
+      }
+    });
+  };
+
+  window.openEditListingModal = function(id) {
+    const l = listingsList.find(x => x.id === id);
+    if (!l || !ownsListing(l)) return;
+    listingKindPick = l.kind || 'sell';
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Edit post</div>
+      <form id="listing-form">
+        ${listingFormHtml(l)}
+        ${(l.photoIds || []).length ? `<div style="font-size:13px; color:var(--text-muted); margin-top:10px;">${l.photoIds.length} photo(s) attached (to change photos, delete this post and post again).</div>` : ''}
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save changes</button>
+      </form>`;
+    openModal();
+    document.getElementById('listing-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const kind = listingKindPick;
+      const upd = {
+        kind,
+        title: document.getElementById('listing-title').value.trim(),
+        description: document.getElementById('listing-desc').value.trim(),
+        price: isLostFound(kind) || kind === 'free' ? 0 : (Number(document.getElementById('listing-price').value) || 0),
+        location: document.getElementById('listing-location').value.trim(),
+        contactPhone: document.getElementById('listing-phone').value.trim(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      try {
+        await db.collection('listings').doc(id).update(upd);
+        logAudit('listing', id, 'update', upd.title);
+        closeModal(); toast('Post updated.'); loadListings();
+      } catch (err) { toast('Error saving: ' + err.message); }
+    });
+  };
+
+  window.closeListing = async function(id) {
+    const l = listingsList.find(x => x.id === id);
+    if (!l || !ownsListing(l)) return;
+    try {
+      await db.collection('listings').doc(id).update({ status: 'closed', closedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      logAudit('listing', id, 'close', l.title || '');
+      goBack(); toast(`Marked as ${listingClosedLabel(l).toLowerCase()}. It stays under Resolved for 30 days.`); loadListings();
+    } catch (err) { toast('Error: ' + err.message); }
+  };
+  window.reopenListing = async function(id) {
+    const l = listingsList.find(x => x.id === id);
+    if (!l || !ownsListing(l)) return;
+    try {
+      await db.collection('listings').doc(id).update({ status: 'open', closedAt: null, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      goBack(); toast('Posted again.'); loadListings();
+    } catch (err) { toast('Error: ' + err.message); }
+  };
+  window.removeListing = async function(id) {
+    const l = listingsList.find(x => x.id === id);
+    if (!l || !(ownsListing(l) || canModerateListings())) return;
+    const mine = ownsListing(l);
+    const ok = await confirmSheet({ title: mine ? 'Delete this post?' : 'Remove this post?', body: mine ? 'It will disappear from the board.' : `"${l.title || ''}" by ${l.createdByName || 'a resident'} will be removed from the board.`, okLabel: mine ? 'Delete' : 'Remove', danger: true });
+    if (!ok) return;
+    try {
+      await db.collection('listings').doc(id).update({ isDeleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp(), deletedBy: currentUserProfile.name || '', deletedByRole: mine ? 'owner' : currentUserProfile.role });
+      logAudit('listing', id, 'delete', (mine ? '' : 'moderation: ') + (l.title || ''));
+      if (!mine && l.createdBy) sendNotification(l.createdBy, 'Your post was removed', `Management removed your post "${l.title || ''}" from Lost & Found / Classifieds. Contact the office if you have questions.`, 'warning', 'general');
+      toast('Post removed.'); loadListings();
     } catch (err) { toast('Error removing: ' + err.message); }
   };
 
