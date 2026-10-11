@@ -51,6 +51,9 @@ const SEED = {
   'tickets/td2': { uid: 'r2', status: 'closed' },
   'documents/doc1': { title: 'Bylaws', createdBy: 'adm' },
   'documents/docb': { title: 'Form', createdBy: 'brd' },
+  'listings/lr1': { title: 'Cat', kind: 'lost', createdBy: 'r1', status: 'open' },
+  'listings/lr2': { title: 'Bike', kind: 'sell', createdBy: 'r2', status: 'open' },
+  'proofs/lstf': { uid: 'r2', kind: 'listing', data: 'x' },
   'proofs/docf': { uid: 'adm', kind: 'document', data: 'pdf' },
   'meetings/m1': { title: 'M', status: 'upcoming', suggestionsOpen: true, agenda: [{ text: 'a', byUid: 'adm', source: 'board' }], createdBy: 'adm' },
   'meetings/mc': { title: 'M', status: 'upcoming', suggestionsOpen: false, agenda: [], createdBy: 'adm' },
@@ -168,6 +171,21 @@ const CASES = [
   ['board cannot edit admin\'s document', 'brd', db => updateDoc(doc(db, 'documents/doc1'), { title: 'Y' }), false],
   ['super admin archives a document', 'sa', db => updateDoc(doc(db, 'documents/doc1'), { isDeleted: true }), true],
   ['admin cannot hard-delete a document', 'adm', db => deleteDoc(doc(db, 'documents/doc1')), false],
+
+  // lost & found / classifieds
+  ['resident reads listings', 'r1', db => getDocs(collection(db, 'listings')), true],
+  ['pending resident cannot read listings', 'pend', db => getDocs(collection(db, 'listings')), false],
+  ['resident posts a listing in own name', 'r1', db => addDoc(collection(db, 'listings'), { title: 'X', kind: 'sell', createdBy: 'r1' }), true],
+  ['resident cannot post a listing as someone else', 'r1', db => addDoc(collection(db, 'listings'), { title: 'X', kind: 'sell', createdBy: 'r2' }), false],
+  ['pending resident cannot post a listing', 'pend', db => addDoc(collection(db, 'listings'), { title: 'X', createdBy: 'pend' }), false],
+  ['admin posts a listing', 'adm', db => addDoc(collection(db, 'listings'), { title: 'X', kind: 'found', createdBy: 'adm' }), true],
+  ['resident closes own listing', 'r1', db => updateDoc(doc(db, 'listings/lr1'), { status: 'closed' }), true],
+  ['resident cannot edit another resident\'s listing', 'r1', db => updateDoc(doc(db, 'listings/lr2'), { title: 'Y' }), false],
+  ['board moderates (removes) a listing', 'brd', db => updateDoc(doc(db, 'listings/lr2'), { isDeleted: true }), true],
+  ['admin moderates (removes) a listing', 'adm', db => updateDoc(doc(db, 'listings/lr1'), { isDeleted: true }), true],
+  ['resident cannot hard-delete a listing', 'r1', db => deleteDoc(doc(db, 'listings/lr1')), false],
+  ['resident reads another resident\'s listing photo', 'r1', db => getDoc(doc(db, 'proofs/lstf')), true],
+  ['pending resident cannot read a listing photo', 'pend', db => getDoc(doc(db, 'proofs/lstf')), false],
 
   // Board meetings: agenda & minutes
   ['resident reads meetings', 'r1', db => getDocs(collection(db, 'meetings')), true],

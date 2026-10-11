@@ -250,6 +250,16 @@
   docs.set('doc3', { title: 'Gate Pass Request Form', category: 'Forms', description: '', link: 'https://drive.google.com/file/d/rphs-gate-pass/view', createdBy: 'u_r4', createdByName: 'Bilal Hussain', createdByRole: 'board', createdAt: daysAgo(12, 10) });
   docs.set('doc4', { title: 'Old parking policy', category: 'Notices & Circulars', link: 'https://example.com/old', createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdAt: daysAgo(200), isDeleted: true, deletedAt: daysAgo(100), deletedBy: 'Tariq Mehmood' });
 
+  // lost & found / classifieds (photos in proofs/{id} kind 'listing')
+  coll('proofs').set('lst_f1', { uid: 'u_r2', kind: 'listing', type: 'image', name: 'bike.png', data: PX, createdAt: daysAgo(3, 10) });
+  const listings = coll('listings');
+  listings.set('l1', { kind: 'lost', title: 'Black cat "Milo" missing since Friday', description: 'Black male cat with a white patch on the chest, red collar. Last seen near the park.', price: 0, location: 'Near the park, Block B', contactPhone: '0300-1234567', photoIds: [], status: 'open', createdBy: 'u_res1', createdByName: 'Ayesha Malik', createdByHouse: 'House 14, Block B', createdAt: daysAgo(1, 9), updatedAt: daysAgo(1, 9) });
+  listings.set('l2', { kind: 'sell', title: 'Honda CD70 2019, 21,000 km', description: 'Single owner, all documents complete, new tyres.', price: 95000, location: '', contactPhone: '0321-7654321', photoIds: ['lst_f1'], status: 'open', createdBy: 'u_r2', createdByName: 'Muhammad Usman Khan', createdByHouse: 'House 3, Block A', createdAt: daysAgo(3, 10), updatedAt: daysAgo(3, 10) });
+  listings.set('l3', { kind: 'found', title: 'Found: bunch of keys with a Toyota remote', description: 'Found on the main road near Gate 2 on Sunday evening. Describe the keyring to claim.', price: 0, location: 'Gate 2', contactPhone: '0300-1112233', photoIds: [], status: 'open', createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdByHouse: 'House 1, Block A', createdAt: daysAgo(2, 19), updatedAt: daysAgo(2, 19) });
+  listings.set('l4', { kind: 'service', title: 'Home tuition – Maths & Physics (Matric / FSc)', description: 'Evening classes at my home or yours. 10 years experience.', price: 6000, location: 'Block A', contactPhone: '0333-4445556', photoIds: [], status: 'open', createdBy: 'u_r3', createdByName: 'Fatima Zahra', createdByHouse: 'House 7, Block A', createdAt: daysAgo(6, 12), updatedAt: daysAgo(6, 12) });
+  listings.set('l5', { kind: 'sell', title: 'Baby cot with mattress', description: 'Good condition.', price: 8000, contactPhone: '0300-1234567', photoIds: [], status: 'closed', closedAt: daysAgo(4), createdBy: 'u_res1', createdByName: 'Ayesha Malik', createdByHouse: 'House 14, Block B', createdAt: daysAgo(20), updatedAt: daysAgo(4) });
+  listings.set('l6', { kind: 'free', title: 'Old spam post', description: 'x', status: 'open', createdBy: 'u_r2', createdByName: 'Muhammad Usman Khan', createdAt: daysAgo(10), isDeleted: true, deletedAt: daysAgo(9), deletedBy: 'Tariq Mehmood' });
+
   // board meetings: one upcoming (agenda open to suggestions), one held (minutes)
   const meetings = coll('meetings');
   const at = (d) => daysAgo(d, 18).toDate().getTime();

@@ -582,6 +582,77 @@ test('admin: bulk issue leaves out members exempt from the monthly bill', async 
   noErrors(page);
 }, 'admin');
 
+test('resident: Lost & Found board lists open posts, opens a detail sheet with Call/WhatsApp, and can post a lost item', async page => {
+  await page.evaluate(() => selectTab('market'));
+  await settle(page);
+  let text = await page.evaluate(() => document.getElementById('listings-body').innerText);
+  assert(/Milo/.test(text) && /Honda CD70/.test(text) && /PKR 95,000/.test(text) && /Found: bunch of keys/.test(text), `open posts should be listed, got: ${text.slice(0, 200)}`);
+  assert(!/Baby cot/.test(text) && !/Old spam post/.test(text), 'closed and removed posts must not be in the open list');
+  await page.evaluate(() => setListingFilter('closed'));
+  text = await page.evaluate(() => document.getElementById('listings-body').innerText);
+  assert(/Baby cot/.test(text) && /Sold \/ gone/i.test(text), 'Resolved chip should show the closed post');
+  await page.evaluate(() => setListingFilter('all'));
+  await page.evaluate(() => openListingDetail('l2'));
+  await page.waitForSelector('#listing-detail', { timeout: 5000 });
+  const hrefs = await page.$$eval('#listing-detail a', as => as.map(a => a.getAttribute('href')));
+  assert(hrefs.some(h => h === 'tel:0321-7654321') && hrefs.some(h => /wa\.me\/923217654321/.test(h)), `detail should offer Call and WhatsApp, got ${hrefs}`);
+  assert(await page.locator('#listing-detail button:has-text("moderation")').count() === 0, 'residents must not get moderation controls');
+  await page.evaluate(() => goBack());
+
+  await page.evaluate(() => openNewListingModal());
+  await page.waitForSelector('#listing-form', { timeout: 5000 });
+  await page.evaluate(() => pickListingKind('lost'));
+  await page.fill('#listing-title', 'Blue school bag with books');
+  await page.fill('#listing-desc', 'Left in the park on Monday.');
+  await page.fill('#listing-location', 'Park, Block B');
+  await page.click('#listing-form button[type=submit]');
+  await page.waitForFunction(() => [...window.__mockStore.listings.values()].some(l => l.title === 'Blue school bag with books'), null, { timeout: 8000 });
+  const stored = await page.evaluate(() => [...window.__mockStore.listings.values()].find(l => l.title === 'Blue school bag with books'));
+  assert(stored.kind === 'lost' && stored.createdBy === 'u_res1' && stored.status === 'open' && stored.createdByHouse, `listing stored wrongly: ${JSON.stringify(stored)}`);
+  await page.waitForFunction(() => [...(window.__mockStore['users/u_r2/notifications'] || new Map()).values()].some(n => /Blue school bag/.test(n.title)), null, { timeout: 8000 })
+    .catch(() => { throw new Error('other residents should be alerted about a lost item'); });
+  await settle(page);
+  text = await page.evaluate(() => document.getElementById('listings-body').innerText);
+  assert(/Blue school bag/.test(text), 'new post should appear on the board');
+  noErrors(page);
+}, 'resident');
+
+test('resident: marks own post as sold and it moves to Resolved', async page => {
+  await page.evaluate(() => selectTab('market'));
+  await settle(page);
+  await page.evaluate(() => openListingDetail('l1'));
+  await page.waitForSelector('#listing-detail', { timeout: 5000 });
+  const btns = await page.$$eval('#listing-detail button', bs => bs.map(b => b.textContent.trim()));
+  assert(btns.some(b => /Mark as returned/i.test(b)) && btns.some(b => /Edit/.test(b)) && btns.some(b => /Delete my post/.test(b)), `owner should get Mark/Edit/Delete, got ${btns}`);
+  await page.evaluate(() => closeListing('l1'));
+  await page.waitForFunction(() => window.__mockStore.listings.get('l1').status === 'closed', null, { timeout: 8000 });
+  await settle(page);
+  let text = await page.evaluate(() => document.getElementById('listings-body').innerText);
+  assert(!/Milo/.test(text), 'closed post should leave the open list');
+  await page.evaluate(() => setListingFilter('closed'));
+  text = await page.evaluate(() => document.getElementById('listings-body').innerText);
+  assert(/Milo/.test(text) && /Returned/i.test(text), 'closed post should be under Resolved with a Returned tag');
+  noErrors(page);
+}, 'resident');
+
+test('admin: can moderate (remove) a resident post and the poster is told', async page => {
+  await page.evaluate(() => selectTab('market'));
+  await settle(page);
+  await page.evaluate(() => openListingDetail('l4'));
+  await page.waitForSelector('#listing-detail', { timeout: 5000 });
+  assert(await page.locator('#listing-detail button:has-text("moderation")').count() === 1, 'staff should get the moderation remove button');
+  callLater(page, "removeListing('l4')");
+  await page.waitForSelector('#ui-sheet [data-ui="ok"]', { timeout: 5000 });
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForFunction(() => window.__mockStore.listings.get('l4').isDeleted === true, null, { timeout: 8000 });
+  await page.waitForFunction(() => [...(window.__mockStore['users/u_r3/notifications'] || new Map()).values()].some(n => /post was removed/i.test(n.title)), null, { timeout: 8000 })
+    .catch(() => { throw new Error('poster should be notified of the removal'); });
+  await settle(page);
+  const text = await page.evaluate(() => document.getElementById('listings-body').innerText);
+  assert(!/Home tuition/.test(text), 'removed post should leave the board');
+  noErrors(page);
+}, 'admin');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
