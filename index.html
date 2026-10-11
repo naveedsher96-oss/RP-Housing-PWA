@@ -70,6 +70,34 @@
     background-attachment:fixed;
   }
   html.text-lg body{zoom:1.12;}
+  html.text-xl body{zoom:1.22;}
+  /* Light appearance: same layout, swapped palette (Preferences → Appearance). */
+  html.theme-light{
+    --bg:#F4F1EA; --bg-elevated:#FFFFFF; --bg-elevated-2:#F3EFE6; --bg-elevated-3:#E8E2D4;
+    --accent:#D98A12; --accent-2:#8E5400; --accent-soft:rgba(217,138,18,0.14);
+    --text:#1E2235; --text-muted:#565C7C; --text-faint:#8A90AE;
+    --success:#1E8A71; --success-soft:rgba(30,138,113,0.14);
+    --danger:#C4403A; --danger-soft:rgba(196,64,58,0.12);
+    --warning:#B86E00; --warning-soft:rgba(217,138,18,0.14);
+    --info:#3A5CD0; --info-soft:rgba(58,92,208,0.12);
+    --border:rgba(30,34,53,0.12); --border-soft:rgba(30,34,53,0.07);
+    --shadow:0 8px 24px rgba(30,34,53,0.10);
+  }
+  html.theme-light body{ background: radial-gradient(circle at 20% -10%, rgba(217,138,18,0.12), transparent 45%), radial-gradient(circle at 90% 0%, rgba(58,92,208,0.07), transparent 40%), var(--bg); }
+  html.theme-light .btn.primary{ background:linear-gradient(180deg, #F2B64F, #D98A12); color:#251400; box-shadow:0 4px 14px rgba(217,138,18,0.28); }
+  html.theme-light .switch{ background:rgba(30,34,53,0.18); }
+  html.theme-light .topbar{ background:linear-gradient(180deg, rgba(244,241,234,0.97), rgba(244,241,234,0.9) 70%, rgba(244,241,234,0)); }
+  html.theme-light nav.tabbar{ background:linear-gradient(0deg, rgba(255,255,255,0.99), rgba(255,255,255,0.96)); }
+  html.theme-light .brand-mark{ box-shadow:0 0 0 1px rgba(30,34,53,0.08), 0 0 14px 2px rgba(217,138,18,0.35); }
+  html.theme-light .ui-toast{ background:#1E2235; color:#F1F2F9; }
+  html.theme-light .badge.closed, html.theme-light .badge.cancelled{ background:rgba(30,34,53,0.08); }
+  html.theme-light #offline-bar{ background:#FBE4E2; color:#7F1D1D; }
+  html.theme-light #offline-bar.back{ background:#DDF4EE; color:#065F46; }
+  html.theme-light .listing-kind.k-lost{ color:#9F1D1D; } html.theme-light .listing-kind.k-found{ color:#166534; }
+  html.theme-light .listing-kind.k-sell, html.theme-light .listing-kind.k-rent{ color:#92400E; }
+  html.theme-light .listing-kind.k-wanted, html.theme-light .listing-kind.k-service{ color:#1E40AF; } html.theme-light .listing-kind.k-free{ color:#065F46; }
+  .seg{ display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 2px; }
+  .seg .chip{ flex:1; text-align:center; min-width:0; justify-content:center; }
   #app{
     max-width:520px;
     margin:0 auto;
@@ -2002,6 +2030,7 @@
       <div class="more-list">
         <button onclick="closeModal(); openNotificationsModal();">${icon('bell')}<span style="flex:1;">Notifications</span>${unread ? `<span class="badge overdue">${unread} new</span>` : ''}</button>
         <button onclick="toggleLanguage()">${icon('lang')}<span style="flex:1;">${uiLang === 'ur' ? 'English' : 'اردو (Urdu)'}</span></button>
+        <button onclick="closeModal(); toggleTheme();">${icon('eye')}<span style="flex:1;">${resolvedTheme() === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}</span></button>
         <button onclick="closeModal(); doSignOut();" style="color:var(--danger);">${icon('logout')}<span style="flex:1;">Log out</span></button>
       </div>
     `;
@@ -2224,7 +2253,16 @@
       <div class="card" style="cursor:default; padding:16px 20px 8px;">
         <div style="font-weight:700; font-size:16px; margin-bottom:6px;">Preferences</div>
         ${row('<span lang="ur">اردو</span> / Urdu', 'Your house card on the Dashboard', uiLang === 'ur', 'toggleLanguage()')}
-        ${row('Larger text', 'Makes all text a little bigger on this phone', lsGet('rphs.textLg') === '1', 'toggleLargeText()')}
+        <div style="padding:12px 0 10px; border-top:1px solid var(--border-soft);">
+          <div style="font-weight:700;">Text size</div>
+          <div style="font-size:13px; color:var(--text-muted);">Bigger text is easier to read on this phone.</div>
+          <div class="seg" id="pref-text-size">${[['0', 'Normal'], ['1', 'Large'], ['2', 'Extra large']].map(([v, l]) => `<button class="chip ${textSizePref() === v ? 'active' : ''}" onclick="setTextSize('${v}')" style="font-size:${v === '0' ? 13 : v === '1' ? 14.5 : 16}px;">${l}</button>`).join('')}</div>
+        </div>
+        <div style="padding:12px 0 10px; border-top:1px solid var(--border-soft);">
+          <div style="font-weight:700;">Appearance</div>
+          <div style="font-size:13px; color:var(--text-muted);">Dark is easier on the eyes at night; Light is clearer in sunlight. Auto follows your phone's setting.</div>
+          <div class="seg" id="pref-theme">${[['dark', '🌙 Dark'], ['light', '☀️ Light'], ['auto', '📱 Auto']].map(([v, l]) => `<button class="chip ${themePref() === v ? 'active' : ''}" onclick="setTheme('${v}')">${l}</button>`).join('')}</div>
+        </div>
         ${row('Bill and notice alerts', pushState === 'denied' ? 'Blocked in your phone settings. Allow notifications for RPHS there.' : pushState === 'unsupported' ? 'This browser cannot show alerts.' : 'Notifications on this phone', pushState === 'granted', pushState === 'default' ? 'requestPushPermission()' : '', pushState !== 'default')}
         ${currentUserProfile.role === 'resident' ? `<button class="btn secondary block" style="margin:8px 0 10px;" onclick="downloadResidentStatement()">${icon('file')} Download my statement (PDF)</button>` : ''}
       </div>`;
@@ -2248,15 +2286,39 @@
     closeModal();
     render();
   };
+  // rphs.textLg: '0' normal, '1' large, '2' extra large (older builds stored only '0'/'1').
+  function textSizePref() { const v = lsGet('rphs.textLg'); return v === '1' || v === '2' ? v : '0'; }
   function applyTextSize() {
-    document.documentElement.classList.toggle('text-lg', lsGet('rphs.textLg') === '1');
+    const v = textSizePref();
+    document.documentElement.classList.toggle('text-lg', v === '1');
+    document.documentElement.classList.toggle('text-xl', v === '2');
   }
   applyTextSize();
-  window.toggleLargeText = function() {
-    lsSet('rphs.textLg', lsGet('rphs.textLg') === '1' ? '0' : '1');
-    applyTextSize();
-    render();
-  };
+  window.setTextSize = function(v) { lsSet('rphs.textLg', v); applyTextSize(); render(); };
+  window.toggleLargeText = function() { setTextSize(textSizePref() === '0' ? '1' : '0'); };
+
+  // rphs.theme: 'dark' (default) | 'light' | 'auto' (follows prefers-color-scheme).
+  const THEME_COLORS = { dark: '#10142A', light: '#F4F1EA' };
+  function themePref() { const v = lsGet('rphs.theme'); return v === 'light' || v === 'auto' ? v : 'dark'; }
+  function resolvedTheme() {
+    const v = themePref();
+    if (v !== 'auto') return v;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  function applyTheme() {
+    const t = resolvedTheme();
+    document.documentElement.classList.toggle('theme-light', t === 'light');
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEME_COLORS[t]);
+  }
+  applyTheme();
+  if (window.matchMedia) {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const onChange = () => { if (themePref() === 'auto') { applyTheme(); if (typeof render === 'function' && currentUserProfile) render(); } };
+    if (mq.addEventListener) mq.addEventListener('change', onChange); else if (mq.addListener) mq.addListener(onChange);
+  }
+  window.setTheme = function(v) { lsSet('rphs.theme', v); applyTheme(); render(); };
+  window.toggleTheme = function() { setTheme(resolvedTheme() === 'light' ? 'dark' : 'light'); };
 
 
   function drawerItemsForRole() {

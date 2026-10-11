@@ -653,6 +653,42 @@ test('admin: can moderate (remove) a resident post and the poster is told', asyn
   noErrors(page);
 }, 'admin');
 
+test('resident: Preferences → text size and appearance (dark / light / auto) apply instantly and persist on the device', async page => {
+  await page.evaluate(() => selectTab('profile'));
+  await settle(page);
+  let chips = await page.$$eval('#pref-theme .chip.active, #pref-text-size .chip.active', cs => cs.map(c => c.textContent.trim()));
+  assert(chips.some(c => /Dark/.test(c)) && chips.some(c => /Normal/.test(c)), `defaults should be Dark + Normal, got ${chips}`);
+  await page.evaluate(() => setTheme('light'));
+  await settle(page);
+  let state = await page.evaluate(() => ({ light: document.documentElement.classList.contains('theme-light'), meta: document.querySelector('meta[name="theme-color"]').getAttribute('content'), pref: localStorage.getItem('rphs.theme'), bg: getComputedStyle(document.body).backgroundColor }));
+  assert(state.light && state.meta === '#F4F1EA' && state.pref === 'light', `light mode should apply: ${JSON.stringify(state)}`);
+  assert(/244, 241, 234/.test(state.bg), `body background should be the light palette, got ${state.bg}`);
+  chips = await page.$$eval('#pref-theme .chip.active', cs => cs.map(c => c.textContent.trim()));
+  assert(chips.length === 1 && /Light/.test(chips[0]), 'Light chip should be active');
+  await page.evaluate(() => setTheme('dark'));
+  await settle(page);
+  state = await page.evaluate(() => ({ light: document.documentElement.classList.contains('theme-light'), meta: document.querySelector('meta[name="theme-color"]').getAttribute('content') }));
+  assert(!state.light && state.meta === '#10142A', 'dark mode should restore the dark palette');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.evaluate(() => setTheme('auto'));
+  await settle(page);
+  assert(await page.evaluate(() => document.documentElement.classList.contains('theme-light')), 'auto should follow a light phone setting');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForFunction(() => !document.documentElement.classList.contains('theme-light'), null, { timeout: 5000 }).catch(() => { throw new Error('auto should switch back when the phone goes dark'); });
+
+  await page.evaluate(() => setTextSize('2'));
+  await settle(page);
+  state = await page.evaluate(() => ({ xl: document.documentElement.classList.contains('text-xl'), lg: document.documentElement.classList.contains('text-lg'), pref: localStorage.getItem('rphs.textLg') }));
+  assert(state.xl && !state.lg && state.pref === '2', `extra large should apply: ${JSON.stringify(state)}`);
+  await page.evaluate(() => setTextSize('1'));
+  await settle(page);
+  state = await page.evaluate(() => ({ xl: document.documentElement.classList.contains('text-xl'), lg: document.documentElement.classList.contains('text-lg') }));
+  assert(!state.xl && state.lg, 'large should apply');
+  await page.evaluate(() => setTextSize('0'));
+  await page.evaluate(() => setTheme('dark'));
+  noErrors(page);
+}, 'resident');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
