@@ -407,6 +407,29 @@
   .house-card .due-amt{ font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .house-card .rej{ background:var(--danger-soft); color:var(--danger); border-radius:12px; padding:10px 12px; font-size:14px; font-weight:600; margin-top:12px; line-height:1.5; }
   .house-card.ur .eyebrow{ letter-spacing:0; text-transform:none; }
+  /* emergency broadcast + contacts */
+  .emg-card{ background:linear-gradient(135deg, rgba(229,97,90,0.26), rgba(229,97,90,0.08)); border:1px solid rgba(229,97,90,0.6); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; }
+  .emg-tag{ display:inline-flex; align-items:center; gap:6px; background:var(--danger); color:#fff; font-size:11.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; border-radius:20px; padding:3px 10px; }
+  .emg-tag.resolved{ background:var(--success-soft); color:var(--success); }
+  .emg-card h3{ font-family:var(--font-display); font-size:20px; font-weight:700; margin:8px 0 6px; line-height:1.25; }
+  .emg-card p{ margin:0; font-size:15px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .emg-meta{ font-size:13px; color:var(--text-muted); margin-top:8px; }
+  .emg-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .emg-btn{ width:100%; display:flex; align-items:center; justify-content:center; gap:8px; background:var(--danger); color:#fff; border:none; border-radius:14px; padding:13px 16px; font-size:15px; font-weight:800; font-family:inherit; cursor:pointer; margin-bottom:14px; box-shadow:0 6px 18px rgba(229,97,90,0.35); }
+  .emg-btn .ico-svg{ width:20px; height:20px; }
+  .contact-list{ display:flex; flex-direction:column; }
+  .contact-row{ display:flex; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--border); }
+  .contact-row:first-child{ border-top:none; }
+  .contact-ico{ width:38px; height:38px; border-radius:12px; background:var(--bg-elevated-2); display:flex; align-items:center; justify-content:center; font-size:18px; flex:none; }
+  .contact-name{ font-weight:700; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; }
+  .contact-sub{ font-size:12.5px; color:var(--text-muted); margin-top:1px; font-family:var(--font-mono); }
+  .contact-call{ flex:none; display:inline-flex; align-items:center; gap:5px; background:var(--success); color:#fff; font-weight:800; font-size:13px; border-radius:20px; padding:7px 13px; text-decoration:none; }
+  .contact-call .ico-svg-sm{ width:14px; height:14px; }
+  .contact-edit{ display:grid; grid-template-columns:44px 1fr 40px; gap:6px; align-items:center; margin-bottom:6px; }
+  .contact-edit input{ margin:0; }
+  .contact-edit .ce-phone{ grid-column:1 / 3; }
+  .contact-edit .dots-btn{ grid-row:1 / 3; }
+  .notice-emg{ border-color:rgba(229,97,90,0.6) !important; }
   .dash-h{ font-family:var(--font-display); font-size:18px; font-weight:600; margin:4px 0 12px; }
   .sum-line{ display:flex; flex-wrap:wrap; gap:4px 12px; font-size:13.5px; color:var(--text-muted); margin-top:3px; font-variant-numeric:tabular-nums; }
   .sum-line b{ font-weight:700; }
@@ -2346,11 +2369,11 @@
     }
   }
 
-  async function broadcastNotification(title, body, category) {
+  async function broadcastNotification(title, body, category, type = 'notice') {
     if (!db) return;
     try {
       const snap = await db.collection('users').where('approved', '==', true).get();
-      const batchPromises = snap.docs.map(userDoc => sendNotification(userDoc.id, title, body, 'notice', category));
+      const batchPromises = snap.docs.map(userDoc => sendNotification(userDoc.id, title, body, type, category));
       await Promise.all(batchPromises);
     } catch (e) {
       console.error("Broadcast failed:", e);
@@ -2882,9 +2905,10 @@
     }
 
     listEl.innerHTML = noticesList.map(n => `
-      <div class="card" style="cursor:default;">
+      <div class="card ${isActiveEmergency(n) ? 'notice-emg' : ''}" style="cursor:default;">
+        ${n.emergency ? `<div style="margin-bottom:8px;">${emergencyTag(n)}</div>` : ''}
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-          <div class="clickable" onclick="openNoticeDetail('${n.id}')" style="font-weight:700; font-size:16px; color:var(--accent-2);">${escapeHtml(n.title)}</div>
+          <div class="clickable" onclick="openNoticeDetail('${n.id}')" style="font-weight:700; font-size:16px; color:${n.emergency ? 'var(--danger)' : 'var(--accent-2)'};">${escapeHtml(n.title)}</div>
           ${isStaff() || canDeletePost(n) ? `<button class="dots-btn" onclick="openNoticeMenu('${n.id}')" aria-label="More actions">${icon('dots')}</button>` : ''}
         </div>
         <div class="clickable" onclick="openNoticeDetail('${n.id}')" style="font-size:14.5px; color:var(--text); line-height:1.5; white-space:pre-wrap; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(n.content)}</div>
@@ -2951,6 +2975,7 @@
     const n = noticesList.find(x => x.id === id);
     if (!n) return;
     document.getElementById('modal-body').innerHTML = `
+      ${n.emergency ? `<div style="margin-bottom:8px;">${emergencyTag(n)}</div>` : ''}
       <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">${postedByLabel(n)}${n.createdAt ? ' · ' + escapeHtml(formatDate(n.createdAt)) : ''}</div>
       <div style="font-family:var(--font-display); font-size:21px; font-weight:600; margin-bottom:10px;">${escapeHtml(n.title || '')}</div>
       <div style="font-size:15.5px; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere;">${escapeHtml(n.content || '')}</div>
@@ -2966,6 +2991,7 @@
     const n = noticesList.find(x => x.id === id);
     if (!n) return;
     menuSheet(n.title, [
+      isActiveEmergency(n) && canBroadcastEmergency() && { label: 'Mark emergency resolved', icon: 'check', run: () => resolveEmergency(id) },
       isStaff() && { label: 'Share on WhatsApp', icon: 'share', run: () => shareNoticeOnWhatsApp(id) },
       canDeletePost(n) && { label: 'Delete announcement', icon: 'trash', danger: true, run: () => deleteNotice(id) }
     ]);
@@ -3016,6 +3042,280 @@
         toast("Error publishing notice: " + err.message);
       }
     });
+  };
+
+  // --- EMERGENCY BROADCAST & EMERGENCY CONTACTS ---
+  // An emergency is an announcement with emergency:true. It is pushed to every
+  // approved member with the 'emergency' category (never muted) and pinned at
+  // the top of every dashboard until management marks it resolved.
+  const EMERGENCY_TYPES = [
+    ['security', 'Security threat', '🚨'],
+    ['fire', 'Fire', '🔥'],
+    ['gas', 'Gas leak', '⚠️'],
+    ['medical', 'Medical', '🚑'],
+    ['water', 'Water / flooding', '💧'],
+    ['power', 'Electricity', '⚡'],
+    ['weather', 'Weather', '🌪️'],
+    ['other', 'Other', '📢']
+  ];
+  const DEFAULT_EMERGENCY_CONTACTS = [
+    { label: 'Rescue 1122 (ambulance, fire)', phone: '1122', icon: '🚑' },
+    { label: 'Police', phone: '15', icon: '🚔' },
+    { label: 'Edhi Ambulance', phone: '115', icon: '🏥' },
+    { label: 'Fire Brigade', phone: '16', icon: '🔥' },
+    { label: 'Sui Gas complaint (SNGPL)', phone: '1199', icon: '⚠️' },
+    { label: 'Electricity complaint', phone: '118', icon: '⚡' }
+  ];
+  let emergencyContacts = null;   // settings/emergencyContacts.contacts, null = not set
+  let activeEmergencies = [];     // unresolved emergency announcements
+  let emergencyTypePick = 'security';
+
+  function canBroadcastEmergency() {
+    return !!currentUserProfile && (currentUserProfile.role === 'admin' || isSuperAdmin());
+  }
+  function emergencyTypeMeta(t) {
+    return EMERGENCY_TYPES.find(x => x[0] === t) || EMERGENCY_TYPES[EMERGENCY_TYPES.length - 1];
+  }
+  function isActiveEmergency(n) { return n.emergency === true && !n.resolvedAt && !n.isDeleted; }
+  function contactsToShow() {
+    return Array.isArray(emergencyContacts) && emergencyContacts.length ? emergencyContacts : DEFAULT_EMERGENCY_CONTACTS;
+  }
+  function telHref(phone) { return 'tel:' + String(phone || '').replace(/[^\d+]/g, ''); }
+
+  async function loadEmergencyContacts() {
+    if (!db) return;
+    try {
+      const doc = await db.collection('settings').doc('emergencyContacts').get();
+      emergencyContacts = doc.exists && Array.isArray(doc.data().contacts) ? doc.data().contacts : null;
+    } catch (e) { console.error('Emergency contacts load failed:', e); }
+  }
+
+  async function loadActiveEmergencies() {
+    if (!db) return;
+    try {
+      const snap = await db.collection('announcements').orderBy('createdAt', 'desc').limit(15).get();
+      activeEmergencies = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(isActiveEmergency);
+    } catch (e) { console.error('Emergency load failed:', e); }
+  }
+
+  function emergencyTag(n) {
+    const meta = emergencyTypeMeta(n.emergencyType);
+    return `<span class="emg-tag ${n.resolvedAt ? 'resolved' : ''}">${n.resolvedAt ? '✓ Resolved' : meta[2] + ' Emergency · ' + escapeHtml(meta[1])}</span>`;
+  }
+
+  function renderEmergencyBanner() {
+    if (!activeEmergencies.length) return '';
+    return activeEmergencies.map(n => `
+      <div class="emg-card" id="emg-${n.id}">
+        ${emergencyTag(n)}
+        <h3>${escapeHtml(n.title || '')}</h3>
+        <p>${escapeHtml(n.content || '')}</p>
+        <div class="emg-meta">${postedByLabel(n)}${n.createdAt ? ' · ' + escapeHtml(timeAgo(n.createdAt)) : ''}</div>
+        <div class="emg-actions">
+          <button class="btn sm secondary" onclick="openEmergencyContactsModal()">📞 Emergency contacts</button>
+          ${canBroadcastEmergency() ? `<button class="btn sm secondary" onclick="resolveEmergency('${n.id}')">${icon('check')} Mark resolved</button>` : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  function emergencyButtonHtml() {
+    if (!canBroadcastEmergency()) return '';
+    return `<button class="emg-btn" onclick="openEmergencyModal()">${icon('alert')} Send Emergency Alert</button>`;
+  }
+
+  function contactRow(c, i) {
+    return `
+      <div class="contact-row">
+        <div class="contact-ico">${escapeHtml(c.icon || '📞')}</div>
+        <div style="min-width:0; flex:1;">
+          <div class="contact-name">${escapeHtml(c.label || '')}</div>
+          <div class="contact-sub">${escapeHtml(c.phone || '')}${c.note ? ' · ' + escapeHtml(c.note) : ''}</div>
+        </div>
+        ${c.phone ? `<a class="contact-call" href="${escapeHtml(telHref(c.phone))}" data-contact="${i}">${icon('bell', 'ico-svg-sm')}Call</a>` : ''}
+      </div>`;
+  }
+
+  function renderEmergencyContactsCard() {
+    const list = contactsToShow();
+    const shown = list.slice(0, 4);
+    const isAdminish = canBroadcastEmergency();
+    return `
+      <div class="card" style="cursor:default; margin-bottom:14px;" id="emg-contacts-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
+          <div style="font-weight:700; font-size:14px;">Emergency Contacts</div>
+          ${isAdminish ? `<button class="btn sm secondary" onclick="openEditEmergencyContactsModal()">Edit</button>` : ''}
+        </div>
+        <div style="font-size:13px; color:var(--text-faint); margin-bottom:6px;">Tap Call — works even when the app is offline.</div>
+        <div class="contact-list">${shown.map(contactRow).join('')}</div>
+        ${list.length > shown.length ? `<button class="btn sm secondary block" style="margin-top:10px;" onclick="openEmergencyContactsModal()">All ${list.length} contacts</button>` : ''}
+      </div>`;
+  }
+
+  window.openEmergencyContactsModal = function() {
+    const list = contactsToShow();
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Emergency Contacts</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">${emergencyContacts ? 'Maintained by RPHS management.' : 'National helplines. Management can add society numbers (gate, secretary, electrician…).'}</div>
+      <div class="contact-list" id="emg-contacts-all">${list.map(contactRow).join('')}</div>
+      ${canBroadcastEmergency() ? `<button class="btn secondary block" style="margin-top:16px;" onclick="openEditEmergencyContactsModal()">${icon('edit')} Edit contacts</button>` : ''}
+    `;
+    openModal();
+  };
+
+  function contactEditRow(c, i) {
+    return `
+      <div class="contact-edit" data-row="${i}">
+        <input type="text" class="ce-icon" value="${escapeHtml(c.icon || '')}" placeholder="📞" maxlength="3" aria-label="Icon" />
+        <input type="text" class="ce-label" value="${escapeHtml(c.label || '')}" placeholder="e.g. Gate security" aria-label="Name" />
+        <input type="tel" class="ce-phone" value="${escapeHtml(c.phone || '')}" placeholder="e.g. 0300-1234567" aria-label="Phone" />
+        <button type="button" class="dots-btn" onclick="this.closest('.contact-edit').remove()" aria-label="Remove">${icon('x')}</button>
+      </div>`;
+  }
+
+  window.openEditEmergencyContactsModal = function() {
+    if (!canBroadcastEmergency()) return;
+    const list = contactsToShow();
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Edit Emergency Contacts</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Shown on every member's dashboard with a Call button. Put the most urgent ones first.</div>
+      <form id="emg-contacts-form">
+        <div id="emg-contact-rows">${list.map(contactEditRow).join('')}</div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button type="button" class="btn sm secondary" onclick="addEmergencyContactRow()">+ Add contact</button>
+          <button type="button" class="btn sm secondary" onclick="resetEmergencyContactRows()">Reset to defaults</button>
+        </div>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save Contacts</button>
+      </form>
+    `;
+    openModal();
+    document.getElementById('emg-contacts-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const contacts = [...document.querySelectorAll('#emg-contact-rows .contact-edit')].map(row => ({
+        icon: row.querySelector('.ce-icon').value.trim() || '📞',
+        label: row.querySelector('.ce-label').value.trim(),
+        phone: row.querySelector('.ce-phone').value.trim()
+      })).filter(c => c.label && c.phone);
+      if (!contacts.length) { toast('Add at least one contact with a phone number', 'bad'); return; }
+      try {
+        await db.collection('settings').doc('emergencyContacts').set({
+          contacts,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: currentUserProfile.name || ''
+        }, { merge: true });
+        emergencyContacts = contacts;
+        logAudit('settings', 'emergencyContacts', 'update', contacts.length + ' emergency contacts saved');
+        toast('Emergency contacts saved');
+        closeModal();
+        if (activeTab === 'dashboard') loadData();
+      } catch (err) {
+        toast('Could not save contacts: ' + err.message, 'bad');
+      }
+    });
+  };
+  window.addEmergencyContactRow = function() {
+    const rows = document.getElementById('emg-contact-rows');
+    if (!rows) return;
+    rows.insertAdjacentHTML('beforeend', contactEditRow({ icon: '📞', label: '', phone: '' }, rows.children.length));
+    const last = rows.lastElementChild.querySelector('.ce-label');
+    if (last) last.focus();
+  };
+  window.resetEmergencyContactRows = function() {
+    const rows = document.getElementById('emg-contact-rows');
+    if (rows) rows.innerHTML = DEFAULT_EMERGENCY_CONTACTS.map(contactEditRow).join('');
+  };
+
+  window.openEmergencyModal = function() {
+    if (!canBroadcastEmergency()) return;
+    emergencyTypePick = 'security';
+    let armed = false;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px; color:var(--danger);">🚨 Emergency Broadcast</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px; line-height:1.5;">Goes to every member's phone immediately — including those who muted notifications — and stays pinned on every dashboard until you mark it resolved. Use only for real emergencies.</div>
+      <form id="emg-form">
+        <label>What is happening?</label>
+        <div class="chip-row" id="emg-types" style="margin:0 0 10px;">
+          ${EMERGENCY_TYPES.map(t => `<button type="button" class="chip ${t[0] === emergencyTypePick ? 'active' : ''}" data-type="${t[0]}" onclick="pickEmergencyType('${t[0]}')">${t[2]} ${escapeHtml(t[1])}</button>`).join('')}
+        </div>
+        <label>Headline</label>
+        <input type="text" id="emg-title" placeholder="e.g. Gas leak near House 24, Block C" required maxlength="90" />
+        <label>Message — what should residents do?</label>
+        <textarea id="emg-content" placeholder="e.g. Avoid the area, keep windows open, do not light stoves. SNGPL team is on the way." required></textarea>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+          <input type="checkbox" id="emg-share-wa" checked style="width:auto; margin:0;" />
+          <span>Also share on WhatsApp after sending</span>
+        </label>
+        <div id="emg-confirm" style="display:none; background:var(--danger-soft); border:1px solid rgba(229,97,90,0.45); border-radius:12px; padding:10px 12px; font-size:14px; font-weight:600; margin-top:14px; line-height:1.5;"></div>
+        <button type="submit" id="emg-send" class="btn danger block" style="margin-top:14px;">Send alert to everyone</button>
+      </form>
+    `;
+    openModal();
+
+    document.getElementById('emg-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('emg-title').value.trim();
+      const content = document.getElementById('emg-content').value.trim();
+      const shareWa = document.getElementById('emg-share-wa').checked;
+      if (!title || !content) return;
+      const btn = document.getElementById('emg-send');
+      if (!armed) {
+        armed = true;
+        const box = document.getElementById('emg-confirm');
+        box.textContent = `Send "${title}" to every member now? This cannot be recalled.`;
+        box.style.display = 'block';
+        btn.textContent = 'Yes, send now';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      try {
+        const ref = await db.collection('announcements').add({
+          title,
+          content,
+          emergency: true,
+          emergencyType: emergencyTypePick,
+          allowComments: false,
+          ...publisherFields(),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await broadcastNotification('🚨 EMERGENCY: ' + title, content, 'emergency', 'error');
+        logAudit('emergency', ref.id, 'broadcast', `${emergencyTypeMeta(emergencyTypePick)[1]}: ${title}`);
+        closeModal();
+        toast('Emergency alert sent to everyone');
+        loadData();
+        if (shareWa) openWhatsAppShare(`🚨 *EMERGENCY – ${title}*\n\n${content}\n\n- RPHS Management`);
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Yes, send now';
+        toast('Could not send the alert: ' + err.message, 'bad');
+      }
+    });
+  };
+  window.pickEmergencyType = function(t) {
+    emergencyTypePick = t;
+    document.querySelectorAll('#emg-types .chip').forEach(c => c.classList.toggle('active', c.getAttribute('data-type') === t));
+    const titleEl = document.getElementById('emg-title');
+    if (titleEl && !titleEl.value.trim() && t !== 'other') titleEl.placeholder = emergencyTypeMeta(t)[1] + ' — where?';
+  };
+
+  window.resolveEmergency = async function(id) {
+    if (!canBroadcastEmergency()) return;
+    const n = activeEmergencies.find(x => x.id === id) || noticesList.find(x => x.id === id);
+    if (!n) return;
+    const ok = await confirmSheet({ title: 'Mark as resolved?', body: `"${n.title}" will be unpinned from everyone's dashboard and members get an all-clear notice.`, okLabel: 'Mark resolved' });
+    if (!ok) return;
+    try {
+      await db.collection('announcements').doc(id).update({
+        resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        resolvedBy: currentUserProfile.name || ''
+      });
+      await broadcastNotification('All clear: ' + n.title, 'Management has marked this emergency as resolved.', 'emergency', 'notice');
+      logAudit('emergency', id, 'resolve', n.title);
+      toast('Marked as resolved');
+      activeEmergencies = activeEmergencies.filter(x => x.id !== id);
+      if (activeTab === 'dashboard') loadData(); else loadNotices();
+    } catch (err) {
+      toast('Could not update: ' + err.message, 'bad');
+    }
   };
 
   // --- POLLS ---
@@ -6928,7 +7228,9 @@
       db.collection('tickets').get(),
       db.collection('transfers').get(),
       db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get(),
-      db.collection('decisions').get()
+      db.collection('decisions').get(),
+      loadEmergencyContacts(),
+      loadActiveEmergencies()
     ]).then(([usersSnap, billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap, decSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       decisionsList = sortDecisions(decSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(x => !x.isDeleted));
@@ -7008,8 +7310,11 @@
       </div>`;
 
     el.innerHTML = `
+      ${renderEmergencyBanner()}
       ${renderStaffNeedsYou(d, { pendingApprovals, inReview: inReviewBills.length, openTickets })}
+      ${emergencyButtonHtml()}
       ${currentUserProfile.role === 'admin' ? '<div id="backup-reminder"></div>' : ''}
+      ${renderEmergencyContactsCard()}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Approved Residents', residents)}
@@ -7206,7 +7511,9 @@
       db.collection('expenses').get(),
       db.collection('tickets').get(),
       db.collection('transfers').get(),
-      db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get()
+      db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get(),
+      loadEmergencyContacts(),
+      loadActiveEmergencies()
     ]).then(([billsSnap, society, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const bills = billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted);
@@ -7287,7 +7594,9 @@
       </div>`;
 
     el.innerHTML = `
+      ${renderEmergencyBanner()}
       ${renderMyHouseCard(d.bills)}
+      ${renderEmergencyContactsCard()}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Open Complaints', openTickets, openTickets ? 'var(--info)' : 'var(--text)')}

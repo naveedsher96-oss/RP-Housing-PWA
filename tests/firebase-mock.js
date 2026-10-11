@@ -86,12 +86,14 @@
   // announcements
   const ann = coll('announcements');
   [
+    ['a0', 'Gas leak near House 24, Block C', 'SNGPL has been called. Avoid the lane behind House 24, keep windows open and do not light stoves or generators until the all-clear.', 0, { emergency: true, emergencyType: 'gas', allowComments: false }],
+    ['ar', 'Stray dog pack at the park gate', 'Animal control removed the dogs. Children can use the park again.', 14, { emergency: true, emergencyType: 'security', allowComments: false, resolvedAt: daysAgo(13, 18), resolvedBy: 'Tariq Mehmood' }],
     ['a1', 'Water Supply Suspension – Saturday', 'Dear residents, WASA will carry out main-line repairs on Saturday 3rd October from 9:00 AM to 4:00 PM. Please store sufficient water in advance. The tanker service will be available at the main gate for emergencies.', 1],
     ['a2', 'September 2026 Financial Summary', 'The monthly financial summary for September 2026 has been posted. Total in: PKR 96,500 · Total out: PKR 61,200 · Net +PKR 35,300.\n\nTap Breakdown for the full statement.', 0, { summaryMonth: '2026-09' }],
     ['a3', 'Jashn-e-Azadi Mehfil Postponed', 'Due to the weather forecast, the community mehfil scheduled for this Friday is postponed to next Friday after Maghrib. Children\'s milli naghma competition will be held at the same time.', 6],
     ['a4', 'New Security Guard Shift Timings', 'From 1st October, night-shift guards will be on duty from 10 PM to 6 AM. Visitors after 11 PM must be registered at the gate with CNIC.', 10, { allowComments: false }],
     ['a5', 'Dengue Spray Campaign', 'The society will carry out fumigation in all blocks on Sunday morning. Please keep windows closed between 7 and 9 AM and remove stagnant water from pots and coolers.', 18]
-  ].forEach(([id, title, content, d, extra]) => ann.set(id, Object.assign({ title, content, createdAt: daysAgo(d, 10), createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdByRole: id === 'a3' ? 'board' : 'management' }, extra || {})));
+  ].forEach(([id, title, content, d, extra]) => ann.set(id, Object.assign({ title, content, createdAt: id === 'a0' ? daysAgo(0, Math.max(0, new Date().getHours() - 2)) : daysAgo(d, 10), createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdByRole: id === 'a3' ? 'board' : 'management' }, extra || {})));
   coll('announcements/a1/comments').set('c1', { uid: 'u_r3', name: 'Fatima Zahra', role: 'resident', text: 'Will the tanker be free of charge?', createdAt: daysAgo(1, 12) });
   coll('announcements/a1/comments').set('c2', { uid: 'u_admin', name: 'Tariq Mehmood', role: 'management', text: 'Yes, one tanker per house is free on Saturday.', createdAt: daysAgo(1, 13) });
   coll('announcements/a3/comments').set('c3', { uid: 'u_r2', name: 'Muhammad Usman Khan', role: 'resident', text: 'JazakAllah for the update.', createdAt: daysAgo(5, 9) });
@@ -228,6 +230,15 @@
   coll('settings').set('society', { bankName: 'Meezan Bank – Model Town Branch', accountTitle: 'Roshan Pakistan Housing Society', accountNumber: '0201-0104567890', iban: 'PK36MEZN0002010104567890', instructions: 'Write your house number in the transfer remarks.' });
   coll('settings').set('recurringBill', { enabled: true, amount: 2500, category: 'Monthly Maintenance', dueDay: 20, notes: '', lastRun: { at: daysAgo(0, 0), issued: 12, period: 'October 2026', skippedBilled: 0, skippedExempt: 1 } });
   coll('settings').set('monthlySummary', { enabled: true });
+  coll('settings').set('emergencyContacts', { contacts: [
+    { icon: '🛡️', label: 'Main gate security (24h)', phone: '0300-1112233' },
+    { icon: '🏠', label: 'Society secretary – Tariq Mehmood', phone: '0300-4521876' },
+    { icon: '🚑', label: 'Rescue 1122 (ambulance, fire)', phone: '1122' },
+    { icon: '🚔', label: 'Police', phone: '15' },
+    { icon: '⚠️', label: 'Sui Gas complaint (SNGPL)', phone: '1199' },
+    { icon: '⚡', label: 'LESCO complaint', phone: '118' },
+    { icon: '🔧', label: 'Society electrician – Rafiq', phone: '0333-9988776' }
+  ], updatedBy: 'Tariq Mehmood', updatedAt: daysAgo(40) });
 
   // documents vault (file kept in proofs/{fileId} with kind 'document')
   const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';

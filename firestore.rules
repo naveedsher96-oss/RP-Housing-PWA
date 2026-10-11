@@ -92,8 +92,10 @@ service cloud.firestore {
     // ---------- announcements ----------
     match /announcements/{id} {
       allow read: if signedIn();
+      // Emergency broadcasts (emergency: true) are admin/superadmin only.
       allow create: if canPublish()
-        && request.resource.data.get('createdBy', '') == request.auth.uid;
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && (request.resource.data.get('emergency', false) != true || isAdmin() || isSuperAdmin());
       allow update, delete: if isAdmin() || isSuperAdmin() || ownsPost();
 
       // Resident comments on an announcement. Approved residents, staff and
@@ -255,6 +257,10 @@ service cloud.firestore {
     // Bill totals for the resident dashboard, kept up to date by any staff member.
     match /settings/billsSummary {
       allow write: if isStaff();
+    }
+    // Emergency contacts shown on every dashboard.
+    match /settings/emergencyContacts {
+      allow write: if isAdmin() || isSuperAdmin();
     }
 
     // ---------- payment proof files ----------
