@@ -634,6 +634,8 @@ exports.sendPushOnNotification = onDocumentCreated(
     const token = tokenDoc.data().token;
     if (!token) return;
 
+    const category = notifCategory(data);
+    const emergency = category === "emergency";
     try {
       await admin.messaging().send({
         token,
@@ -641,9 +643,13 @@ exports.sendPushOnNotification = onDocumentCreated(
           title: data.title,
           body: data.body || data.text || "",
         },
+        data: { category },
         webpush: {
+          // Emergency alerts: delivered first, stay on screen until dismissed, vibrate.
+          headers: emergency ? { Urgency: "high", TTL: "3600" } : {},
           notification: {
             icon: "https://naveedsher96-oss.github.io/RP-Housing-PWA/icon-192.png",
+            ...(emergency ? { requireInteraction: true, vibrate: [300, 100, 300, 100, 300], tag: "rphs-emergency", renotify: true } : {}),
           },
           fcmOptions: {
             link: "https://naveedsher96-oss.github.io/RP-Housing-PWA/",

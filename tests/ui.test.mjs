@@ -380,6 +380,91 @@ test('admin: can lodge a complaint of their own', async page => {
   noErrors(page);
 }, 'admin');
 
+test('resident: active emergency is pinned on the dashboard with contacts; no broadcast controls', async page => {
+  const text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
+  assert(/Gas leak near House 24/.test(text) && /EMERGENCY · GAS LEAK/i.test(text), `active emergency should be pinned on top, got: ${text.slice(0, 160)}`);
+  assert(!/Stray dog pack/.test(text), 'resolved emergency must not be pinned');
+  assert(/Emergency Contacts/.test(text) && /Main gate security/.test(text), 'emergency contacts card should list society contacts');
+  const tel = await page.$eval('#emg-contacts-card .contact-call', a => a.getAttribute('href'));
+  assert(tel === 'tel:03001112233', `Call button should dial the number, got ${tel}`);
+  assert(await page.locator('.emg-btn').count() === 0, 'residents must not see the broadcast button');
+  assert(!/Mark resolved/.test(text), 'residents must not be able to resolve emergencies');
+  assert(await page.locator('#emg-contacts-card .btn:has-text("Edit")').count() === 0, 'residents must not edit contacts');
+  await page.evaluate(() => openEmergencyContactsModal());
+  await page.waitForSelector('#emg-contacts-all', { timeout: 5000 });
+  assert(await page.locator('#emg-contacts-all .contact-row').count() === 7, 'all 7 contacts should be listed in the sheet');
+  await page.evaluate(() => closeModal());
+  await page.evaluate(() => selectTab('notices'));
+  await settle(page);
+  const notices = await page.evaluate(() => document.getElementById('notices-list').innerText);
+  assert(/Gas leak near House 24/.test(notices) && /Resolved/i.test(notices), 'announcements should show both the active and the resolved emergency');
+  noErrors(page);
+}, 'resident');
+
+test('board: sees the emergency banner but cannot broadcast or edit contacts', async page => {
+  const text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
+  assert(/Gas leak near House 24/.test(text), 'board should see the pinned emergency');
+  assert(await page.locator('.emg-btn').count() === 0 && !/Mark resolved/.test(text), 'board must not get broadcast/resolve controls');
+  noErrors(page);
+}, 'board');
+
+test('admin: sends an emergency broadcast (two-step confirm), everyone is alerted, then resolves it', async page => {
+  assert(await page.locator('.emg-btn').count() === 1, 'admin should see the Send Emergency Alert button');
+  const before = await page.evaluate(() => window.__mockStore.announcements.size);
+  await page.evaluate(() => openEmergencyModal());
+  await page.waitForSelector('#emg-form', { timeout: 5000 });
+  await page.click('#emg-types .chip[data-type="fire"]');
+  await page.fill('#emg-title', 'Fire at the community hall');
+  await page.fill('#emg-content', 'Keep away from the hall. Rescue 1122 is on the way.');
+  await page.evaluate(() => { document.getElementById('emg-share-wa').checked = false; });
+  await page.click('#emg-send');
+  await page.waitForSelector('#emg-confirm:visible', { timeout: 3000 });
+  assert(await page.evaluate(n => window.__mockStore.announcements.size === n, before), 'first tap must only ask for confirmation');
+  await page.click('#emg-send');
+  await page.waitForFunction(n => window.__mockStore.announcements.size === n + 1, before, { timeout: 8000 })
+    .catch(() => { throw new Error('emergency announcement was not created'); });
+  const a = await page.evaluate(() => [...window.__mockStore.announcements.entries()].map(([id, x]) => ({ id, ...x })).find(x => x.title === 'Fire at the community hall'));
+  assert(a.emergency === true && a.emergencyType === 'fire' && a.createdBy === 'u_admin' && a.allowComments === false, `stored wrongly: ${JSON.stringify(a)}`);
+  await page.waitForFunction(() => [...(window.__mockStore['users/u_res1/notifications'] || new Map()).values()].some(n => /EMERGENCY: Fire at the community hall/.test(n.title) && n.category === 'emergency' && n.type === 'error'), null, { timeout: 8000 })
+    .catch(() => { throw new Error('residents did not get the emergency notification'); });
+  await settle(page);
+  let text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
+  assert(/Fire at the community hall/.test(text) && /Mark resolved/.test(text), 'new emergency should be pinned with a resolve button');
+
+  callLater(page, `resolveEmergency('${a.id}')`);
+  await page.waitForSelector('#ui-sheet [data-ui="ok"]', { timeout: 5000 });
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForFunction(id => !!window.__mockStore.announcements.get(id).resolvedAt, a.id, { timeout: 8000 })
+    .catch(() => { throw new Error('emergency was not marked resolved'); });
+  await page.waitForFunction(() => [...(window.__mockStore['users/u_res1/notifications'] || new Map()).values()].some(n => /All clear: Fire at the community hall/.test(n.title)), null, { timeout: 8000 })
+    .catch(() => { throw new Error('residents did not get the all-clear'); });
+  await settle(page);
+  text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
+  assert(!/Fire at the community hall/.test(text), 'resolved emergency should leave the dashboard');
+  noErrors(page);
+}, 'admin');
+
+test('superadmin: edits the emergency contacts list', async page => {
+  await page.evaluate(() => openEditEmergencyContactsModal());
+  await page.waitForSelector('#emg-contacts-form', { timeout: 5000 });
+  assert(await page.locator('#emg-contact-rows .contact-edit').count() === 7, 'editor should start from the saved contacts');
+  await page.click('#emg-contact-rows .contact-edit:first-child .dots-btn');
+  await page.evaluate(() => addEmergencyContactRow());
+  await page.fill('#emg-contact-rows .contact-edit:last-child .ce-label', 'Plumber – Akram');
+  await page.fill('#emg-contact-rows .contact-edit:last-child .ce-phone', '0301-5556677');
+  await page.click('#emg-contacts-form button[type=submit]');
+  await page.waitForFunction(() => { const s = window.__mockStore.settings.get('emergencyContacts'); return s && s.contacts.length === 7 && s.contacts[6].label === 'Plumber – Akram'; }, null, { timeout: 8000 })
+    .catch(() => { throw new Error('contacts were not saved'); });
+  const saved = await page.evaluate(() => window.__mockStore.settings.get('emergencyContacts').contacts);
+  assert(saved[0].label !== 'Main gate security (24h)' && saved[6].phone === '0301-5556677', `saved wrongly: ${JSON.stringify(saved.map(c => c.label))}`);
+  await settle(page);
+  await page.evaluate(() => openEmergencyContactsModal());
+  await page.waitForSelector('#emg-contacts-all', { timeout: 5000 });
+  const text = await page.evaluate(() => document.getElementById('emg-contacts-all').innerText);
+  assert(/Plumber – Akram/.test(text) && !/Main gate security/.test(text), 'sheet should show the updated list');
+  noErrors(page);
+}, 'superadmin');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {

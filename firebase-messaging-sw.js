@@ -15,9 +15,11 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification.title;
+  const emergency = payload.data && payload.data.category === 'emergency';
   const notificationOptions = {
     body: payload.notification.body,
-    icon: 'icon-192.png'
+    icon: 'icon-192.png',
+    ...(emergency ? { requireInteraction: true, vibrate: [300, 100, 300, 100, 300], tag: 'rphs-emergency', renotify: true } : {})
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);

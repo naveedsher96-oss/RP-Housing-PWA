@@ -44,6 +44,8 @@ const SEED = {
   'volunteer_programs/v1': { title: 'V', participants: [] },
   'volunteer_programs/v2': { title: 'V', participants: [{ uid: 'r1' }] },
   'announcements/n1': { title: 'N', createdBy: 'brd', allowComments: true },
+  'announcements/ne': { title: 'E', createdBy: 'adm', emergency: true },
+  'settings/emergencyContacts': { contacts: [{ label: 'Gate', phone: '15' }] },
   'tickets/t1': { uid: 'r1', status: 'pending' },
   'tickets/td': { uid: 'r1', status: 'resolved', history: [] },
   'tickets/td2': { uid: 'r2', status: 'closed' },
@@ -179,6 +181,20 @@ const CASES = [
   ['resident cannot suggest when suggestions are closed', 'r1', db => updateDoc(doc(db, 'meetings/mc'), { agenda: arrayUnion({ text: 'b', byUid: 'r1', source: 'resident' }), updatedAt: serverTimestamp() }), false],
   ['resident cannot suggest on a held meeting', 'r1', db => updateDoc(doc(db, 'meetings/mh'), { agenda: arrayUnion({ text: 'b', byUid: 'r1', source: 'resident' }), updatedAt: serverTimestamp() }), false],
   ['resident cannot edit minutes', 'r1', db => updateDoc(doc(db, 'meetings/mh'), { minutes: 'tampered' }), false],
+
+  // Emergency broadcast + contacts
+  ['admin sends an emergency broadcast', 'adm', db => addDoc(collection(db, 'announcements'), { title: 'Fire', content: 'x', emergency: true, emergencyType: 'fire', createdBy: 'adm', createdAt: serverTimestamp() }), true],
+  ['superadmin sends an emergency broadcast', 'sa', db => addDoc(collection(db, 'announcements'), { title: 'Fire', content: 'x', emergency: true, createdBy: 'sa', createdAt: serverTimestamp() }), true],
+  ['board cannot send an emergency broadcast', 'brd', db => addDoc(collection(db, 'announcements'), { title: 'Fire', content: 'x', emergency: true, createdBy: 'brd', createdAt: serverTimestamp() }), false],
+  ['board still posts a normal notice', 'brd', db => addDoc(collection(db, 'announcements'), { title: 'N', content: 'x', createdBy: 'brd', createdAt: serverTimestamp() }), true],
+  ['resident cannot send an emergency broadcast', 'r1', db => addDoc(collection(db, 'announcements'), { title: 'Fire', content: 'x', emergency: true, createdBy: 'r1', createdAt: serverTimestamp() }), false],
+  ['superadmin resolves an emergency', 'sa', db => updateDoc(doc(db, 'announcements/ne'), { resolvedAt: serverTimestamp(), resolvedBy: 'S' }), true],
+  ['resident cannot resolve an emergency', 'r1', db => updateDoc(doc(db, 'announcements/ne'), { resolvedAt: serverTimestamp() }), false],
+  ['resident reads emergency contacts', 'r1', db => getDoc(doc(db, 'settings/emergencyContacts')), true],
+  ['superadmin edits emergency contacts', 'sa', db => setDoc(doc(db, 'settings/emergencyContacts'), { contacts: [{ label: 'Gate', phone: '1' }], updatedAt: serverTimestamp() }, { merge: true }), true],
+  ['admin edits emergency contacts', 'adm', db => setDoc(doc(db, 'settings/emergencyContacts'), { contacts: [] }, { merge: true }), true],
+  ['board cannot edit emergency contacts', 'brd', db => setDoc(doc(db, 'settings/emergencyContacts'), { contacts: [] }, { merge: true }), false],
+  ['resident cannot edit emergency contacts', 'r1', db => setDoc(doc(db, 'settings/emergencyContacts'), { contacts: [] }, { merge: true }), false],
   ['resident cannot change the title while suggesting', 'r1', db => updateDoc(doc(db, 'meetings/m1'), { title: 'Z', agenda: arrayUnion({ text: 'b', byUid: 'r1', source: 'resident' }) }), false],
 
   // Audit log
