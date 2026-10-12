@@ -5188,54 +5188,13 @@
       billsLoaded = true;
       if (isStaff()) syncBillsSummary(billsList);
       renderBillsList();
-      applyLateFees(billsList);
     }).catch(e => { console.error("Error loading bills:", e); showLoadError('bills-list', e); });
 
     if (currentUserProfile.role !== 'admin') loadSocietySettings().then(renderBankCard);
   }
 
-  // --- LATE FEE (optional, off by default) ---
-  // When an admin opens the app, unpaid bills that are past their due date plus
-  // the grace days get the late fee added once (lateFeeApplied). Only bills due
-  // on or after lateFeeSince are charged.
-  let lateFeeSettings = null, lateFeeRunning = false;
-  async function applyLateFees(bills) {
-    if (currentUserProfile.role !== 'admin' || lateFeeRunning) return;
-    lateFeeRunning = true;
-    try {
-      if (!lateFeeSettings || Date.now() - lateFeeSettings.at > 10 * 60 * 1000) {
-        const doc = await db.collection('settings').doc('recurringBill').get();
-        lateFeeSettings = { at: Date.now(), ...(doc.exists ? doc.data() : {}) };
-      }
-      const s = lateFeeSettings;
-      const fee = Number(s.lateFeeAmount) || 0;
-      if (!s.lateFeeEnabled || !(fee > 0) || !s.lateFeeSince) return;
-      const cutoff = new Date(new Date().toDateString());
-      cutoff.setDate(cutoff.getDate() - (Number(s.lateFeeGraceDays) || 0));
-      const category = s.category || RECURRING_DEFAULTS.category;
-      const due = bills.filter(b => !b.isDeleted && b.status === 'unpaid' && !b.lateFeeApplied && b.dueDate
-        && (b.category || '') === category
-        && String(b.dueDate) >= s.lateFeeSince && toDate(b.dueDate) < cutoff);
-      for (const b of due) {
-        const base = Number(b.amount || 0);
-        const patch = { amount: base + fee, baseAmount: base, lateFee: fee, lateFeeApplied: true };
-        await db.collection('bills').doc(b.id).update({ ...patch, lateFeeAt: firebase.firestore.FieldValue.serverTimestamp() });
-        Object.assign(b, patch);
-        const inList = billsList.find(x => x.id === b.id);
-        if (inList && inList !== b) Object.assign(inList, patch);
-        logAudit('bill', b.id, 'late_fee', `Late fee ${formatMoney(fee)} added to ${b.billNo || b.id} (${b.name || ''})`);
-        if (b.uid) sendNotification(b.uid, `Late fee added (${b.billNo || 'bill'})`, `${b.period || b.category || 'Your bill'} is overdue, so a late fee of ${formatMoney(fee)} was added. New total: ${formatMoney(base + fee)}.`, 'error', 'bills');
-      }
-      if (due.length) {
-        toast(`Late fee added to ${due.length} overdue bill${due.length > 1 ? 's' : ''}.`);
-        if (document.getElementById('bills-list')) renderBillsList();
-      }
-    } catch (e) {
-      console.warn('Late fee check failed:', e && e.message);
-    } finally {
-      lateFeeRunning = false;
-    }
-  }
+  // Late fees are applied by the applyLateFeesDaily Cloud Function (functions/index.js);
+  // the settings live in settings/recurringBill and are edited in the Recurring Bill card.
 
   // --- RECURRING MONTHLY BILL (ADMIN) ---
   // settings/recurringBill is read by the issueMonthlyRecurringBills Cloud
@@ -5357,7 +5316,6 @@
       if (data.lateFeeEnabled && !s.lateFeeEnabled) data.lateFeeSince = new Date().toISOString().slice(0, 10);
       try {
         await db.collection('settings').doc('recurringBill').set(data, { merge: true });
-        lateFeeSettings = null;
         logAudit('settings', 'recurringBill', 'update', `Recurring bill ${data.enabled ? 'enabled' : 'disabled'}: ${data.category} ${formatMoney(data.amount)}, due day ${data.dueDay}`);
         toast('Recurring bill saved');
         openBillingSettings();

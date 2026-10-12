@@ -1,6 +1,7 @@
 {
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "functions": {
     "source": "functions"
@@ -10,6 +11,7 @@
     "ignore": [
       "firebase.json",
       "firestore.rules",
+      "firestore.indexes.json",
       "README",
       ".git/**",
       ".gitignore",
