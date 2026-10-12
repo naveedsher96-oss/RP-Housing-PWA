@@ -326,6 +326,62 @@ async function issueRecurringBills(db, settings, monthKey, dueDate, trigger) {
   return { issued: targets.length, skippedBilled, skippedExempt };
 }
 
+// Late fee (settings/recurringBill: lateFeeEnabled, lateFeeAmount, lateFeeGraceDays,
+// lateFeeSince). Every morning, each unpaid bill of the recurring category whose
+// due date is on/after lateFeeSince and more than the grace days in the past gets
+// the fee added once (lateFeeApplied). Replaces the old on-app-open client check.
+async function applyLateFees(db, today) {
+  const snap = await db.doc(RECURRING_SETTINGS_PATH).get();
+  const s = snap.exists ? snap.data() : {};
+  const fee = Number(s.lateFeeAmount) || 0;
+  if (s.lateFeeEnabled !== true || !(fee > 0) || typeof s.lateFeeSince !== "string") {
+    return { applied: 0, skipped: "disabled" };
+  }
+  const cutoff = addDays(today, -(Number(s.lateFeeGraceDays) || 0));
+  const category = String(s.category || "Monthly Maintenance").trim().toLowerCase();
+  const unpaid = await db.collection("bills").where("status", "==", "unpaid").get();
+  const due = unpaid.docs.filter((d) => {
+    const b = d.data();
+    return !b.isDeleted && b.lateFeeApplied !== true && typeof b.dueDate === "string"
+      && String(b.category || "").trim().toLowerCase() === category
+      && b.dueDate >= s.lateFeeSince && b.dueDate < cutoff;
+  });
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  let batch = db.batch();
+  let ops = 0;
+  const flush = async () => { if (ops) { await batch.commit(); batch = db.batch(); ops = 0; } };
+  for (const d of due) {
+    const b = d.data();
+    const base = Number(b.amount || 0);
+    batch.update(d.ref, { amount: base + fee, baseAmount: base, lateFee: fee, lateFeeApplied: true, lateFeeAt: now });
+    batch.set(db.collection("audit_log").doc(), {
+      entityType: "bill", entityId: d.id, action: "late_fee",
+      details: `Late fee ${formatMoney(fee)} added to ${b.billNo || d.id} (${b.name || ""})`,
+      performedBy: RECURRING_ISSUER, performedByUid: "", role: "system", timestamp: now,
+    });
+    ops += 2;
+    if (b.uid) {
+      batch.set(db.collection("users").doc(b.uid).collection("notifications").doc(), notificationDoc(
+        `Late fee added (${b.billNo || "bill"})`,
+        `${b.period || b.category || "Your bill"} is overdue, so a late fee of ${formatMoney(fee)} was added. New total: ${formatMoney(base + fee)}.${PAY_FOOTER}`,
+        "warning"
+      ));
+      ops++;
+    }
+    if (ops >= 400) await flush();
+  }
+  batch.set(snap.ref, { lateFeeLastRun: { at: now, date: today, applied: due.length } }, { merge: true });
+  ops++;
+  await flush();
+  console.log(`${today}: late fee ${formatMoney(fee)} applied to ${due.length} bill(s)`);
+  return { applied: due.length };
+}
+
+exports.applyLateFeesDaily = onSchedule(
+  { schedule: "every day 09:15", timeZone: TIME_ZONE },
+  async () => applyLateFees(admin.firestore(), todayKey())
+);
+
 // Runs on the RECURRING_ISSUE_DAY of every month.
 exports.issueMonthlyRecurringBills = onSchedule(
   { schedule: `${RECURRING_ISSUE_DAY} of month 09:00`, timeZone: TIME_ZONE },
@@ -672,3 +728,5 @@ exports.sendPushOnNotification = onDocumentCreated(
     }
   }
 );
+
+exports._applyLateFees = applyLateFees;

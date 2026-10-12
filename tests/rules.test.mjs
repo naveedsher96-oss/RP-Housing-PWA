@@ -43,6 +43,11 @@ const SEED = {
   'decisions/dm': { title: 'T', type: 'membership', refUid: 'pend', status: 'pending', requiredVotes: 2, votes: [{ uid: 'adm', choice: 'endorse' }] },
   'volunteer_programs/v1': { title: 'V', participants: [] },
   'volunteer_programs/v2': { title: 'V', participants: [{ uid: 'r1' }] },
+  'expenses/x1': { title: 'Paint', amount: 100, createdBy: 'adm' },
+  'transfers/tr1': { amount: 100 },
+  'monthly_summaries/2026-09': { collected: 1 },
+  'settings/society': { bank: 'HBL' },
+  'funds/f1': { title: 'Masjid' },
   'announcements/n1': { title: 'N', createdBy: 'brd', allowComments: true },
   'announcements/ne': { title: 'E', createdBy: 'adm', emergency: true },
   'settings/emergencyContacts': { contacts: [{ label: 'Gate', phone: '15' }] },
@@ -218,7 +223,25 @@ const CASES = [
   // Audit log
   ['audit entry as self', 'r1', db => addDoc(collection(db, 'audit_log'), { performedByUid: 'r1' }), true],
   ['audit entry as admin', 'adm', db => addDoc(collection(db, 'audit_log'), { performedByUid: 'adm' }), true],
-  ['audit entry as someone else', 'r1', db => addDoc(collection(db, 'audit_log'), { performedByUid: 'adm' }), false]
+  ['audit entry as someone else', 'r1', db => addDoc(collection(db, 'audit_log'), { performedByUid: 'adm' }), false],
+  // ---- approval gating on community reads (A8) ----
+  ['approved resident reads announcements', 'r1', db => getDocs(collection(db, 'announcements')), true],
+  ['pending resident cannot read announcements', 'pend', db => getDocs(collection(db, 'announcements')), false],
+  ['pending resident cannot read polls', 'pend', db => getDocs(collection(db, 'polls')), false],
+  ['pending resident cannot read expenses', 'pend', db => getDoc(doc(db, 'expenses/x1')), false],
+  ['approved resident reads expenses', 'r2', db => getDoc(doc(db, 'expenses/x1')), true],
+  ['pending resident cannot read transfers', 'pend', db => getDoc(doc(db, 'transfers/tr1')), false],
+  ['pending resident cannot read monthly summaries', 'pend', db => getDoc(doc(db, 'monthly_summaries/2026-09')), false],
+  ['board reads monthly summaries', 'brd', db => getDoc(doc(db, 'monthly_summaries/2026-09')), true],
+  ['pending resident cannot read society settings', 'pend', db => getDoc(doc(db, 'settings/society')), false],
+  ['approved resident reads society settings', 'r1', db => getDoc(doc(db, 'settings/society')), true],
+  ['pending resident cannot read funds', 'pend', db => getDoc(doc(db, 'funds/f1')), false],
+  ['pending resident can still read own profile', 'pend', db => getDoc(doc(db, 'users/pend')), true],
+  // ---- report export log ownership (A5) ----
+  ['resident logs own export', 'r1', db => addDoc(collection(db, 'report_exports'), { reportType: 'statement', generatedByUid: 'r1', fileName: 'a.pdf' }), true],
+  ['resident cannot log an export as someone else', 'r1', db => addDoc(collection(db, 'report_exports'), { reportType: 'statement', generatedByUid: 'r2', fileName: 'a.pdf' }), false],
+  ['export log without generatedByUid is rejected', 'adm', db => addDoc(collection(db, 'report_exports'), { reportType: 'finance_report', fileName: 'a.pdf' }), false],
+  ['pending resident cannot log an export', 'pend', db => addDoc(collection(db, 'report_exports'), { reportType: 'statement', generatedByUid: 'pend' }), false],
 ];
 
 // ---------- runner ----------

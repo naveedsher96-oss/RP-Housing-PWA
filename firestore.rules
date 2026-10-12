@@ -29,6 +29,11 @@ service cloud.firestore {
         && me().get('approved', false) == true
         && me().get('suspended', false) != true;
     }
+    // Community content (notices, polls, finances, settings) is for approved,
+    // non-suspended members and management; accounts awaiting approval see none of it.
+    function isMember() {
+      return isStaff() || isApprovedResident();
+    }
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
@@ -91,7 +96,7 @@ service cloud.firestore {
 
     // ---------- announcements ----------
     match /announcements/{id} {
-      allow read: if signedIn();
+      allow read: if isMember();
       // Emergency broadcasts (emergency: true) are admin/superadmin only.
       allow create: if canPublish()
         && request.resource.data.get('createdBy', '') == request.auth.uid
@@ -102,7 +107,7 @@ service cloud.firestore {
       // board members may comment (as themselves); a comment can be removed by
       // its author, admin/superadmin, or the board member who posted the notice.
       match /comments/{commentId} {
-        allow read: if signedIn();
+        allow read: if isMember();
         allow create: if (isApprovedResident() || isStaff() || isBoard())
           && request.resource.data.get('uid', '') == request.auth.uid
           && request.resource.data.get('text', '') is string
@@ -118,7 +123,7 @@ service cloud.firestore {
 
     // ---------- polls ----------
     match /polls/{id} {
-      allow read: if signedIn();
+      allow read: if isMember();
       allow create: if canPublish()
         && request.resource.data.get('createdBy', '') == request.auth.uid;
       allow delete: if isAdmin() || isSuperAdmin() || ownsPost();
@@ -176,7 +181,7 @@ service cloud.firestore {
 
     // ---------- funds ----------
     match /funds/{id} {
-      allow read: if signedIn();
+      allow read: if isMember();
       allow create: if isAdmin();
       allow update: if isAdmin() || superAdminRestore();
       allow delete: if false;
@@ -200,7 +205,7 @@ service cloud.firestore {
 
     // ---------- expenses ----------
     match /expenses/{id} {
-      allow read: if signedIn(); // residents see anonymized category totals in reports
+      allow read: if isMember(); // residents see anonymized category totals in reports
       allow create: if isAdmin();
       allow update: if isAdmin() || superAdminRestore();
       allow delete: if false;
@@ -210,7 +215,7 @@ service cloud.firestore {
     // Immutable ledger entries written by admin only; residents may read them
     // so account balances stay transparent. Undo = an opposite transfer.
     match /transfers/{id} {
-      allow read: if signedIn();
+      allow read: if isMember();
       allow create: if isAdmin()
         && request.resource.data.get('fromType', '') in ['bills', 'fund']
         && request.resource.data.get('toType', '') in ['bills', 'fund']
@@ -242,7 +247,7 @@ service cloud.firestore {
 
     // ---------- volunteer programs ----------
     match /volunteer_programs/{id} {
-      allow read: if signedIn();
+      allow read: if isMember();
       allow create: if isAdmin();
       // Admin manages programs; approved residents join/leave (participants only)
       allow update: if isAdmin() || (isApprovedResident() && onlyChanges(['participants']));
@@ -251,7 +256,7 @@ service cloud.firestore {
 
     // ---------- society settings (bank account etc.) ----------
     match /settings/{id} {
-      allow read: if signedIn();
+      allow read: if isMember();
       allow write: if isAdmin();
     }
     // Bill totals for the resident dashboard, kept up to date by any staff member.
@@ -330,14 +335,14 @@ service cloud.firestore {
 
     // ---------- monthly financial summaries (written by Cloud Functions only) ----------
     match /monthly_summaries/{month} {
-      allow read: if signedIn();
+      allow read: if isMember();
       allow write: if false;
     }
 
     // ---------- report export log ----------
     match /report_exports/{id} {
       allow read: if isStaff();
-      allow create: if signedIn();
+      allow create: if isMember() && request.resource.data.get('generatedByUid', '') == request.auth.uid;
       allow update, delete: if false;
     }
 
