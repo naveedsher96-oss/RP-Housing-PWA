@@ -1046,6 +1046,7 @@
 
     bindGlobalEvents();
     loadData();
+    maybeShowWhatsNew();
   }
 
   function renderSuspendedScreen() {
@@ -1254,10 +1255,10 @@
             <input type="text" id="bio-name" value="${escapeHtml(currentUserProfile.name || '')}" required />
 
             <label>CNIC Number (e.g. 35202-1234567-1)</label>
-            <input type="text" id="bio-cnic" placeholder="35202-1234567-1" required />
+            <input type="text" inputmode="numeric" id="bio-cnic" placeholder="35202-1234567-1" required />
 
             <label>Cell Number</label>
-            <input type="text" id="bio-phone" value="${escapeHtml(currentUserProfile.phone || '')}" placeholder="+92 300 1234567" required />
+            <input type="tel" inputmode="tel" autocomplete="tel" id="bio-phone" value="${escapeHtml(currentUserProfile.phone || '')}" placeholder="+92 300 1234567" required />
 
             <label>House / Plot Number</label>
             <input type="text" id="bio-house" value="${escapeHtml(currentUserProfile.house || '')}" placeholder="House 42, Block B" required />
@@ -1294,9 +1295,9 @@
 
     document.getElementById('biodata-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const cnic = document.getElementById('bio-cnic').value.trim();
-      const phone = document.getElementById('bio-phone').value.trim();
-      const house = document.getElementById('bio-house').value.trim();
+      let cnic, phone, house;
+      try { ({ cnic, phone, house } = validateContactFields('bio')); }
+      catch(err) { toast(err.message, 'bad'); return; }
       const bloodGroup = document.getElementById('bio-blood').value;
       const occupancyType = document.getElementById('bio-occupancy').value;
       const name = document.getElementById('bio-name').value.trim();
@@ -2036,6 +2037,7 @@
         <button onclick="closeModal(); openNotificationsModal();">${icon('bell')}<span style="flex:1;">Notifications</span>${unread ? `<span class="badge overdue">${unread} new</span>` : ''}</button>
         <button onclick="toggleLanguage()">${icon('lang')}<span style="flex:1;">${uiLang === 'ur' ? 'English' : 'اردو (Urdu)'}</span></button>
         <button onclick="closeModal(); toggleTheme();">${icon('eye')}<span style="flex:1;">${resolvedTheme() === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}</span></button>
+        <button onclick="closeModal(); openWhatsNew();">${icon('file')}<span style="flex:1;">What's new</span><span style="font-size:12px; color:var(--text-faint);">v${APP_VERSION}</span></button>
         <button onclick="closeModal(); doSignOut();" style="color:var(--danger);">${icon('logout')}<span style="flex:1;">Log out</span></button>
       </div>
     `;
@@ -2272,7 +2274,86 @@
         </div>
         ${row('Bill and notice alerts', pushState === 'denied' ? 'Blocked in your phone settings. Allow notifications for RPHS there.' : pushState === 'unsupported' ? 'This browser cannot show alerts.' : 'Notifications on this phone', pushState === 'granted', pushState === 'default' ? 'requestPushPermission()' : '', pushState !== 'default')}
         ${currentUserProfile.role === 'resident' ? `<button class="btn secondary block" style="margin:8px 0 10px;" onclick="downloadResidentStatement()">${icon('file')} Download my statement (PDF)</button>` : ''}
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0 6px; border-top:1px solid var(--border-soft); font-size:12px; color:var(--text-faint);">
+          <span id="app-version">RPHS app v${APP_VERSION}</span>
+          <button class="btn sm secondary" onclick="openWhatsNew()">What's new</button>
+        </div>
       </div>`;
+  }
+
+  // --- CONTACT FIELD VALIDATION ---
+  // Phone: Pakistani mobile stored as 03XX-XXXXXXX (accepts +92 / 92 / 0092 prefixes, spaces,
+  // dashes); landlines (0XX…, 9–10 digits after the 0) are kept as digits. CNIC: 13 digits,
+  // stored as XXXXX-XXXXXXX-X. Returns the normalised value or null when invalid.
+  function normalizePkPhone(v) {
+    let d = String(v || '').replace(/\D/g, '');
+    if (d.startsWith('0092')) d = d.slice(4);
+    else if (d.startsWith('92') && d.length >= 11) d = d.slice(2);
+    else if (d.startsWith('0')) d = d.slice(1);
+    if (/^3\d{9}$/.test(d)) return '0' + d.slice(0, 3) + '-' + d.slice(3);
+    if (/^[1-9]\d{8,9}$/.test(d)) return '0' + d;
+    return null;
+  }
+  function normalizeCnic(v) {
+    const d = String(v || '').replace(/\D/g, '');
+    return /^\d{13}$/.test(d) ? `${d.slice(0, 5)}-${d.slice(5, 12)}-${d.slice(12)}` : null;
+  }
+  // Houses compared case/spacing/punctuation-insensitively ("house 7 block a" == "House 7, Block A").
+  function houseKey(h) { return String(h || '').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim(); }
+  // Reads <prefix>-phone / -cnic / -house, returns normalised values or throws with the field focused.
+  function validateContactFields(prefix) {
+    const el = id => document.getElementById(`${prefix}-${id}`);
+    const fail = (id, msg) => { const f = el(id); if (f) { f.focus(); f.select && f.select(); } throw new Error(msg); };
+    const phone = normalizePkPhone(el('phone').value);
+    if (!phone) fail('phone', 'Enter a valid Pakistani phone number, e.g. 0300 1234567 or +92 300 1234567.');
+    const cnic = normalizeCnic(el('cnic').value);
+    if (!cnic) fail('cnic', 'CNIC must be 13 digits, e.g. 35202-1234567-1.');
+    const house = el('house').value.trim().replace(/\s+/g, ' ');
+    if (house.length < 2 || !/\d/.test(house)) fail('house', 'Enter your house with its number, e.g. House 42, Block B.');
+    return { phone, cnic, house };
+  }
+
+  // --- APP VERSION & WHAT'S NEW (per device) ---
+  // Bump APP_VERSION and add an entry at the top of WHATS_NEW with every release.
+  // The sheet opens once per device after an update (first installs only record the version).
+  const APP_VERSION = '2026.10.05';
+  const WHATS_NEW = [
+    { version: '2026.10.05', items: [
+      'Late fees on overdue maintenance are now added automatically every morning (if enabled in the Recurring Bill settings).',
+      'Phone and CNIC numbers are checked when you fill in or edit your biodata.',
+      'Admins are warned when a new registration uses a house that is already registered.',
+      'Emergency Contacts card folds up — tap the arrow to show the numbers.',
+    ] },
+    { version: '2026.10.04', items: [
+      'The whole app is now available in Urdu (More → اردو).',
+      'Text size (Normal / Large / Extra large) and Dark / Light / Auto appearance in Profile → Preferences.',
+      'Lost & Found / Classifieds board under More.',
+      'Emergency Broadcast button for management, with an Emergency Contacts card for everyone.',
+      'Documents & Minutes: bylaws, budgets and Board meeting agendas/minutes.',
+      'Complaints: attach photos, follow the progress timeline, rate the fix or reopen.',
+    ] },
+  ];
+  let whatsNewShown = false;
+  window.openWhatsNew = function() {
+    lsSet('rphs.seenVersion', APP_VERSION);
+    return openUiSheet(`
+      <div class="ui-sheet-title">What's new</div>
+      <div class="ui-sheet-body" style="color:var(--text-muted); font-size:13px;">RPHS app v${APP_VERSION}</div>
+      ${WHATS_NEW.map((rel, i) => `
+        <div style="margin-top:${i ? 14 : 6}px;">
+          <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${i ? 'Version ' + escapeHtml(rel.version) : 'This update'}</div>
+          <ul style="margin:0; padding-left:18px; display:grid; gap:6px;">${rel.items.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>
+        </div>`).join('')}
+      <div class="ui-sheet-actions"><button class="btn primary block" data-ui="ok">Got it</button></div>
+    `, view => { view.querySelector('[data-ui="ok"]').onclick = () => closeUiSheet(true); });
+  };
+  function maybeShowWhatsNew() {
+    if (whatsNewShown) return;
+    const seen = lsGet('rphs.seenVersion');
+    if (seen === APP_VERSION) return;
+    whatsNewShown = true;
+    if (!seen) { lsSet('rphs.seenVersion', APP_VERSION); return; }
+    setTimeout(() => { if (!uiSheetOpen()) openWhatsNew(); }, 600);
   }
 
   // --- LANGUAGE & TEXT SIZE (per device) ---
@@ -4147,10 +4228,10 @@
         <input type="text" id="edit-bio-name" value="${escapeHtml(currentUserProfile.name || '')}" required />
 
         <label>CNIC Number</label>
-        <input type="text" id="edit-bio-cnic" value="${escapeHtml(currentUserProfile.cnic || '')}" required />
+        <input type="text" inputmode="numeric" id="edit-bio-cnic" value="${escapeHtml(currentUserProfile.cnic || '')}" required />
 
         <label>Cell Number</label>
-        <input type="text" id="edit-bio-phone" value="${escapeHtml(currentUserProfile.phone || '')}" required />
+        <input type="tel" inputmode="tel" autocomplete="tel" id="edit-bio-phone" value="${escapeHtml(currentUserProfile.phone || '')}" required />
 
         <label>House / Plot Number</label>
         <input type="text" id="edit-bio-house" value="${escapeHtml(currentUserProfile.house || '')}" required />
@@ -4184,9 +4265,9 @@
     document.getElementById('edit-bio-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = document.getElementById('edit-bio-name').value.trim();
-      const cnic = document.getElementById('edit-bio-cnic').value.trim();
-      const phone = document.getElementById('edit-bio-phone').value.trim();
-      const house = document.getElementById('edit-bio-house').value.trim();
+      let cnic, phone, house;
+      try { ({ cnic, phone, house } = validateContactFields('edit-bio')); }
+      catch(err) { toast(err.message, 'bad'); return; }
       const bloodGroup = document.getElementById('edit-bio-blood').value;
       const occupancyType = document.getElementById('edit-bio-occupancy').value;
 
@@ -7860,6 +7941,7 @@
     'Join a volunteer program to help with relief and community work.': 'امدادی اور کمیونٹی کاموں میں مدد کے لیے رضاکار پروگرام میں شامل ہوں۔', 'Join as Volunteer': 'رضاکار بنیں', 'Leave program': 'پروگرام چھوڑیں', '✔ You have joined': '✔ آپ شامل ہیں', '🤝 {x} volunteers joined': '🤝 {x} رضاکار شامل', '🤝 1 volunteer joined': '🤝 1 رضاکار شامل',
     // profile & preferences
     'Your registered society details on file.': 'سوسائٹی میں آپ کی درج شدہ تفصیلات۔', 'resident': 'رہائشی', 'Resident': 'رہائشی', 'House / Plot:': 'مکان / پلاٹ:', 'CNIC:': 'شناختی کارڈ:', 'Phone:': 'فون:', 'Email:': 'ای میل:', 'Blood Group:': 'بلڈ گروپ:', 'Occupancy Type:': 'رہائش کی نوعیت:', 'Owner': 'مالک', 'Tenant': 'کرایہ دار', 'Family / Dependents:': 'خاندان / زیرِ کفالت:', 'Update Biodata': 'کوائف اپ ڈیٹ کریں',
+    'What\'s new': 'نیا کیا ہے', 'This update': 'یہ اپڈیٹ', 'Got it': 'سمجھ گیا', 'House already registered': 'گھر پہلے سے رجسٹرڈ ہے', 'Approve anyway': 'پھر بھی منظور کریں',
     'Preferences': 'ترجیحات', 'Your house card on the Dashboard': 'ڈیش بورڈ پر آپ کے گھر کا کارڈ', 'Text size': 'متن کا سائز', 'Bigger text is easier to read on this phone.': 'بڑا متن اس فون پر پڑھنے میں آسان ہے۔', 'Normal': 'عام', 'Large': 'بڑا', 'Extra large': 'بہت بڑا',
     'Appearance': 'ظاہری شکل', "Dark is easier on the eyes at night; Light is clearer in sunlight. Auto follows your phone's setting.": 'گہرا موڈ رات میں آنکھوں کے لیے بہتر ہے؛ روشن موڈ دھوپ میں صاف نظر آتا ہے۔ آٹو آپ کے فون کی سیٹنگ پر چلتا ہے۔', '🌙 Dark': '🌙 گہرا', '☀️ Light': '☀️ روشن', '📱 Auto': '📱 آٹو',
     'Bill and notice alerts': 'بل اور اعلانات کی اطلاعات', 'Blocked in your phone settings. Allow notifications for RPHS there.': 'آپ کے فون کی سیٹنگز میں بند ہیں۔ وہاں RPHS کے لیے اطلاعات کی اجازت دیں۔', 'This browser cannot show alerts.': 'یہ براؤزر اطلاعات نہیں دکھا سکتا۔', 'Notifications on this phone': 'اس فون پر اطلاعات',
@@ -9812,14 +9894,29 @@
   };
 
   // --- APPROVALS ---
+  // houseKey -> names of approved members already registered there (duplicate-house warning).
+  let approvedHouses = new Map();
   function loadPendingResidents() {
     if (!db) return;
-    db.collection('users').where('approved', '==', false).get().then(snapshot => {
-      pendingResidents = snapshot.docs
+    Promise.all([
+      db.collection('users').where('approved', '==', false).get(),
+      db.collection('users').where('approved', '==', true).get()
+    ]).then(([pending, approved]) => {
+      pendingResidents = pending.docs
         .map(doc => ({ uid: doc.id, ...doc.data() }))
         .filter(r => r.membershipStatus !== 'rejected');
+      approvedHouses = new Map();
+      approved.docs.forEach(doc => {
+        const d = doc.data(), k = houseKey(d.house);
+        if (!k) return;
+        if (!approvedHouses.has(k)) approvedHouses.set(k, []);
+        approvedHouses.get(k).push(d.name || doc.id);
+      });
       renderApprovalsList();
     }).catch(e => console.error("Error loading approvals:", e));
+  }
+  function duplicateHouseOwners(r) {
+    return (approvedHouses.get(houseKey(r.house)) || []).filter(n => n !== r.name);
   }
 
   function renderApprovalsList() {
@@ -9840,6 +9937,7 @@
           </div>
         </div>
         <div style="font-size:13px; color:var(--text-faint); margin-top:6px;">${escapeHtml(r.email || '')}${r.biodataSubmitted ? '' : ' · biodata not submitted yet'}</div>
+        ${duplicateHouseOwners(r).length ? `<div class="dup-house" style="font-size:13px; color:var(--warning, #F2A93B); margin-top:6px;">⚠ ${houseHtml(r.house)} is already registered to ${escapeHtml(duplicateHouseOwners(r).join(', '))}</div>` : ''}
         <div style="display:flex; gap:10px; margin-top:12px;">
           <button class="btn sm primary block" onclick="approveUser('${r.uid}')">Approve</button>
           <button class="btn sm secondary block" onclick="rejectUser('${r.uid}')">Decline…</button>
@@ -9851,6 +9949,8 @@
   window.approveUser = async function(uid) {
     const r = pendingResidents.find(item => item.uid === uid);
     try {
+      const dup = r ? duplicateHouseOwners(r) : [];
+      if (dup.length && !(await confirmSheet({ title: 'House already registered', body: `${houseLabel(r.house)} is already registered to ${dup.join(', ')}. Approve ${r.name} for the same house anyway?`, okLabel: 'Approve anyway' }))) return;
       await db.collection('users').doc(uid).update({ approved: true, membershipStatus: 'approved', statusReason: '' });
       logAudit('member', uid, 'update', `Membership approved: ${r ? r.name : uid}`);
       await sendNotification(uid, "Account Approved", "Your account has been approved! You can now access your portal.", "success");

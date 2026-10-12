@@ -697,6 +697,86 @@ test('resident: Preferences → text size and appearance (dark / light / auto) a
   noErrors(page);
 }, 'resident');
 
+test('resident: app version is shown in Preferences, What\'s new opens from Preferences/More and auto-opens once after an update', async page => {
+  await page.evaluate(() => selectTab('profile'));
+  await settle(page);
+  const version = await page.$eval('#app-version', el => el.textContent.trim());
+  assert(/^RPHS app v\d{4}\.\d{2}\.\d{2}$/.test(version), `version line should read "RPHS app vYYYY.MM.DD", got "${version}"`);
+  const v = version.replace('RPHS app v', '');
+  assert(await page.evaluate(() => localStorage.getItem('rphs.seenVersion')) === v, 'first open should record the version without showing the sheet');
+  assert(!(await page.$('#ui-sheet.active')), 'no sheet on a first install');
+  await callLater(page, 'openWhatsNew()');
+  await page.waitForSelector('#ui-sheet.active', { timeout: 5000 });
+  let text = await page.$eval('#ui-sheet-body', el => el.innerText);
+  assert(/What's new/.test(text) && text.includes('v' + v) && /This update/.test(text) && /Late fees/.test(text), `sheet should list this update, got: ${text.slice(0, 160)}`);
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForSelector('#ui-sheet.active', { state: 'detached', timeout: 5000 }).catch(() => {});
+  assert(!(await page.$('#ui-sheet.active')), 'Got it should close the sheet');
+  await callLater(page, 'openMoreSheet()');
+  await settle(page, '#modal-body');
+  text = await page.$eval('#modal-body', el => el.innerText);
+  assert(/What's new/.test(text) && text.includes('v' + v), 'More menu should have a What\'s new row with the version');
+  await page.evaluate(() => closeModal());
+  // Simulate an app update: the stored version is older than the running one.
+  await page.evaluate(() => localStorage.setItem('rphs.seenVersion', '2000.01.01'));
+  await page.reload();
+  await page.waitForSelector('main', { timeout: 15000 });
+  await page.waitForSelector('#ui-sheet.active', { timeout: 8000 });
+  text = await page.$eval('#ui-sheet-body', el => el.innerText);
+  assert(/What's new/.test(text), 'sheet should auto-open after an update');
+  assert(await page.evaluate(() => localStorage.getItem('rphs.seenVersion')) === v, 'auto-open should record the new version');
+  await page.evaluate(() => goBack());
+  noErrors(page);
+}, 'resident');
+
+test('resident: editing biodata rejects a bad phone/CNIC and normalises valid ones to 03XX-XXXXXXX / XXXXX-XXXXXXX-X', async page => {
+  await page.evaluate(() => openEditBiodataModal());
+  await page.waitForSelector('#edit-bio-form', { timeout: 5000 });
+  const before = await page.evaluate(() => ({ ...__mockStore.users.get('u_res1') }));
+  assert(before.phone === '0321-7788123', 'precondition: seeded phone');
+  await page.fill('#edit-bio-phone', '12345');
+  await page.evaluate(() => document.getElementById('edit-bio-form').requestSubmit());
+  await page.waitForTimeout(300);
+  let now = await page.evaluate(() => ({ ...__mockStore.users.get('u_res1') }));
+  assert(now.phone === before.phone, 'invalid phone must not be saved');
+  assert(await page.evaluate(() => document.activeElement && document.activeElement.id) === 'edit-bio-phone', 'the bad field should get focus');
+  assert(await page.$('#edit-bio-form'), 'form should stay open after a validation error');
+  await page.fill('#edit-bio-phone', '+92 345 221 9087');
+  await page.fill('#edit-bio-cnic', '3520276543218');
+  await page.fill('#edit-bio-house', '  House 14,   Block B ');
+  await page.evaluate(() => document.getElementById('edit-bio-form').requestSubmit());
+  await page.waitForFunction(() => __mockStore.users.get('u_res1').phone === '0345-2219087', null, { timeout: 5000 });
+  now = await page.evaluate(() => ({ ...__mockStore.users.get('u_res1') }));
+  assert(now.cnic === '35202-7654321-8', `CNIC should be normalised, got ${now.cnic}`);
+  assert(now.house === 'House 14, Block B', `house spacing should be tidied, got "${now.house}"`);
+  await page.waitForSelector('#edit-bio-form', { state: 'hidden', timeout: 5000 });
+  noErrors(page);
+}, 'resident');
+
+test('admin: Approvals warns when a pending registration uses an already-registered house and asks before approving', async page => {
+  await page.evaluate(() => selectTab('approvals'));
+  await settle(page, '#approvals-list');
+  const cards = await page.$$eval('#approvals-list .card', cs => cs.map(c => ({ text: c.innerText, dup: !!c.querySelector('.dup-house') })));
+  const imran = cards.find(c => /Imran Shah/.test(c.text));
+  assert(imran && imran.dup && /already registered to Fatima Zahra/.test(imran.text), `Imran (house 7 block A) should be flagged against Fatima Zahra, got ${JSON.stringify(imran)}`);
+  assert(cards.filter(c => /Asad Farooq|Hira Javed/.test(c.text)).every(c => !c.dup), 'other pending residents should not be flagged');
+  await callLater(page, "approveUser('u_p4')");
+  await page.waitForSelector('#ui-sheet.active', { timeout: 5000 });
+  const sheet = await page.$eval('#ui-sheet-body', el => el.innerText);
+  assert(/House already registered/.test(sheet) && /Approve anyway/.test(sheet), 'approve should ask for confirmation on a duplicate house');
+  await page.click('#ui-sheet [data-ui="cancel"]');
+  await page.waitForTimeout(300);
+  assert(await page.evaluate(() => __mockStore.users.get('u_p4').approved) === false, 'cancel must leave the account pending');
+  await callLater(page, "approveUser('u_p4')");
+  await page.waitForSelector('#ui-sheet.active', { timeout: 5000 });
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForFunction(() => __mockStore.users.get('u_p4').approved === true, null, { timeout: 5000 });
+  await callLater(page, "approveUser('u_p1')");
+  await page.waitForFunction(() => __mockStore.users.get('u_p1').approved === true, null, { timeout: 5000 });
+  assert(!(await page.$('#ui-sheet.active')), 'no confirmation for a house nobody else has');
+  noErrors(page);
+}, 'admin');
+
 test('resident: Urdu mode translates navigation, titles, badges, buttons and placeholders live, and switches back to English', async page => {
   await page.evaluate(() => toggleLanguage());
   await settle(page);
