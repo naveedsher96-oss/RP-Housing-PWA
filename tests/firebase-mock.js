@@ -78,7 +78,7 @@
       approved: true, membershipStatus: 'approved', biodataSubmitted: true, createdAt: daysAgo(300 - i * 9)
     }, extra || {}));
   });
-  [['u_p1', 'Asad Farooq', 'House 36, Block D', '0304-2211443', true], ['u_p2', 'Hira Javed', 'House 38, Block D', '0335-6677112', true], ['u_p3', 'Waqas Ali Shah', 'House 40, Block D', '0311-9900887', false]]
+  [['u_p1', 'Asad Farooq', 'House 36, Block D', '0304-2211443', true], ['u_p2', 'Hira Javed', 'House 38, Block D', '0335-6677112', true], ['u_p3', 'Waqas Ali Shah', 'House 40, Block D', '0311-9900887', false], ['u_p4', 'Imran Shah', 'house 7 block A', '0345-1112233', true]]
     .forEach(([uid, name, house, phone, bio], i) => users.set(uid, { name, house, phone, role: 'resident', email: name.toLowerCase().replace(/ /g, '.') + '@yahoo.com', approved: false, membershipStatus: 'pending', biodataSubmitted: bio, createdAt: daysAgo(3 - i) }));
 
   const byUid = Object.fromEntries([...users.entries()]);
