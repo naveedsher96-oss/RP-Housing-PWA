@@ -777,6 +777,39 @@ test('admin: Approvals warns when a pending registration uses an already-registe
   noErrors(page);
 }, 'admin');
 
+test('admin: App Health card shows last-7-day errors, scheduled jobs, records a new error and can be cleared; residents never see it', async page => {
+  await page.waitForSelector('#health-card', { timeout: 5000 });
+  let summary = await page.$eval('#health-summary', el => el.innerText);
+  assert(/2 errors in the last 7 days/.test(summary) && /v\d{4}\.\d{2}\.\d{2}/.test(summary), `collapsed row should count the two recent errors and show the version, got "${summary}"`);
+  assert(!(await page.$('#health-body')), 'card starts collapsed');
+  await page.click('#health-card button[aria-controls="health-body"]');
+  await page.waitForSelector('#health-body', { timeout: 5000 });
+  let body = await page.$eval('#health-body', el => el.innerText);
+  assert(/Recurring bills/.test(body) && /12 issued/.test(body) && /Late fees/.test(body) && /Monthly summary/.test(body), `jobs section missing, got: ${body.slice(0, 200)}`);
+  const groups = await page.$$eval('#health-body .health-error', es => es.map(e => e.innerText));
+  assert(groups.length === 2 && /insufficient permissions[\s\S]*×2[\s\S]*bills/.test(groups[0]) && /TypeError[\s\S]*×1/.test(groups[1]), `errors should be grouped by message, newest first: ${JSON.stringify(groups)}`);
+  await page.evaluate(() => reportClientError('error', new Error('Health test boom'), 'index.html:1'));
+  await page.waitForFunction(() => [...__mockStore.client_errors.values()].some(e => /Health test boom/.test(e.message)), null, { timeout: 5000 });
+  const rec = await page.evaluate(() => [...__mockStore.client_errors.values()].find(e => /Health test boom/.test(e.message)));
+  assert(rec.uid === 'u_admin' && rec.role === 'admin' && rec.kind === 'error' && /^\d{4}\.\d{2}\.\d{2}$/.test(rec.version) && rec.screen === 'dashboard', `report should carry uid/role/kind/version/screen: ${JSON.stringify(rec)}`);
+  await page.evaluate(() => reportClientError('error', new Error('Health test boom')));
+  assert(await page.evaluate(() => [...__mockStore.client_errors.values()].filter(e => /Health test boom/.test(e.message)).length) === 1, 'the same message is reported once per app load');
+  await callLater(page, 'clearClientErrors()');
+  await page.waitForSelector('#ui-sheet [data-ui="ok"]', { timeout: 5000 });
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForFunction(() => __mockStore.client_errors.size === 0, null, { timeout: 5000 });
+  body = await page.$eval('#health-body', el => el.innerText);
+  assert(/Nothing reported/.test(body), 'cleared list should show the empty state');
+  summary = await page.$eval('#health-summary', el => el.innerText);
+  assert(/No errors in the last 7 days/.test(summary), `summary should reset, got "${summary}"`);
+  noErrors(page);
+}, 'admin');
+
+test('resident: has no App Health card', async page => {
+  assert(!(await page.$('#health-card')), 'residents must not see the Health card');
+  noErrors(page);
+}, 'resident');
+
 test('resident: Urdu mode translates navigation, titles, badges, buttons and placeholders live, and switches back to English', async page => {
   await page.evaluate(() => toggleLanguage());
   await settle(page);

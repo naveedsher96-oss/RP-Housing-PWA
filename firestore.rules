@@ -340,6 +340,14 @@ service cloud.firestore {
     }
 
     // ---------- report export log ----------
+    // Error reports sent by phones (B7): written as yourself, read by staff, cleared by admin.
+    match /client_errors/{id} {
+      allow read: if isStaff();
+      allow create: if signedIn() && request.resource.data.get('uid', '') == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin() || isSuperAdmin();
+    }
+
     match /report_exports/{id} {
       allow read: if isStaff();
       allow create: if isMember() && request.resource.data.get('generatedByUid', '') == request.auth.uid;
