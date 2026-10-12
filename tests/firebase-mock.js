@@ -230,6 +230,9 @@
   coll('settings').set('society', { bankName: 'Meezan Bank – Model Town Branch', accountTitle: 'Roshan Pakistan Housing Society', accountNumber: '0201-0104567890', iban: 'PK36MEZN0002010104567890', instructions: 'Write your house number in the transfer remarks.' });
   coll('settings').set('recurringBill', { enabled: true, amount: 2500, category: 'Monthly Maintenance', dueDay: 20, notes: '', lastRun: { at: daysAgo(0, 0), issued: 12, period: 'October 2026', skippedBilled: 0, skippedExempt: 1 } });
   coll('settings').set('monthlySummary', { enabled: true });
+  coll('client_errors').set('ce1', { uid: 'u_res1', role: 'resident', kind: 'console', message: 'FirebaseError: Missing or insufficient permissions.', screen: 'bills', version: '2026.10.04', createdAt: daysAgo(1, 10) });
+  coll('client_errors').set('ce2', { uid: 'u_r3', role: 'resident', kind: 'console', message: 'FirebaseError: Missing or insufficient permissions.', screen: 'bills', version: '2026.10.04', createdAt: daysAgo(2, 9) });
+  coll('client_errors').set('ce3', { uid: 'u_r4', role: 'board', kind: 'error', message: "TypeError: Cannot read properties of undefined (reading 'amount')", screen: 'dashboard', version: '2026.10.01', createdAt: daysAgo(12, 9) });
   coll('settings').set('emergencyContacts', { contacts: [
     { icon: '🛡️', label: 'Main gate security (24h)', phone: '0300-1112233' },
     { icon: '🏠', label: 'Society secretary – Tariq Mehmood', phone: '0300-4521876' },

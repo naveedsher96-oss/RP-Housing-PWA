@@ -727,6 +727,9 @@
   let residentSearch = '';
   let societySettings = null;
   let recurringSettings = null;
+  let healthErrors = [];
+  let healthRecurring = null;
+  let healthOpen = false;
   let recurringExempt = [];
   let monthlySummaries = [];
   let fundsList = [];
@@ -2355,6 +2358,48 @@
     if (!seen) { lsSet('rphs.seenVersion', APP_VERSION); return; }
     setTimeout(() => { if (!uiSheetOpen()) openWhatsNew(); }, 600);
   }
+
+  // --- CLIENT ERROR REPORTING (B7) ---
+  // Uncaught errors, failed promises and console.error calls are copied to
+  // client_errors/{auto} (max 8 distinct per app load) so the Health card on the
+  // admin dashboard shows what residents actually hit. Nothing personal beyond uid/role.
+  const reportedErrors = new Set();
+  function errorText(e) {
+    if (e == null) return '';
+    if (typeof e === 'string') return e;
+    if (e.message) return `${e.name || e.code || 'Error'}: ${e.message}`;
+    try { return JSON.stringify(e); } catch (_) { return String(e); }
+  }
+  function reportClientError(kind, err, extra) {
+    try {
+      const message = errorText(err).slice(0, 300);
+      if (!message || !db || !auth || !auth.currentUser || reportedErrors.size >= 8 || reportedErrors.has(message)) return;
+      if (/ResizeObserver|Script error\.|Loading chunk|network-request-failed|unavailable/i.test(message)) return;
+      reportedErrors.add(message);
+      db.collection('client_errors').add({
+        uid: auth.currentUser.uid,
+        role: currentUserProfile ? currentUserProfile.role || '' : '',
+        kind, message,
+        stack: String(err && err.stack || '').slice(0, 1000),
+        extra: String(extra || '').slice(0, 300),
+        screen: activeTab,
+        version: APP_VERSION,
+        lang: uiLang,
+        online: navigator.onLine,
+        ua: navigator.userAgent.slice(0, 200),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    } catch (_) {}
+  }
+  window.reportClientError = reportClientError;
+  window.addEventListener('error', ev => reportClientError('error', ev.error || ev.message, ev.filename ? `${ev.filename}:${ev.lineno}` : ''));
+  window.addEventListener('unhandledrejection', ev => reportClientError('promise', ev.reason));
+  const consoleError = console.error.bind(console);
+  console.error = (...args) => {
+    consoleError(...args);
+    const err = args.find(a => a && typeof a === 'object' && a.message) || args.map(errorText).join(' ');
+    reportClientError('console', err, typeof args[0] === 'string' && typeof err !== 'string' ? args[0] : '');
+  };
 
   // --- LANGUAGE & TEXT SIZE (per device) ---
   let uiLang = lsGet('rphs.lang') === 'ur' ? 'ur' : 'en';
@@ -7667,9 +7712,13 @@
       db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get(),
       db.collection('decisions').get(),
       loadEmergencyContacts(),
-      loadActiveEmergencies()
-    ]).then(([usersSnap, billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap, decSnap]) => {
+      loadActiveEmergencies(),
+      canSeeHealth() ? db.collection('client_errors').orderBy('createdAt', 'desc').limit(100).get() : null,
+      canSeeHealth() ? db.collection('settings').doc('recurringBill').get() : null
+    ]).then(([usersSnap, billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap, decSnap, , , errSnap, recSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      healthErrors = errSnap ? errSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
+      healthRecurring = recSnap && recSnap.exists ? recSnap.data() : null;
       decisionsList = sortDecisions(decSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(x => !x.isDeleted));
       // The Bills list is what the Defaulters sheet and proof review read.
       if (seq === billsSeq) {
@@ -7752,6 +7801,7 @@
       ${emergencyButtonHtml()}
       ${currentUserProfile.role === 'admin' ? '<div id="backup-reminder"></div>' : ''}
       ${renderEmergencyContactsCard()}
+      ${renderHealthCard()}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Approved Residents', residents)}
@@ -7942,6 +7992,7 @@
     // profile & preferences
     'Your registered society details on file.': 'سوسائٹی میں آپ کی درج شدہ تفصیلات۔', 'resident': 'رہائشی', 'Resident': 'رہائشی', 'House / Plot:': 'مکان / پلاٹ:', 'CNIC:': 'شناختی کارڈ:', 'Phone:': 'فون:', 'Email:': 'ای میل:', 'Blood Group:': 'بلڈ گروپ:', 'Occupancy Type:': 'رہائش کی نوعیت:', 'Owner': 'مالک', 'Tenant': 'کرایہ دار', 'Family / Dependents:': 'خاندان / زیرِ کفالت:', 'Update Biodata': 'کوائف اپ ڈیٹ کریں',
     'What\'s new': 'نیا کیا ہے', 'This update': 'یہ اپڈیٹ', 'Got it': 'سمجھ گیا', 'House already registered': 'گھر پہلے سے رجسٹرڈ ہے', 'Approve anyway': 'پھر بھی منظور کریں',
+    'App Health': 'ایپ کی صحت', 'No errors in the last 7 days': 'پچھلے 7 دنوں میں کوئی خرابی نہیں', 'Scheduled jobs': 'طے شدہ کام', 'Clear': 'صاف کریں', 'Clear error reports?': 'خرابی کی رپورٹیں صاف کریں؟',
     'Preferences': 'ترجیحات', 'Your house card on the Dashboard': 'ڈیش بورڈ پر آپ کے گھر کا کارڈ', 'Text size': 'متن کا سائز', 'Bigger text is easier to read on this phone.': 'بڑا متن اس فون پر پڑھنے میں آسان ہے۔', 'Normal': 'عام', 'Large': 'بڑا', 'Extra large': 'بہت بڑا',
     'Appearance': 'ظاہری شکل', "Dark is easier on the eyes at night; Light is clearer in sunlight. Auto follows your phone's setting.": 'گہرا موڈ رات میں آنکھوں کے لیے بہتر ہے؛ روشن موڈ دھوپ میں صاف نظر آتا ہے۔ آٹو آپ کے فون کی سیٹنگ پر چلتا ہے۔', '🌙 Dark': '🌙 گہرا', '☀️ Light': '☀️ روشن', '📱 Auto': '📱 آٹو',
     'Bill and notice alerts': 'بل اور اعلانات کی اطلاعات', 'Blocked in your phone settings. Allow notifications for RPHS there.': 'آپ کے فون کی سیٹنگز میں بند ہیں۔ وہاں RPHS کے لیے اطلاعات کی اجازت دیں۔', 'This browser cannot show alerts.': 'یہ براؤزر اطلاعات نہیں دکھا سکتا۔', 'Notifications on this phone': 'اس فون پر اطلاعات',
@@ -8243,6 +8294,101 @@
     if (a >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
     return String(Math.round(n));
   }
+
+  // --- APP HEALTH CARD (admin / superadmin dashboard) ---
+  function canSeeHealth() {
+    return !!currentUserProfile && (currentUserProfile.role === 'admin' || currentUserProfile.role === 'superadmin');
+  }
+  window.toggleHealthCard = function() {
+    healthOpen = !healthOpen;
+    const el = document.getElementById('health-card');
+    if (el) el.outerHTML = renderHealthCard();
+  };
+  function healthErrorGroups() {
+    const groups = new Map();
+    healthErrors.forEach(e => {
+      const key = String(e.message || '').slice(0, 300);
+      const g = groups.get(key) || { message: key, count: 0, last: null, screens: new Set(), roles: new Set(), versions: new Set() };
+      g.count++;
+      const at = toDate(e.createdAt);
+      if (at && (!g.last || at > g.last)) g.last = at;
+      if (e.screen) g.screens.add(e.screen);
+      if (e.role) g.roles.add(e.role);
+      if (e.version) g.versions.add(e.version);
+      groups.set(key, g);
+    });
+    return [...groups.values()].sort((a, b) => (b.last || 0) - (a.last || 0));
+  }
+  function renderHealthCard() {
+    if (!canSeeHealth()) return '';
+    const weekAgo = Date.now() - 7 * 86400000;
+    const recent = healthErrors.filter(e => { const d = toDate(e.createdAt); return d && d >= weekAgo; });
+    const groups = healthErrorGroups();
+    const open = healthOpen;
+    const rec = healthRecurring || {};
+    const when = v => { const d = toDate(v); return d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''; };
+    const job = (label, ok, text) => `
+      <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border);">
+        <span style="width:9px; height:9px; border-radius:50%; flex-shrink:0; background:${ok === null ? 'var(--text-faint)' : ok ? 'var(--success)' : 'var(--warning)'};"></span>
+        <span style="flex:1; min-width:0; font-size:13px;"><b>${label}</b> <span style="color:var(--text-muted);">· ${text}</span></span>
+      </div>`;
+    const lastRun = rec.lastRun;
+    const lastRunAt = lastRun ? toDate(lastRun.at) : null;
+    const lastFee = rec.lateFeeLastRun;
+    const latestSummary = monthlySummaries[0];
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    const summaryExpected = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()).padStart(2, '0'); })();
+    const status = recent.length ? 'warning' : 'success';
+    return `
+      <div class="card" style="cursor:default; margin-bottom:14px; padding-top:6px; padding-bottom:${open ? 16 : 6}px;" id="health-card">
+        <button type="button" onclick="toggleHealthCard()" aria-expanded="${open}" aria-controls="health-body" style="display:flex; align-items:center; gap:10px; width:100%; padding:10px 0; background:none; border:0; color:inherit; text-align:left; cursor:pointer; font:inherit;">
+          <span style="font-size:18px;">🩺</span>
+          <span style="flex:1; min-width:0;">
+            <span style="display:block; font-weight:700; font-size:14px;">App Health</span>
+            <span id="health-summary" style="display:block; font-size:12.5px; color:var(--${status});">${recent.length ? `${recent.length} error${recent.length === 1 ? '' : 's'} in the last 7 days` : 'No errors in the last 7 days'} · v${APP_VERSION}</span>
+          </span>
+          <span style="display:inline-block; transition:transform .2s; transform:rotate(${open ? 180 : 0}deg); color:var(--text-muted);">${icon('chevron-down')}</span>
+        </button>
+        ${open ? `
+        <div id="health-body">
+          <div style="font-size:13px; color:var(--text-faint); margin-bottom:4px;">Scheduled jobs</div>
+          ${job('Recurring bills', rec.enabled === true ? !!(lastRunAt && lastRunAt >= monthStart) : null, rec.enabled === true ? (lastRun ? `last run ${when(lastRun.at)}, ${Number(lastRun.issued) || 0} issued` : 'not run yet') : 'off')}
+          ${job('Late fees', rec.lateFeeEnabled === true ? !!lastFee : null, rec.lateFeeEnabled === true ? (lastFee ? `last run ${when(lastFee.at)}, ${Number(lastFee.applied) || 0} applied` : 'not run yet') : 'off')}
+          ${job('Monthly summary', latestSummary ? latestSummary.month >= summaryExpected : false, latestSummary ? `latest ${escapeHtml(latestSummary.period || monthLabel(latestSummary.month))}` : 'none posted yet')}
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; margin-bottom:4px;">
+            <div style="font-size:13px; color:var(--text-faint);">Errors reported by phones (${healthErrors.length})</div>
+            ${healthErrors.length && currentUserProfile.role === 'admin' ? `<button class="btn sm secondary" onclick="clearClientErrors()">Clear</button>` : ''}
+          </div>
+          ${groups.length ? groups.slice(0, 8).map(g => `
+            <div class="health-error" style="padding:8px 0; border-top:1px solid var(--border);">
+              <div style="display:flex; justify-content:space-between; gap:8px; align-items:baseline;">
+                <div style="font-size:13px; font-weight:600; word-break:break-word; flex:1; min-width:0;">${escapeHtml(g.message)}</div>
+                <span class="badge ${g.count > 1 ? 'overdue' : 'closed'}" style="flex-shrink:0;">×${g.count}</span>
+              </div>
+              <div style="font-size:12px; color:var(--text-faint); margin-top:2px;">${g.last ? timeAgo(g.last) : ''}${g.screens.size ? ' · ' + escapeHtml([...g.screens].join(', ')) : ''}${g.roles.size ? ' · ' + escapeHtml([...g.roles].join(', ')) : ''}${g.versions.size ? ' · v' + escapeHtml([...g.versions].join(', v')) : ''}</div>
+            </div>`).join('') : `<div style="font-size:13px; color:var(--text-muted); padding:8px 0;">Nothing reported. Errors residents hit in the app show up here automatically.</div>`}
+        </div>` : ''}
+      </div>`;
+  }
+  window.clearClientErrors = async function() {
+    if (currentUserProfile.role !== 'admin' || !healthErrors.length) return;
+    if (!(await confirmSheet({ title: 'Clear error reports?', body: `Delete all ${healthErrors.length} reports? New errors will keep appearing as they happen.`, okLabel: 'Clear' }))) return;
+    try {
+      const snap = await db.collection('client_errors').limit(500).get();
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const batch = db.batch();
+        snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+      healthErrors = [];
+      const el = document.getElementById('health-card');
+      if (el) el.outerHTML = renderHealthCard();
+      toast('Reports cleared', 'ok');
+    } catch (e) {
+      console.error('Error clearing reports:', e);
+      toast('Could not clear: ' + e.message, 'bad');
+    }
+  };
 
   function renderSummariesCard() {
     const isAdmin = currentUserProfile.role === 'admin';

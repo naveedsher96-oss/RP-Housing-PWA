@@ -44,6 +44,7 @@ const SEED = {
   'volunteer_programs/v1': { title: 'V', participants: [] },
   'volunteer_programs/v2': { title: 'V', participants: [{ uid: 'r1' }] },
   'expenses/x1': { title: 'Paint', amount: 100, createdBy: 'adm' },
+  'client_errors/ce1': { uid: 'r1', message: 'boom', kind: 'error' },
   'transfers/tr1': { amount: 100 },
   'monthly_summaries/2026-09': { collected: 1 },
   'settings/society': { bank: 'HBL' },
@@ -242,6 +243,17 @@ const CASES = [
   ['resident cannot log an export as someone else', 'r1', db => addDoc(collection(db, 'report_exports'), { reportType: 'statement', generatedByUid: 'r2', fileName: 'a.pdf' }), false],
   ['export log without generatedByUid is rejected', 'adm', db => addDoc(collection(db, 'report_exports'), { reportType: 'finance_report', fileName: 'a.pdf' }), false],
   ['pending resident cannot log an export', 'pend', db => addDoc(collection(db, 'report_exports'), { reportType: 'statement', generatedByUid: 'pend' }), false],
+  // ---- client error reports (B7) ----
+  ['resident reports an error as themselves', 'r1', db => addDoc(collection(db, 'client_errors'), { uid: 'r1', message: 'TypeError: x', kind: 'error' }), true],
+  ['pending resident can report an error too', 'pend', db => addDoc(collection(db, 'client_errors'), { uid: 'pend', message: 'permission', kind: 'console' }), true],
+  ['cannot report an error under another uid', 'r1', db => addDoc(collection(db, 'client_errors'), { uid: 'r2', message: 'x', kind: 'error' }), false],
+  ['error report without uid is rejected', 'r1', db => addDoc(collection(db, 'client_errors'), { message: 'x', kind: 'error' }), false],
+  ['resident cannot read error reports', 'r1', db => getDoc(doc(db, 'client_errors/ce1')), false],
+  ['board can read error reports', 'brd', db => getDoc(doc(db, 'client_errors/ce1')), true],
+  ['admin can clear an error report', 'adm', db => deleteDoc(doc(db, 'client_errors/ce1')), true],
+  ['superadmin can clear an error report', 'sa', db => deleteDoc(doc(db, 'client_errors/ce1')), true],
+  ['board cannot clear error reports', 'brd', db => deleteDoc(doc(db, 'client_errors/ce1')), false],
+  ['error reports cannot be edited', 'adm', db => updateDoc(doc(db, 'client_errors/ce1'), { message: 'changed' }), false],
 ];
 
 // ---------- runner ----------
