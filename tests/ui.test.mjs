@@ -381,15 +381,23 @@ test('admin: can lodge a complaint of their own', async page => {
 }, 'admin');
 
 test('resident: active emergency is pinned on the dashboard with contacts; no broadcast controls', async page => {
-  const text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
+  let text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
   assert(/Gas leak near House 24/.test(text) && /EMERGENCY · GAS LEAK/i.test(text), `active emergency should be pinned on top, got: ${text.slice(0, 160)}`);
   assert(!/Stray dog pack/.test(text), 'resolved emergency must not be pinned');
-  assert(/Emergency Contacts/.test(text) && /Main gate security/.test(text), 'emergency contacts card should list society contacts');
+  assert(/Emergency Contacts/.test(text) && /7 numbers · tap to show/.test(text) && !/Main gate security/.test(text), 'emergency contacts card should start collapsed with a count');
+  assert(await page.$eval('#emg-contacts-card [aria-expanded]', b => b.getAttribute('aria-expanded')) === 'false', 'caret button should report collapsed');
+  await page.click('#emg-contacts-card [aria-expanded]');
+  await page.waitForSelector('#emg-contacts-body', { timeout: 5000 });
+  assert(await page.locator('#emg-contacts-body .contact-row').count() === 7, 'expanding should show every contact on the card');
+  text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
+  assert(/Main gate security/.test(text), 'expanded card should list society contacts');
   const tel = await page.$eval('#emg-contacts-card .contact-call', a => a.getAttribute('href'));
   assert(tel === 'tel:03001112233', `Call button should dial the number, got ${tel}`);
   assert(await page.locator('.emg-btn').count() === 0, 'residents must not see the broadcast button');
   assert(!/Mark resolved/.test(text), 'residents must not be able to resolve emergencies');
   assert(await page.locator('#emg-contacts-card .btn:has-text("Edit")').count() === 0, 'residents must not edit contacts');
+  await page.click('#emg-contacts-card [aria-expanded]');
+  await page.waitForSelector('#emg-contacts-body', { state: 'detached', timeout: 5000 });
   await page.evaluate(() => openEmergencyContactsModal());
   await page.waitForSelector('#emg-contacts-all', { timeout: 5000 });
   assert(await page.locator('#emg-contacts-all .contact-row').count() === 7, 'all 7 contacts should be listed in the sheet');

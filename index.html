@@ -2067,6 +2067,7 @@
 
   // --- ICONS (Lucide-style strokes) ---
   const ICON_PATHS = {
+    'chevron-down': '<polyline points="6 9 12 15 18 9"/>',
     home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
     bell:'<path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
     grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -3239,19 +3240,31 @@
       </div>`;
   }
 
+  let emgContactsOpen = false;
+  window.toggleEmergencyContacts = function() {
+    emgContactsOpen = !emgContactsOpen;
+    const el = document.getElementById('emg-contacts-card');
+    if (el) el.outerHTML = renderEmergencyContactsCard(); else render();
+  };
   function renderEmergencyContactsCard() {
     const list = contactsToShow();
-    const shown = list.slice(0, 4);
     const isAdminish = canBroadcastEmergency();
+    const open = emgContactsOpen;
     return `
-      <div class="card" style="cursor:default; margin-bottom:14px;" id="emg-contacts-card">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
-          <div style="font-weight:700; font-size:14px;">Emergency Contacts</div>
-          ${isAdminish ? `<button class="btn sm secondary" onclick="openEditEmergencyContactsModal()">Edit</button>` : ''}
-        </div>
-        <div style="font-size:13px; color:var(--text-faint); margin-bottom:6px;">Tap Call — works even when the app is offline.</div>
-        <div class="contact-list">${shown.map(contactRow).join('')}</div>
-        ${list.length > shown.length ? `<button class="btn sm secondary block" style="margin-top:10px;" onclick="openEmergencyContactsModal()">All ${list.length} contacts</button>` : ''}
+      <div class="card" style="cursor:default; margin-bottom:14px; padding-top:6px; padding-bottom:${open ? 16 : 6}px;" id="emg-contacts-card">
+        <button type="button" onclick="toggleEmergencyContacts()" aria-expanded="${open}" aria-controls="emg-contacts-body" style="display:flex; align-items:center; gap:10px; width:100%; padding:10px 0; background:none; border:0; color:var(--text); text-align:left; font:inherit; cursor:pointer;">
+          <span style="font-size:18px;">📞</span>
+          <span style="flex:1; min-width:0;">
+            <span style="display:block; font-weight:700; font-size:14px;">Emergency Contacts</span>
+            <span style="display:block; font-size:12.5px; color:var(--text-faint);">${open ? 'Tap Call — works even when the app is offline.' : `${list.length} numbers · tap to show`}</span>
+          </span>
+          <span class="emg-caret" style="display:inline-block; transition:transform .2s; transform:rotate(${open ? 180 : 0}deg); color:var(--text-muted);">${icon('chevron-down')}</span>
+        </button>
+        ${open ? `
+        <div id="emg-contacts-body">
+          <div class="contact-list">${list.map(contactRow).join('')}</div>
+          ${isAdminish ? `<button class="btn sm secondary block" style="margin-top:10px;" onclick="openEditEmergencyContactsModal()">${icon('edit')} Edit contacts</button>` : ''}
+        </div>` : ''}
       </div>`;
   }
 
@@ -7853,7 +7866,7 @@
     'Monthly Financial Summaries': 'ماہانہ مالی خلاصے', 'Posted automatically on the 1st of every month: what came in, what was spent and the closing balances. Amounts in PKR.': 'ہر مہینے کی پہلی تاریخ کو خودکار طور پر شائع: کیا آیا، کیا خرچ ہوا اور اختتامی بیلنس۔ رقوم روپوں میں۔',
     'In': 'آمد', 'Out': 'خرچ', 'Net': 'خالص', 'Generate': 'تیار کریں', 'Breakdown': 'تفصیل', '📊 Breakdown': '📊 تفصیل', '📄 PDF': '📄 PDF',
     // emergency
-    'Emergency Contacts': 'ہنگامی رابطے', '📞 Emergency contacts': '📞 ہنگامی رابطے', 'Tap Call — works even when the app is offline.': 'کال دبائیں — ایپ آف لائن ہونے پر بھی کام کرتا ہے۔', 'All {x} contacts': 'تمام {x} رابطے', 'Mark resolved': 'حل شدہ نشان زد کریں',
+    'Emergency Contacts': 'ہنگامی رابطے', '📞 Emergency contacts': '📞 ہنگامی رابطے', 'Tap Call — works even when the app is offline.': 'کال دبائیں — ایپ آف لائن ہونے پر بھی کام کرتا ہے۔', 'All {x} contacts': 'تمام {x} رابطے', '{x} numbers · tap to show': '{x} نمبر · دیکھنے کے لیے ٹیپ کریں', 'Edit contacts': 'رابطے ترمیم کریں', 'Mark resolved': 'حل شدہ نشان زد کریں',
     'Posted by Management · {x}': 'انتظامیہ کی جانب سے · {x}', 'Posted by Board · {x}': 'بورڈ کی جانب سے · {x}', 'Posted by {x}': '{x} کی جانب سے', '✓ Resolved': '✓ حل ہو گیا', 'Resolved': 'حل شدہ',
     // notices / polls
     'Official community news and circulars.': 'سوسائٹی کی سرکاری خبریں اور اطلاع نامے۔', 'No announcements posted yet.': 'ابھی کوئی اعلان نہیں۔', 'Read more': 'مزید پڑھیں', 'Share on WhatsApp': 'واٹس ایپ پر شیئر کریں',
