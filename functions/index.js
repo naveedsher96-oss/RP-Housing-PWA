@@ -729,4 +729,31 @@ exports.sendPushOnNotification = onDocumentCreated(
   }
 );
 
+// Lost & Found alert: a new listing with alertAll: true (lost/found only, see
+// firestore.rules) notifies every approved member except the poster. Runs here
+// because residents may not read the member list to notify everyone themselves.
+exports.listingAlert = onDocumentCreated(
+  "listings/{listingId}",
+  async (event) => {
+    const l = event.data && event.data.data();
+    if (!l || l.alertAll !== true || !["lost", "found"].includes(l.kind) || !l.createdBy) return;
+    const db = admin.firestore();
+    const author = await db.collection("users").doc(l.createdBy).get();
+    const a = author.exists ? author.data() : null;
+    if (!a || a.approved !== true || a.suspended === true) return;
+
+    const title = `${l.kind === "lost" ? "🔍 Lost" : "🎁 Found"}: ${String(l.title || "").slice(0, 80)}`;
+    const body = `${a.name || "A resident"}${a.house ? " (" + a.house + ")" : ""}${l.location ? " · " + String(l.location).slice(0, 80) : ""} — open Lost & Found to help.`;
+    const users = await db.collection("users").where("approved", "==", true).get();
+    const targets = users.docs.filter((d) => d.id !== l.createdBy && d.data().suspended !== true);
+    for (let i = 0; i < targets.length; i += 400) {
+      const batch = db.batch();
+      targets.slice(i, i + 400).forEach((d) => {
+        batch.set(d.ref.collection("notifications").doc(), { ...notificationDoc(title, body, "notice"), category: "general" });
+      });
+      await batch.commit();
+    }
+  }
+);
+
 exports._applyLateFees = applyLateFees;
