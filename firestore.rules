@@ -65,21 +65,29 @@ service cloud.firestore {
     }
 
     // ---------- users ----------
+    // Fields only admin / super admin may set. superAdmin and boardMember grant
+    // management powers on their own (see isSuperAdmin / isBoard), so a member
+    // must never be able to write them on their own profile.
+    function privilegedUserFields() {
+      return ['role', 'approved', 'suspended', 'superAdmin', 'boardMember',
+              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason'];
+    }
     match /users/{uid} {
       // Own profile, any staff member, or a board member (needed to broadcast notices)
       allow read: if isOwner(uid) || isStaff() || isBoard();
 
-      // Self-registration: must be your own doc, role 'resident', not pre-approved
+      // Self-registration: must be your own doc, role 'resident', not pre-approved,
+      // and no management flags.
       allow create: if isOwner(uid)
         && request.resource.data.role == 'resident'
-        && request.resource.data.approved == false;
+        && request.resource.data.approved == false
+        && !request.resource.data.keys().hasAny(['suspended', 'superAdmin', 'boardMember',
+              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason']);
 
-      // Self-update: cannot escalate role, self-approve/unsuspend, or opt out of recurring bills
+      // Self-update: cannot escalate role, make yourself super admin or board,
+      // self-approve/unsuspend, or opt out of recurring bills.
       allow update: if (isOwner(uid)
-          && request.resource.data.get('role', '') == resource.data.get('role', '')
-          && request.resource.data.get('approved', false) == resource.data.get('approved', false)
-          && request.resource.data.get('suspended', false) == resource.data.get('suspended', false)
-          && request.resource.data.get('billExempt', false) == resource.data.get('billExempt', false))
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(privilegedUserFields()))
         || isAdmin() || isSuperAdmin();
 
       // No hard deletes of user records (soft policy)
@@ -129,7 +137,7 @@ service cloud.firestore {
       allow delete: if isAdmin() || isSuperAdmin() || ownsPost();
       // Publishers may edit; everyone else may only set or change their own vote while the poll is open.
       allow update: if isAdmin() || isSuperAdmin() || ownsPost()
-        || (signedIn()
+        || (isMember()
             && onlyChanges(['votes'])
             && resource.data.get('closed', false) != true
             && request.resource.data.votes.diff(resource.data.get('votes', {})).affectedKeys().hasOnly([request.auth.uid]));
@@ -174,8 +182,9 @@ service cloud.firestore {
             && resource.data.uid == request.auth.uid
             && request.resource.data.status == 'submitted'
             && resource.data.status in ['unpaid', 'submitted']
-            && request.resource.data.amount == resource.data.amount
-            && request.resource.data.uid == resource.data.uid);
+            && onlyChanges(['status', 'paymentMethod', 'paymentDate', 'paymentRef',
+                            'proofId', 'proofData', 'proofType', 'proofName', 'proofBatch',
+                            'proofRejectedReason', 'proofUploadedAt']));
       allow delete: if false; // soft delete only
     }
 
@@ -193,7 +202,7 @@ service cloud.firestore {
       // progress totals work; unverified ones only by staff or their owner.
       allow read: if isStaff()
         || (signedIn() && resource.data.uid == request.auth.uid)
-        || (signedIn() && resource.data.status == 'verified');
+        || (isMember() && resource.data.status == 'verified');
       // Residents and staff submit their own (never pre-verified); admin can record verified cash entries
       allow create: if isAdmin()
         || ((isApprovedResident() || isStaff())
@@ -274,7 +283,9 @@ service cloud.firestore {
       // Files of society documents (kind 'document') are readable by every approved member.
       allow read: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid)
         || (isApprovedResident() && resource.data.get('kind', '') in ['document', 'listing']);
-      allow create: if isAdmin() || (signedIn() && request.resource.data.uid == request.auth.uid);
+      // Society document files only from those who may add documents.
+      allow create: if isAdmin() || (signedIn() && request.resource.data.uid == request.auth.uid
+        && (request.resource.data.get('kind', '') != 'document' || canPublish()));
       allow update: if isAdmin();
       allow delete: if false;
     }
@@ -294,12 +305,33 @@ service cloud.firestore {
     // Any approved member posts in their own name and edits/closes/deletes
     // their own post; staff (admin, board, super admin) may moderate any post.
     // Soft delete only.
+    // alertAll: true asks the listingAlert Cloud Function to notify every
+    // approved member (lost & found only; residents cannot read the member list).
     match /listings/{id} {
       allow read: if isStaff() || isApprovedResident();
       allow create: if (isStaff() || isApprovedResident())
-        && request.resource.data.get('createdBy', '') == request.auth.uid;
-      allow update: if isStaff() || (isApprovedResident() && resource.data.get('createdBy', '') == request.auth.uid);
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('status', 'open') == 'open'
+        && request.resource.data.get('isDeleted', false) != true
+        && (request.resource.data.get('alertAll', false) != true
+            || request.resource.data.get('kind', '') in ['lost', 'found']);
+      // Owner edits, closes, reopens or deletes their post (never re-assigns it,
+      // re-sends the alert or restores a removed post); staff only remove posts.
+      allow update: if listingOwnerEdits() || (isStaff() && listingModeration());
       allow delete: if false;
+
+      function listingOwnerEdits() {
+        return (isApprovedResident() || isStaff())
+          && resource.data.get('createdBy', '') == request.auth.uid
+          && resource.data.get('isDeleted', false) != true
+          && onlyChanges(['kind', 'title', 'description', 'price', 'location', 'contactPhone',
+                          'status', 'closedAt', 'updatedAt',
+                          'isDeleted', 'deletedAt', 'deletedBy', 'deletedByRole']);
+      }
+      function listingModeration() {
+        return onlyChanges(['isDeleted', 'deletedAt', 'deletedBy', 'deletedByRole'])
+          && request.resource.data.isDeleted == true;
+      }
     }
 
     // ---------- board meetings: agenda & minutes ----------
@@ -343,7 +375,11 @@ service cloud.firestore {
     // Error reports sent by phones (B7): written as yourself, read by staff, cleared by admin.
     match /client_errors/{id} {
       allow read: if isStaff();
-      allow create: if signedIn() && request.resource.data.get('uid', '') == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.get('uid', '') == request.auth.uid
+        && request.resource.data.get('message', '') is string
+        && request.resource.data.get('message', '').size() <= 300
+        && request.resource.data.get('stack', '') is string
+        && request.resource.data.get('stack', '').size() <= 1000;
       allow update: if false;
       allow delete: if isAdmin() || isSuperAdmin();
     }

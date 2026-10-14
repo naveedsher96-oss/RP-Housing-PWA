@@ -59,6 +59,9 @@ const SEED = {
   'documents/docb': { title: 'Form', createdBy: 'brd' },
   'listings/lr1': { title: 'Cat', kind: 'lost', createdBy: 'r1', status: 'open' },
   'listings/lr2': { title: 'Bike', kind: 'sell', createdBy: 'r2', status: 'open' },
+  'listings/lrc': { title: 'Cot', kind: 'sell', createdBy: 'r1', status: 'closed' },
+  'listings/lrd': { title: 'Old', kind: 'sell', createdBy: 'r1', status: 'open', isDeleted: true },
+  'fund_contributions/fc1': { uid: 'r1', fundId: 'f1', amount: 500, status: 'verified' },
   'proofs/lstf': { uid: 'r2', kind: 'listing', data: 'x' },
   'proofs/docf': { uid: 'adm', kind: 'document', data: 'pdf' },
   'meetings/m1': { title: 'M', status: 'upcoming', suggestionsOpen: true, agenda: [{ text: 'a', byUid: 'adm', source: 'board' }], createdBy: 'adm' },
@@ -254,6 +257,50 @@ const CASES = [
   ['superadmin can clear an error report', 'sa', db => deleteDoc(doc(db, 'client_errors/ce1')), true],
   ['board cannot clear error reports', 'brd', db => deleteDoc(doc(db, 'client_errors/ce1')), false],
   ['error reports cannot be edited', 'adm', db => updateDoc(doc(db, 'client_errors/ce1'), { message: 'changed' }), false],
+  ['oversized error report is rejected', 'r1', db => addDoc(collection(db, 'client_errors'), { uid: 'r1', message: 'x'.repeat(301), kind: 'error' }), false],
+
+  // ---- profile privilege escalation ----
+  ['resident edits own profile details', 'r1', db => updateDoc(doc(db, 'users/r1'), { name: 'R', cnic: '1', phone: '0300', house: 'H1', family: [], mutedCategories: ['polls'] }), true],
+  ['resident cannot make themselves super admin', 'r1', db => updateDoc(doc(db, 'users/r1'), { superAdmin: true }), false],
+  ['resident cannot make themselves a board member', 'r1', db => updateDoc(doc(db, 'users/r1'), { boardMember: true }), false],
+  ['resident cannot change own role', 'r1', db => updateDoc(doc(db, 'users/r1'), { role: 'admin' }), false],
+  ['pending resident cannot approve themselves', 'pend', db => updateDoc(doc(db, 'users/pend'), { approved: true }), false],
+  ['resident cannot exempt themselves from bills', 'r1', db => updateDoc(doc(db, 'users/r1'), { billExempt: true }), false],
+  ['resident cannot set own membership status', 'pend', db => updateDoc(doc(db, 'users/pend'), { membershipStatus: 'approved' }), false],
+  ['board-flag resident cannot make themselves super admin', 'rb', db => updateDoc(doc(db, 'users/rb'), { superAdmin: true }), false],
+  ['new account registers', 'new1', db => setDoc(doc(db, 'users/new1'), { name: 'N', email: 'n@x', role: 'resident', house: 'H', phone: '0', approved: false, biodataSubmitted: false, createdAt: serverTimestamp() }), true],
+  ['new account cannot register as super admin', 'new1', db => setDoc(doc(db, 'users/new1'), { name: 'N', role: 'resident', approved: false, superAdmin: true }), false],
+  ['new account cannot register as board member', 'new1', db => setDoc(doc(db, 'users/new1'), { name: 'N', role: 'resident', approved: false, boardMember: true }), false],
+  ['admin makes a resident a board member', 'adm', db => updateDoc(doc(db, 'users/r2'), { boardMember: true }), true],
+  ['admin exempts a resident from bills', 'adm', db => updateDoc(doc(db, 'users/r2'), { billExempt: true, billExemptReason: 'x' }), true],
+
+  // ---- bill proof submission only touches proof fields ----
+  ['resident submits proof with method, date and ref', 'r1', db => updateDoc(doc(db, 'bills/b1'), { status: 'submitted', paymentMethod: 'bank', paymentDate: '2026-10-01', proofId: 'pr1', proofType: 'image', proofName: 'a.jpg', proofData: deleteField(), proofBatch: '', paymentRef: 'TX1', proofRejectedReason: '', proofUploadedAt: serverTimestamp() }), true],
+  ['resident cannot archive own bill', 'r1', db => updateDoc(doc(db, 'bills/b1'), { status: 'submitted', isDeleted: true }), false],
+  ['resident cannot change own bill period or due date', 'r1', db => updateDoc(doc(db, 'bills/b1'), { status: 'submitted', dueDate: '2030-01-01' }), false],
+  ['resident cannot drop own late fee', 'r1', db => updateDoc(doc(db, 'bills/b1'), { status: 'submitted', lateFee: 0 }), false],
+
+  // ---- pending accounts and community data ----
+  ['pending resident cannot vote in a poll', 'pend', db => updateDoc(doc(db, 'polls/p1'), { votes: { r2: 0, pend: 1 } }), false],
+  ['pending resident cannot read verified contributions', 'pend', db => getDoc(doc(db, 'fund_contributions/fc1')), false],
+  ['resident reads verified contributions', 'r2', db => getDoc(doc(db, 'fund_contributions/fc1')), true],
+
+  // ---- document files ----
+  ['resident cannot store a file as a society document', 'r1', db => addDoc(collection(db, 'proofs'), { uid: 'r1', kind: 'document', data: 'x' }), false],
+  ['board stores a document file', 'brd', db => addDoc(collection(db, 'proofs'), { uid: 'brd', kind: 'document', data: 'x' }), true],
+  ['resident stores a listing photo', 'r1', db => addDoc(collection(db, 'proofs'), { uid: 'r1', kind: 'listing', data: 'x', type: 'image', name: 'a.jpg' }), true],
+
+  // ---- listings: ownership, alerts, moderation ----
+  ['resident posts a lost item with alert', 'r1', db => addDoc(collection(db, 'listings'), { title: 'Bag', kind: 'lost', createdBy: 'r1', status: 'open', alertAll: true, photoIds: [] }), true],
+  ['resident cannot alert everyone for a sale', 'r1', db => addDoc(collection(db, 'listings'), { title: 'Bike', kind: 'sell', createdBy: 'r1', status: 'open', alertAll: true }), false],
+  ['resident edits own listing', 'r1', db => updateDoc(doc(db, 'listings/lr1'), { title: 'Cat Milo', description: 'd', price: 0, location: 'Park', contactPhone: '0300', kind: 'lost', updatedAt: serverTimestamp() }), true],
+  ['resident reopens own listing', 'r1', db => updateDoc(doc(db, 'listings/lrc'), { status: 'open', closedAt: null, updatedAt: serverTimestamp() }), true],
+  ['resident deletes own listing', 'r1', db => updateDoc(doc(db, 'listings/lr1'), { isDeleted: true, deletedAt: serverTimestamp(), deletedBy: 'R', deletedByRole: 'owner' }), true],
+  ['resident cannot hand own listing to someone else', 'r1', db => updateDoc(doc(db, 'listings/lr1'), { createdBy: 'r2' }), false],
+  ['resident cannot re-send the alert', 'r1', db => updateDoc(doc(db, 'listings/lr1'), { alertAll: true }), false],
+  ['resident cannot restore a removed listing', 'r1', db => updateDoc(doc(db, 'listings/lrd'), { isDeleted: false }), false],
+  ['board cannot rewrite a resident listing', 'brd', db => updateDoc(doc(db, 'listings/lr2'), { title: 'Y' }), false],
+  ['admin removes a listing with details', 'adm', db => updateDoc(doc(db, 'listings/lr2'), { isDeleted: true, deletedAt: serverTimestamp(), deletedBy: 'A', deletedByRole: 'admin' }), true],
 ];
 
 // ---------- runner ----------

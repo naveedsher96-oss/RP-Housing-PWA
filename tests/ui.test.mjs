@@ -617,8 +617,8 @@ test('resident: Lost & Found board lists open posts, opens a detail sheet with C
   await page.waitForFunction(() => [...window.__mockStore.listings.values()].some(l => l.title === 'Blue school bag with books'), null, { timeout: 8000 });
   const stored = await page.evaluate(() => [...window.__mockStore.listings.values()].find(l => l.title === 'Blue school bag with books'));
   assert(stored.kind === 'lost' && stored.createdBy === 'u_res1' && stored.status === 'open' && stored.createdByHouse, `listing stored wrongly: ${JSON.stringify(stored)}`);
-  await page.waitForFunction(() => [...(window.__mockStore['users/u_r2/notifications'] || new Map()).values()].some(n => /Blue school bag/.test(n.title)), null, { timeout: 8000 })
-    .catch(() => { throw new Error('other residents should be alerted about a lost item'); });
+  // Residents cannot read the member list, so the alert is sent by the listingAlert Cloud Function.
+  assert(stored.alertAll === true, 'a lost item should ask the server to alert all residents (alertAll)');
   await settle(page);
   text = await page.evaluate(() => document.getElementById('listings-body').innerText);
   assert(/Blue school bag/.test(text), 'new post should appear on the board');
@@ -798,8 +798,9 @@ test('admin: App Health card shows last-7-day errors, scheduled jobs, records a 
   await page.waitForSelector('#ui-sheet [data-ui="ok"]', { timeout: 5000 });
   await page.click('#ui-sheet [data-ui="ok"]');
   await page.waitForFunction(() => __mockStore.client_errors.size === 0, null, { timeout: 5000 });
-  body = await page.$eval('#health-body', el => el.innerText);
-  assert(/Nothing reported/.test(body), 'cleared list should show the empty state');
+  // The card re-renders just after the store empties, so wait for it rather than reading once.
+  await page.waitForFunction(() => /Nothing reported/.test((document.getElementById('health-body') || {}).innerText || ''), null, { timeout: 5000 })
+    .catch(() => { throw new Error('cleared list should show the empty state'); });
   summary = await page.$eval('#health-summary', el => el.innerText);
   assert(/No errors in the last 7 days/.test(summary), `summary should reset, got "${summary}"`);
   noErrors(page);
