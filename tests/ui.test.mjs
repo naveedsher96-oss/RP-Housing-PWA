@@ -393,8 +393,9 @@ test('resident: active emergency is pinned on the dashboard with contacts; no br
   assert(/Main gate security/.test(text), 'expanded card should list society contacts');
   const tel = await page.$eval('#emg-contacts-card .contact-call', a => a.getAttribute('href'));
   assert(tel === 'tel:03001112233', `Call button should dial the number, got ${tel}`);
-  assert(await page.locator('.emg-btn').count() === 0, 'residents must not see the broadcast button');
-  assert(!/Mark resolved/.test(text), 'residents must not be able to resolve emergencies');
+  assert(await page.locator('.emg-btn').count() === 1 && /Emergency Alarm/.test(await page.locator('.emg-btn').innerText()), 'residents should see the Emergency Alarm button');
+  assert(!/Mark resolved|Cancel alarm/.test(text), 'residents must not be able to resolve someone else\'s emergency');
+  assert(!(await page.locator('#emg-alarm.show').count()), 'an emergency older than an hour must not sound the alarm');
   assert(await page.locator('#emg-contacts-card .btn:has-text("Edit")').count() === 0, 'residents must not edit contacts');
   await page.click('#emg-contacts-card [aria-expanded]');
   await page.waitForSelector('#emg-contacts-body', { state: 'detached', timeout: 5000 });
@@ -409,10 +410,11 @@ test('resident: active emergency is pinned on the dashboard with contacts; no br
   noErrors(page);
 }, 'resident');
 
-test('board: sees the emergency banner but cannot broadcast or edit contacts', async page => {
+test('board: sees the emergency banner and can raise an alarm, but cannot resolve others or edit contacts', async page => {
   const text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
   assert(/Gas leak near House 24/.test(text), 'board should see the pinned emergency');
-  assert(await page.locator('.emg-btn').count() === 0 && !/Mark resolved/.test(text), 'board must not get broadcast/resolve controls');
+  assert(await page.locator('.emg-btn').count() === 1, 'board should see the Emergency Alarm button');
+  assert(!/Mark resolved|Cancel alarm/.test(text), 'board must not resolve management\'s emergency');
   noErrors(page);
 }, 'board');
 
@@ -451,6 +453,54 @@ test('admin: sends an emergency broadcast (two-step confirm), everyone is alerte
   assert(!/Fire at the community hall/.test(text), 'resolved emergency should leave the dashboard');
   noErrors(page);
 }, 'admin');
+
+test('resident: raises an emergency alarm with one tap of a type; everyone is alerted by the server; can cancel it', async page => {
+  const before = await page.evaluate(() => window.__mockStore.announcements.size);
+  await page.click('.emg-btn');
+  await page.waitForSelector('#emg-form', { timeout: 5000 });
+  await page.click('#emg-types .chip[data-type="security"]');
+  await page.evaluate(() => { document.getElementById('emg-share-wa').checked = false; });
+  await page.click('#emg-send');
+  await page.waitForSelector('#emg-confirm:visible', { timeout: 3000 });
+  assert(await page.evaluate(n => window.__mockStore.announcements.size === n, before), 'first tap must only ask for confirmation');
+  await page.click('#emg-send');
+  await page.waitForFunction(n => window.__mockStore.announcements.size === n + 1, before, { timeout: 8000 })
+    .catch(() => { throw new Error('alarm was not created'); });
+  const a = await page.evaluate(() => [...window.__mockStore.announcements.entries()].map(([id, x]) => ({ id, ...x })).find(x => x.createdBy === 'u_res1' && x.emergency));
+  assert(a.alertAll === true && a.createdByRole === 'resident' && a.createdByHouse && /^Security threat at /.test(a.title) && a.content && a.emergencyType === 'security',
+    `resident alarm stored wrongly: ${JSON.stringify(a)}`);
+  assert(!(await page.locator('#emg-alarm.show').count()), 'the person who raised the alarm should not get the siren');
+  await settle(page);
+  let text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
+  assert(/Security threat at/.test(text) && /Raised by Ayesha/.test(text) && /Cancel alarm/.test(text), `alarm should be pinned with the raiser and a cancel button: ${text.slice(0, 300)}`);
+  callLater(page, `resolveEmergency('${a.id}')`);
+  await page.waitForSelector('#ui-sheet [data-ui="ok"]', { timeout: 5000 });
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForFunction(id => !!window.__mockStore.announcements.get(id).resolvedAt, a.id, { timeout: 8000 })
+    .catch(() => { throw new Error('alarm was not cancelled'); });
+  noErrors(page);
+}, 'resident');
+
+test('resident: a fresh alarm from someone else takes over the screen with Call and stop buttons', async page => {
+  await page.evaluate(() => {
+    window.__mockStore.announcements.set('fresh1', { title: 'Fire at House 9, Block A', content: 'Smoke from the kitchen.', emergency: true, emergencyType: 'fire', alertAll: true,
+      createdBy: 'u_r2', createdByName: 'Muhammad Usman Khan', createdByRole: 'resident', createdByHouse: 'House 3, Block A', createdAt: new Date() });
+    startEmergencyWatch();
+  });
+  await page.waitForSelector('#emg-alarm.show', { timeout: 5000 }).catch(() => { throw new Error('alarm screen did not appear'); });
+  const t = await page.$eval('#emg-alarm', el => el.innerText);
+  assert(/EMERGENCY/.test(t) && /Fire at House 9/.test(t) && /Raised by Muhammad Usman Khan/.test(t), `alarm screen text: ${t}`);
+  assert(await page.$eval('#emg-alarm .emg-call', a => a.getAttribute('href')) === 'tel:03001112233', 'alarm should offer a Call button for the first emergency contact');
+  await page.click('#emg-ack');
+  assert(!(await page.locator('#emg-alarm.show').count()), 'stop should close the alarm');
+  await page.evaluate(() => startEmergencyWatch());
+  await page.waitForTimeout(300);
+  assert(!(await page.locator('#emg-alarm.show').count()), 'a seen alarm must not ring again');
+  await page.evaluate(() => testEmergencyAlarm());
+  assert(/TEST/.test(await page.$eval('#emg-alarm', el => el.innerText)), 'test alarm should show');
+  await page.click('#emg-ack');
+  noErrors(page);
+}, 'resident');
 
 test('superadmin: edits the emergency contacts list', async page => {
   await page.evaluate(() => openEditEmergencyContactsModal());

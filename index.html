@@ -462,6 +462,22 @@
   .emg-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
   .emg-btn{ width:100%; display:flex; align-items:center; justify-content:center; gap:8px; background:var(--danger); color:#fff; border:none; border-radius:14px; padding:13px 16px; font-size:15px; font-weight:800; font-family:inherit; cursor:pointer; margin-bottom:14px; box-shadow:0 6px 18px rgba(229,97,90,0.35); }
   .emg-btn .ico-svg{ width:20px; height:20px; }
+  /* full-screen emergency alarm */
+  #emg-alarm{ position:fixed; inset:0; z-index:1000; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); text-align:center; color:#fff; background:#b3261e; animation:emgFlash 1s steps(1, end) infinite; overflow-y:auto; }
+  #emg-alarm.show{ display:flex; }
+  @keyframes emgFlash{ 0%{ background:#b3261e; } 50%{ background:#5c0f0a; } }
+  @keyframes emgPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.12); } }
+  #emg-alarm .emg-siren{ font-size:72px; line-height:1; animation:emgPulse .8s ease-in-out infinite; }
+  #emg-alarm .emg-word{ font-size:34px; font-weight:900; letter-spacing:.12em; }
+  #emg-alarm .emg-kind{ font-size:16px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; background:rgba(0,0,0,0.28); border-radius:20px; padding:5px 14px; }
+  #emg-alarm h2{ font-size:24px; font-weight:800; margin:0; line-height:1.25; max-width:460px; overflow-wrap:anywhere; }
+  #emg-alarm p{ margin:0; font-size:16px; line-height:1.5; max-width:460px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  #emg-alarm .emg-who{ font-size:14px; opacity:.9; }
+  #emg-alarm .emg-acts{ display:flex; flex-direction:column; gap:10px; width:100%; max-width:360px; margin-top:8px; }
+  #emg-alarm .emg-acts a, #emg-alarm .emg-acts button{ display:block; width:100%; border-radius:14px; padding:14px; font:inherit; font-size:16px; font-weight:800; text-decoration:none; cursor:pointer; border:2px solid #fff; }
+  #emg-alarm .emg-call{ background:#fff; color:#b3261e; }
+  #emg-alarm .emg-stop{ background:transparent; color:#fff; }
+  #emg-alarm .emg-tap{ font-size:13px; opacity:.85; }
   .contact-list{ display:flex; flex-direction:column; }
   .contact-row{ display:flex; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--border); }
   .contact-row:first-child{ border-top:none; }
@@ -551,6 +567,8 @@
     <div id="modal-body"></div>
   </div>
 </div>
+
+<div id="emg-alarm" role="alertdialog" aria-modal="true" aria-labelledby="emg-alarm-title"></div>
 
 <div id="ui-sheet" class="modal-overlay">
   <div class="modal-card">
@@ -814,6 +832,7 @@
             currentUserProfile = { uid: user.uid, email: user.email, ...userDoc.data() };
             wasSignedIn = true;
             saveDeviceToken();
+            startEmergencyWatch();
           } else {
             currentUserProfile = null;
             authMessage = { type: 'error', text: 'No resident record was found for this account. Please register or contact the administrator.' };
@@ -829,6 +848,7 @@
         }
       } else {
         currentUserProfile = null;
+        stopEmergencyWatch();
         notifications = [];
         notifsLoadedAt = 0;
         // Nothing from the previous account may show to the next one.
@@ -3301,9 +3321,19 @@
   let activeEmergencies = [];     // unresolved emergency announcements
   let emergencyTypePick = 'security';
 
+  // Admin / super admin manage emergencies (resolve any, edit contacts).
   function canBroadcastEmergency() {
     return !!currentUserProfile && (currentUserProfile.role === 'admin' || isSuperAdmin());
   }
+  // Every approved, active member may raise the alarm.
+  function canRaiseEmergency() {
+    return !!currentUserProfile && (isStaff() || (currentUserProfile.approved === true && currentUserProfile.suspended !== true));
+  }
+  // Management and board can look up every member and notify them from the phone;
+  // a resident's alarm is fanned out by the emergencyAlert Cloud Function (alertAll).
+  function canNotifyEveryone() { return !!(isStaff() || isBoard()); }
+  function raisedByMe(n) { return !!(auth.currentUser && n.createdBy === auth.currentUser.uid); }
+  function canResolveEmergency(n) { return canBroadcastEmergency() || raisedByMe(n); }
   function emergencyTypeMeta(t) {
     return EMERGENCY_TYPES.find(x => x[0] === t) || EMERGENCY_TYPES[EMERGENCY_TYPES.length - 1];
   }
@@ -3341,17 +3371,21 @@
         ${emergencyTag(n)}
         <h3>${escapeHtml(n.title || '')}</h3>
         <p>${escapeHtml(n.content || '')}</p>
-        <div class="emg-meta">${postedByLabel(n)}${n.createdAt ? ' · ' + escapeHtml(timeAgo(n.createdAt)) : ''}</div>
+        <div class="emg-meta">${escapeHtml(emergencyRaisedBy(n))}${n.createdAt ? ' · ' + escapeHtml(timeAgo(n.createdAt)) : ''}</div>
         <div class="emg-actions">
           <button class="btn sm secondary" onclick="openEmergencyContactsModal()">📞 Emergency contacts</button>
-          ${canBroadcastEmergency() ? `<button class="btn sm secondary" onclick="resolveEmergency('${n.id}')">${icon('check')} Mark resolved</button>` : ''}
+          ${canResolveEmergency(n) ? `<button class="btn sm secondary" onclick="resolveEmergency('${n.id}')">${icon('check')} ${canBroadcastEmergency() ? 'Mark resolved' : 'Cancel alarm'}</button>` : ''}
         </div>
       </div>`).join('');
   }
 
+  function emergencyRaisedBy(n) {
+    if (n.createdByRole === 'resident') return 'Raised by ' + (n.createdByName || 'a resident') + (n.createdByHouse ? ' (' + n.createdByHouse + ')' : '');
+    return postedByLabel(n);
+  }
   function emergencyButtonHtml() {
-    if (!canBroadcastEmergency()) return '';
-    return `<button class="emg-btn" onclick="openEmergencyModal()">${icon('alert')} Send Emergency Alert</button>`;
+    if (!canRaiseEmergency()) return '';
+    return `<button class="emg-btn" onclick="openEmergencyModal()">${icon('alert')} ${canBroadcastEmergency() ? 'Send Emergency Alert' : 'Emergency Alarm'}</button>`;
   }
 
   function contactRow(c, i) {
@@ -3389,6 +3423,7 @@
         ${open ? `
         <div id="emg-contacts-body">
           <div class="contact-list">${list.map(contactRow).join('')}</div>
+          <button class="btn sm secondary block" style="margin-top:10px;" onclick="testEmergencyAlarm()">🔔 Test alarm sound</button>
           ${isAdminish ? `<button class="btn sm secondary block" style="margin-top:10px;" onclick="openEditEmergencyContactsModal()">${icon('edit')} Edit contacts</button>` : ''}
         </div>` : ''}
       </div>`;
@@ -3468,21 +3503,23 @@
   };
 
   window.openEmergencyModal = function() {
-    if (!canBroadcastEmergency()) return;
+    if (!canRaiseEmergency()) return;
+    unlockAlarmAudio();
+    const manager = canBroadcastEmergency();
     emergencyTypePick = 'security';
     let armed = false;
     document.getElementById('modal-body').innerHTML = `
-      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px; color:var(--danger);">🚨 Emergency Broadcast</div>
-      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px; line-height:1.5;">Goes to every member's phone immediately — including those who muted notifications — and stays pinned on every dashboard until you mark it resolved. Use only for real emergencies.</div>
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px; color:var(--danger);">🚨 ${manager ? 'Emergency Broadcast' : 'Emergency Alarm'}</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px; line-height:1.5;">Sounds an alarm on every member's phone immediately, including those who muted notifications, and stays pinned on every dashboard until it is resolved. ${manager ? '' : 'Your name and house are shown with the alarm. '}Use only for real emergencies.</div>
       <form id="emg-form">
         <label>What is happening?</label>
         <div class="chip-row" id="emg-types" style="margin:0 0 10px;">
           ${EMERGENCY_TYPES.map(t => `<button type="button" class="chip ${t[0] === emergencyTypePick ? 'active' : ''}" data-type="${t[0]}" onclick="pickEmergencyType('${t[0]}')">${t[2]} ${escapeHtml(t[1])}</button>`).join('')}
         </div>
-        <label>Headline</label>
-        <input type="text" id="emg-title" placeholder="e.g. Gas leak near House 24, Block C" required maxlength="90" />
-        <label>Message — what should residents do?</label>
-        <textarea id="emg-content" placeholder="e.g. Avoid the area, keep windows open, do not light stoves. SNGPL team is on the way." required></textarea>
+        <label>Where / headline${manager ? '' : ' (optional)'}</label>
+        <input type="text" id="emg-title" placeholder="${manager ? 'e.g. Gas leak near House 24, Block C' : escapeHtml('e.g. ' + (currentUserProfile.house || 'House 24, Block C'))}" ${manager ? 'required' : ''} maxlength="90" />
+        <label>Message${manager ? ' — what should residents do?' : ' (optional)'}</label>
+        <textarea id="emg-content" placeholder="${manager ? 'e.g. Avoid the area, keep windows open, do not light stoves. SNGPL team is on the way.' : 'e.g. Someone is trying to break in, please come quickly.'}" ${manager ? 'required' : ''}></textarea>
         <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
           <input type="checkbox" id="emg-share-wa" checked style="width:auto; margin:0;" />
           <span>Also share on WhatsApp after sending</span>
@@ -3495,15 +3532,19 @@
 
     document.getElementById('emg-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const title = document.getElementById('emg-title').value.trim();
-      const content = document.getElementById('emg-content').value.trim();
+      const typeLabel = emergencyTypeMeta(emergencyTypePick)[1];
+      const where = document.getElementById('emg-title').value.trim();
+      // A resident in a hurry may skip the details: the type and their house are enough.
+      const title = manager ? where : (where ? `${typeLabel}: ${where}` : `${typeLabel} at ${currentUserProfile.house || 'a house in RPHS'}`);
+      const content = document.getElementById('emg-content').value.trim() || (manager ? '' : 'Please help or call for help. Open the RPHS app for details.');
       const shareWa = document.getElementById('emg-share-wa').checked;
       if (!title || !content) return;
+      const fanOutHere = canNotifyEveryone();
       const btn = document.getElementById('emg-send');
       if (!armed) {
         armed = true;
         const box = document.getElementById('emg-confirm');
-        box.textContent = `Send "${title}" to every member now? This cannot be recalled.`;
+        box.textContent = `Sound the alarm for "${title}" on every member's phone now?`;
         box.style.display = 'block';
         btn.textContent = 'Yes, send now';
         return;
@@ -3518,14 +3559,16 @@
           emergencyType: emergencyTypePick,
           allowComments: false,
           ...publisherFields(),
+          ...(currentUserProfile.role === 'resident' && !isBoard() ? { createdByRole: 'resident', createdByHouse: currentUserProfile.house || '' } : {}),
+          ...(fanOutHere ? {} : { alertAll: true }),
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        await broadcastNotification('🚨 EMERGENCY: ' + title, content, 'emergency', 'error');
+        if (fanOutHere) await broadcastNotification('🚨 EMERGENCY: ' + title, content, 'emergency', 'error');
         logAudit('emergency', ref.id, 'broadcast', `${emergencyTypeMeta(emergencyTypePick)[1]}: ${title}`);
         closeModal();
-        toast('Emergency alert sent to everyone');
+        toast(fanOutHere ? 'Emergency alert sent to everyone' : 'Alarm raised. Everyone is being alerted.');
         loadData();
-        if (shareWa) openWhatsAppShare(`🚨 *EMERGENCY – ${title}*\n\n${content}\n\n- RPHS Management`);
+        if (shareWa) openWhatsAppShare(`🚨 *EMERGENCY – ${title}*\n\n${content}\n\n- ${manager ? 'RPHS Management' : (currentUserProfile.name || 'RPHS resident') + (currentUserProfile.house ? ', ' + currentUserProfile.house : '')}`);
       } catch (err) {
         btn.disabled = false;
         btn.textContent = 'Yes, send now';
@@ -3541,17 +3584,20 @@
   };
 
   window.resolveEmergency = async function(id) {
-    if (!canBroadcastEmergency()) return;
     const n = activeEmergencies.find(x => x.id === id) || noticesList.find(x => x.id === id);
-    if (!n) return;
-    const ok = await confirmSheet({ title: 'Mark as resolved?', body: `"${n.title}" will be unpinned from everyone's dashboard and members get an all-clear notice.`, okLabel: 'Mark resolved' });
+    if (!n || !canResolveEmergency(n)) return;
+    const manager = canBroadcastEmergency();
+    const ok = await confirmSheet(manager
+      ? { title: 'Mark as resolved?', body: `"${n.title}" will be unpinned from everyone's dashboard and members get an all-clear notice.`, okLabel: 'Mark resolved' }
+      : { title: 'Cancel your alarm?', body: `"${n.title}" will be unpinned and everyone gets an all-clear notice. Do this once you are safe or if it was raised by mistake.`, okLabel: 'Cancel alarm' });
     if (!ok) return;
     try {
       await db.collection('announcements').doc(id).update({
         resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
         resolvedBy: currentUserProfile.name || ''
       });
-      await broadcastNotification('All clear: ' + n.title, 'Management has marked this emergency as resolved.', 'emergency', 'notice');
+      // Alarms raised with alertAll get their all-clear from the Cloud Function too.
+      if (!n.alertAll) await broadcastNotification('All clear: ' + n.title, 'Management has marked this emergency as resolved.', 'emergency', 'notice');
       logAudit('emergency', id, 'resolve', n.title);
       toast('Marked as resolved');
       activeEmergencies = activeEmergencies.filter(x => x.id !== id);
@@ -3560,6 +3606,145 @@
       toast('Could not update: ' + err.message, 'bad');
     }
   };
+
+  // --- EMERGENCY ALARM (full screen + siren) ---
+  // Every signed-in member listens to emergency announcements. A new one raised
+  // by someone else in the last hour takes over the screen, sounds a two-tone
+  // siren and vibrates until the member taps "I've seen it". Browsers only allow
+  // sound after the person has touched the page once, so the audio is unlocked
+  // on the first tap; until then the alarm asks for a tap to sound.
+  const ALARM_WINDOW_MS = 60 * 60 * 1000;
+  const ALARM_MAX_MS = 3 * 60 * 1000;
+  let emergencyUnsub = null, emergencyWatchPrimed = false;
+  let alarmCtx = null, alarmTimer = null, alarmVibeTimer = null, alarmStopTimer = null;
+  let alarmShowingId = null;
+  function alarmAcked() {
+    try { return JSON.parse(localStorage.getItem('emgAck') || '[]'); } catch (_) { return []; }
+  }
+  function ackAlarm(id) {
+    try { localStorage.setItem('emgAck', JSON.stringify([id, ...alarmAcked().filter(x => x !== id)].slice(0, 30))); } catch (_) {}
+  }
+  function unlockAlarmAudio() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      if (!alarmCtx) alarmCtx = new AC();
+      if (alarmCtx.state === 'suspended') alarmCtx.resume().catch(() => {});
+      return alarmCtx;
+    } catch (_) { return null; }
+  }
+  ['pointerdown', 'keydown', 'touchstart'].forEach(ev => window.addEventListener(ev, () => unlockAlarmAudio(), { once: true, passive: true }));
+
+  function sirenBurst() {
+    const ctx = alarmCtx;
+    if (!ctx || ctx.state !== 'running') return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(960, t);
+    osc.frequency.setValueAtTime(720, t + 0.4);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+    gain.gain.setValueAtTime(0.35, t + 0.76);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t); osc.stop(t + 0.82);
+  }
+  function startSiren() {
+    stopSiren();
+    unlockAlarmAudio();
+    sirenBurst();
+    alarmTimer = setInterval(sirenBurst, 850);
+    const vibe = () => { try { navigator.vibrate && navigator.vibrate([700, 250, 700, 250, 700]); } catch (_) {} };
+    vibe();
+    alarmVibeTimer = setInterval(vibe, 2700);
+    alarmStopTimer = setTimeout(stopSiren, ALARM_MAX_MS);
+  }
+  function stopSiren() {
+    clearInterval(alarmTimer); clearInterval(alarmVibeTimer); clearTimeout(alarmStopTimer);
+    alarmTimer = alarmVibeTimer = alarmStopTimer = null;
+    try { navigator.vibrate && navigator.vibrate(0); } catch (_) {}
+  }
+
+  function showEmergencyAlarm(n, test) {
+    const el = document.getElementById('emg-alarm');
+    if (!el) return;
+    const meta = emergencyTypeMeta(n.emergencyType);
+    const first = contactsToShow()[0];
+    alarmShowingId = n.id;
+    el.innerHTML = `
+      <div class="emg-siren">${meta[2]}</div>
+      <div class="emg-word">${test ? 'TEST' : 'EMERGENCY'}</div>
+      <div class="emg-kind">${escapeHtml(meta[1])}</div>
+      <h2 id="emg-alarm-title">${escapeHtml(n.title || '')}</h2>
+      ${n.content ? `<p>${escapeHtml(n.content)}</p>` : ''}
+      <div class="emg-who">${escapeHtml(test ? 'This is how an emergency alarm looks and sounds.' : emergencyRaisedBy(n))}${!test && n.createdAt && timeAgo(n.createdAt) ? ' · ' + escapeHtml(timeAgo(n.createdAt)) : ''}</div>
+      <div class="emg-acts">
+        ${!test && first && first.phone ? `<a class="emg-call" href="${escapeHtml(telHref(first.phone))}">📞 Call ${escapeHtml(first.label || first.phone)}</a>` : ''}
+        ${!test ? `<button type="button" class="emg-stop" onclick="closeEmergencyAlarm(); openEmergencyContactsModal();">All emergency contacts</button>` : ''}
+        <button type="button" class="emg-stop" id="emg-ack" onclick="closeEmergencyAlarm()">${test ? 'Stop test' : "I've seen it, stop alarm"}</button>
+      </div>
+      <div class="emg-tap" id="emg-tap" style="display:none;">Tap anywhere to sound the alarm</div>`;
+    el.classList.add('show');
+    el.onclick = ev => {
+      if (ev.target.closest('a, button')) return;
+      unlockAlarmAudio();
+      if (alarmCtx && alarmCtx.state !== 'running') alarmCtx.resume().then(() => { const t = document.getElementById('emg-tap'); if (t) t.style.display = 'none'; }).catch(() => {});
+    };
+    startSiren();
+    setTimeout(() => {
+      const tap = document.getElementById('emg-tap');
+      if (tap && alarmShowingId === n.id) tap.style.display = alarmCtx && alarmCtx.state === 'running' ? 'none' : 'block';
+    }, 300);
+  }
+  window.closeEmergencyAlarm = function() {
+    if (alarmShowingId && !String(alarmShowingId).startsWith('test')) ackAlarm(alarmShowingId);
+    alarmShowingId = null;
+    stopSiren();
+    const el = document.getElementById('emg-alarm');
+    if (el) { el.classList.remove('show'); el.innerHTML = ''; }
+  };
+  window.testEmergencyAlarm = function() {
+    unlockAlarmAudio();
+    showEmergencyAlarm({ id: 'test-' + Date.now(), emergencyType: 'other', title: 'Alarm test', content: 'Only you can see and hear this.' }, true);
+  };
+
+  function onEmergencySnapshot(snap) {
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const active = all.filter(isActiveEmergency);
+    if (alarmShowingId && !String(alarmShowingId).startsWith('test') && !active.some(n => n.id === alarmShowingId)) {
+      const gone = all.find(n => n.id === alarmShowingId);
+      closeEmergencyAlarm();
+      if (gone && gone.resolvedAt) toast('All clear: ' + (gone.title || 'the emergency is resolved'));
+    }
+    const acked = alarmAcked();
+    const fresh = active
+      .filter(n => !raisedByMe(n) && !acked.includes(n.id))
+      // A just-created alarm has no server time yet (pending write): treat it as now.
+      .filter(n => { const d = toDate(n.createdAt); return !d || Date.now() - d.getTime() < ALARM_WINDOW_MS; })
+      .sort((a, b) => (toDate(b.createdAt) || new Date()) - (toDate(a.createdAt) || new Date()));
+    if (fresh.length && alarmShowingId !== fresh[0].id && !(alarmShowingId && !String(alarmShowingId).startsWith('test'))) showEmergencyAlarm(fresh[0]);
+    const before = activeEmergencies.map(n => n.id).join(',');
+    activeEmergencies = active.sort((a, b) => (toDate(b.createdAt) || new Date()) - (toDate(a.createdAt) || new Date()));
+    // The first snapshot only mirrors what the dashboard already loaded.
+    if (emergencyWatchPrimed && before !== activeEmergencies.map(n => n.id).join(',') && activeTab === 'dashboard') loadData();
+    emergencyWatchPrimed = true;
+  }
+  function startEmergencyWatch() {
+    stopEmergencyWatch();
+    if (!db || !canRaiseEmergency()) return;
+    try {
+      emergencyUnsub = db.collection('announcements').where('emergency', '==', true)
+        .onSnapshot(onEmergencySnapshot, e => console.warn('Emergency watch stopped:', e && e.message));
+    } catch (e) { console.warn('Emergency watch failed:', e && e.message); }
+  }
+  window.startEmergencyWatch = startEmergencyWatch; // re-check now (tests, after reconnect)
+  function stopEmergencyWatch() {
+    if (emergencyUnsub) { try { emergencyUnsub(); } catch (_) {} }
+    emergencyUnsub = null;
+    emergencyWatchPrimed = false;
+    if (alarmShowingId) closeEmergencyAlarm();
+  }
 
   // --- POLLS ---
   function loadPolls() {
@@ -8223,6 +8408,7 @@
 
     el.innerHTML = `
       ${renderEmergencyBanner()}
+      ${emergencyButtonHtml()}
       ${renderMyHouseCard(d.bills)}
       ${renderEmergencyContactsCard()}
       ${renderSummariesCard()}

@@ -1,4 +1,4 @@
-const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
@@ -729,30 +729,70 @@ exports.sendPushOnNotification = onDocumentCreated(
   }
 );
 
+// The member who raised an alertAll post, if still approved and active.
+async function activeAuthor(db, uid) {
+  if (!uid) return null;
+  const snap = await db.collection("users").doc(uid).get();
+  const a = snap.exists ? snap.data() : null;
+  return a && a.approved === true && a.suspended !== true ? a : null;
+}
+
+// One in-app notification (and so one push) to every approved, active member
+// except skipUid. Used for posts residents raise, since they cannot read the
+// member list to notify everyone themselves.
+async function notifyAllMembers(db, skipUid, title, body, type, category) {
+  const users = await db.collection("users").where("approved", "==", true).get();
+  const targets = users.docs.filter((d) => d.id !== skipUid && d.data().suspended !== true);
+  for (let i = 0; i < targets.length; i += 400) {
+    const batch = db.batch();
+    targets.slice(i, i + 400).forEach((d) => {
+      batch.set(d.ref.collection("notifications").doc(), { ...notificationDoc(title, body, type), category });
+    });
+    await batch.commit();
+  }
+}
+
 // Lost & Found alert: a new listing with alertAll: true (lost/found only, see
-// firestore.rules) notifies every approved member except the poster. Runs here
-// because residents may not read the member list to notify everyone themselves.
+// firestore.rules) notifies every approved member except the poster.
 exports.listingAlert = onDocumentCreated(
   "listings/{listingId}",
   async (event) => {
     const l = event.data && event.data.data();
-    if (!l || l.alertAll !== true || !["lost", "found"].includes(l.kind) || !l.createdBy) return;
+    if (!l || l.alertAll !== true || !["lost", "found"].includes(l.kind)) return;
     const db = admin.firestore();
-    const author = await db.collection("users").doc(l.createdBy).get();
-    const a = author.exists ? author.data() : null;
-    if (!a || a.approved !== true || a.suspended === true) return;
-
+    const a = await activeAuthor(db, l.createdBy);
+    if (!a) return;
     const title = `${l.kind === "lost" ? "🔍 Lost" : "🎁 Found"}: ${String(l.title || "").slice(0, 80)}`;
     const body = `${a.name || "A resident"}${a.house ? " (" + a.house + ")" : ""}${l.location ? " · " + String(l.location).slice(0, 80) : ""} — open Lost & Found to help.`;
-    const users = await db.collection("users").where("approved", "==", true).get();
-    const targets = users.docs.filter((d) => d.id !== l.createdBy && d.data().suspended !== true);
-    for (let i = 0; i < targets.length; i += 400) {
-      const batch = db.batch();
-      targets.slice(i, i + 400).forEach((d) => {
-        batch.set(d.ref.collection("notifications").doc(), { ...notificationDoc(title, body, "notice"), category: "general" });
-      });
-      await batch.commit();
-    }
+    await notifyAllMembers(db, l.createdBy, title, body, "notice", "general");
+  }
+);
+
+// Emergency alarm raised by a resident (announcement with emergency and
+// alertAll: true): high-priority push to every member, never muted.
+exports.emergencyAlert = onDocumentCreated(
+  "announcements/{id}",
+  async (event) => {
+    const n = event.data && event.data.data();
+    if (!n || n.emergency !== true || n.alertAll !== true) return;
+    const db = admin.firestore();
+    if (!(await activeAuthor(db, n.createdBy))) return;
+    await notifyAllMembers(db, n.createdBy, "🚨 EMERGENCY: " + String(n.title || "").slice(0, 90),
+      String(n.content || "Open the RPHS app now.").slice(0, 300), "error", "emergency");
+  }
+);
+
+// All-clear for those alarms once they are resolved (by the raiser or management).
+exports.emergencyAllClear = onDocumentUpdated(
+  "announcements/{id}",
+  async (event) => {
+    const before = event.data && event.data.before.data();
+    const after = event.data && event.data.after.data();
+    if (!before || !after || after.emergency !== true || after.alertAll !== true) return;
+    if (before.resolvedAt || !after.resolvedAt) return;
+    const by = after.resolvedBy ? ` by ${String(after.resolvedBy).slice(0, 60)}` : "";
+    await notifyAllMembers(admin.firestore(), null, "All clear: " + String(after.title || "").slice(0, 90),
+      `This emergency has been marked resolved${by}.`, "notice", "emergency");
   }
 );
 
