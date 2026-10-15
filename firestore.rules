@@ -121,6 +121,14 @@ service cloud.firestore {
             && onlyChanges(['resolvedAt', 'resolvedBy']));
       allow delete: if isAdmin() || isSuperAdmin() || ownsPost();
 
+      // "I've seen it" on an emergency alarm: stops the repeating alarm push
+      // (emergencyAlarmRepeat function) for that member.
+      match /acks/{ackUid} {
+        allow read: if isStaff();
+        allow create, update: if isOwner(ackUid) && isMember();
+        allow delete: if false;
+      }
+
       // Resident comments on an announcement. Approved residents, staff and
       // board members may comment (as themselves); a comment can be removed by
       // its author, admin/superadmin, or the board member who posted the notice.

@@ -493,6 +493,8 @@ test('resident: a fresh alarm from someone else takes over the screen with Call 
   assert(await page.$eval('#emg-alarm .emg-call', a => a.getAttribute('href')) === 'tel:03001112233', 'alarm should offer a Call button for the first emergency contact');
   await page.click('#emg-ack');
   assert(!(await page.locator('#emg-alarm.show').count()), 'stop should close the alarm');
+  await page.waitForFunction(() => (window.__mockStore['announcements/fresh1/acks'] || new Map()).has('u_res1'), null, { timeout: 5000 })
+    .catch(() => { throw new Error('"I\'ve seen it" should save an ack so the server stops repeating the alarm'); });
   await page.evaluate(() => startEmergencyWatch());
   await page.waitForTimeout(300);
   assert(!(await page.locator('#emg-alarm.show').count()), 'a seen alarm must not ring again');

@@ -3698,7 +3698,13 @@
     }, 300);
   }
   window.closeEmergencyAlarm = function() {
-    if (alarmShowingId && !String(alarmShowingId).startsWith('test')) ackAlarm(alarmShowingId);
+    if (alarmShowingId && !String(alarmShowingId).startsWith('test')) {
+      ackAlarm(alarmShowingId);
+      // Tells the server to stop repeating the alarm push to this phone.
+      if (db && auth.currentUser) db.collection('announcements').doc(alarmShowingId).collection('acks').doc(auth.currentUser.uid)
+        .set({ at: firebase.firestore.FieldValue.serverTimestamp(), name: currentUserProfile ? currentUserProfile.name || '' : '' })
+        .catch(e => console.warn('Alarm ack not saved:', e && e.message));
+    }
     alarmShowingId = null;
     stopSiren();
     const el = document.getElementById('emg-alarm');
