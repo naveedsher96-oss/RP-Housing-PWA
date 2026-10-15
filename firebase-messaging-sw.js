@@ -19,7 +19,7 @@ messaging.onBackgroundMessage((payload) => {
   const notificationOptions = {
     body: payload.notification.body,
     icon: 'icon-192.png',
-    ...(emergency ? { requireInteraction: true, vibrate: [300, 100, 300, 100, 300], tag: 'rphs-emergency', renotify: true } : {})
+    ...(emergency ? { requireInteraction: true, vibrate: [700, 250, 700, 250, 700, 250, 700], tag: 'rphs-emergency', renotify: true } : {})
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
