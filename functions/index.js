@@ -678,6 +678,25 @@ exports.runMonthlySummaryOnRequest = onDocumentWritten(
   }
 );
 
+// One web push. Emergency pushes are delivered first, stay on screen until
+// dismissed, vibrate, and re-alert (sound again) when repeated with the same tag.
+function pushMessage(token, title, body, category) {
+  const emergency = category === "emergency";
+  return {
+    token,
+    notification: { title, body },
+    data: { category },
+    webpush: {
+      headers: emergency ? { Urgency: "high", TTL: "600" } : {},
+      notification: {
+        icon: "https://naveedsher96-oss.github.io/RP-Housing-PWA/icon-192.png",
+        ...(emergency ? { requireInteraction: true, vibrate: [700, 250, 700, 250, 700, 250, 700], tag: "rphs-emergency", renotify: true } : {}),
+      },
+      fcmOptions: { link: "https://naveedsher96-oss.github.io/RP-Housing-PWA/" },
+    },
+  };
+}
+
 // Sends a push notification to the target user's registered device whenever an
 // in-app notification document is created under users/{uid}/notifications.
 exports.sendPushOnNotification = onDocumentCreated(
@@ -694,28 +713,8 @@ exports.sendPushOnNotification = onDocumentCreated(
     const token = tokenDoc.data().token;
     if (!token) return;
 
-    const category = notifCategory(data);
-    const emergency = category === "emergency";
     try {
-      await admin.messaging().send({
-        token,
-        notification: {
-          title: data.title,
-          body: data.body || data.text || "",
-        },
-        data: { category },
-        webpush: {
-          // Emergency alerts: delivered first, stay on screen until dismissed, vibrate.
-          headers: emergency ? { Urgency: "high", TTL: "3600" } : {},
-          notification: {
-            icon: "https://naveedsher96-oss.github.io/RP-Housing-PWA/icon-192.png",
-            ...(emergency ? { requireInteraction: true, vibrate: [300, 100, 300, 100, 300], tag: "rphs-emergency", renotify: true } : {}),
-          },
-          fcmOptions: {
-            link: "https://naveedsher96-oss.github.io/RP-Housing-PWA/",
-          },
-        },
-      });
+      await admin.messaging().send(pushMessage(token, data.title, data.body || data.text || "", notifCategory(data)));
     } catch (err) {
       if (
         err.code === "messaging/registration-token-not-registered" ||
@@ -793,6 +792,52 @@ exports.emergencyAllClear = onDocumentUpdated(
     const by = after.resolvedBy ? ` by ${String(after.resolvedBy).slice(0, 60)}` : "";
     await notifyAllMembers(admin.firestore(), null, "All clear: " + String(after.title || "").slice(0, 90),
       `This emergency has been marked resolved${by}.`, "notice", "emergency");
+  }
+);
+
+// Alarm while the app is closed: browsers cannot play a custom siren from a
+// notification, so for every new emergency the push is repeated every
+// ALARM_REPEAT_SECONDS (each one beeps and vibrates again) for ALARM_REPEAT_ROUNDS
+// rounds, to every member who has not tapped "I've seen it" in the app
+// (announcements/{id}/acks/{uid}), until the emergency is resolved. The first
+// alert is the normal emergency notification, so repeats start one interval later.
+const ALARM_REPEAT_SECONDS = 20;
+const ALARM_REPEAT_ROUNDS = 9; // about 3 minutes
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+exports.emergencyAlarmRepeat = onDocumentCreated(
+  { document: "announcements/{id}", timeoutSeconds: 300 },
+  async (event) => {
+    const n = event.data && event.data.data();
+    if (!n || n.emergency !== true) return;
+    const db = admin.firestore();
+    const ref = event.data.ref;
+    const title = "🚨 EMERGENCY: " + String(n.title || "").slice(0, 90);
+    const body = String(n.content || "Open the RPHS app now.").slice(0, 200) + "\n\nOpen the app and tap \"I've seen it\" to stop the alarm.";
+    const members = await db.collection("users").where("approved", "==", true).get();
+    const uids = members.docs.filter((d) => d.id !== n.createdBy && d.data().suspended !== true).map((d) => d.id);
+    const tokens = {};
+    await Promise.all(uids.map(async (uid) => {
+      const t = await db.collection("fcm_tokens").doc(uid).get();
+      if (t.exists && t.data().token) tokens[uid] = t.data().token;
+    }));
+
+    for (let round = 1; round <= ALARM_REPEAT_ROUNDS; round++) {
+      await sleep(ALARM_REPEAT_SECONDS * 1000);
+      const now = await ref.get();
+      if (!now.exists || now.data().resolvedAt || now.data().isDeleted) return;
+      const acked = new Set((await ref.collection("acks").get()).docs.map((d) => d.id));
+      const left = Object.keys(tokens).filter((uid) => !acked.has(uid));
+      if (!left.length) return;
+      for (let i = 0; i < left.length; i += 500) {
+        const chunk = left.slice(i, i + 500);
+        const res = await admin.messaging().sendEach(chunk.map((uid) => pushMessage(tokens[uid], title, body, "emergency")));
+        res.responses.forEach((r, j) => {
+          const code = r.error && r.error.code;
+          if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") delete tokens[chunk[j]];
+        });
+      }
+    }
   }
 );
 
