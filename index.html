@@ -907,12 +907,20 @@
     if (Notification.permission === 'granted') {
       saveDeviceToken();
     }
+    // Android Chrome forbids `new Notification()` in a page ("Illegal constructor"),
+    // so the banner goes through the service worker, which works everywhere.
     messaging.onMessage((payload) => {
-      new Notification(payload.notification.title, {
-        body: payload.notification.body,
-        icon: 'icon-192.png'
-      });
       loadNotifications(true);
+      const n = payload.notification || {};
+      if (!n.title || Notification.permission !== 'granted' || !navigator.serviceWorker) return;
+      const emergency = payload.data && payload.data.category === 'emergency';
+      navigator.serviceWorker.ready
+        .then(reg => reg.showNotification(n.title, {
+          body: n.body || '',
+          icon: 'icon-192.png',
+          ...(emergency ? { requireInteraction: true, vibrate: [700, 250, 700, 250, 700, 250, 700], tag: 'rphs-emergency', renotify: true } : {})
+        }))
+        .catch(() => {});
     });
   }
 
@@ -2421,7 +2429,7 @@
     try {
       const message = errorText(err).slice(0, 300);
       if (!message || !db || !auth || !auth.currentUser || reportedErrors.size >= 8 || reportedErrors.has(message)) return;
-      if (/ResizeObserver|Script error\.|Loading chunk|network-request-failed|unavailable/i.test(message)) return;
+      if (/ResizeObserver|Script error\.|Loading chunk|network-request-failed|unavailable|client is offline/i.test(message)) return;
       reportedErrors.add(message);
       db.collection('client_errors').add({
         uid: auth.currentUser.uid,
