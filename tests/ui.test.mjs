@@ -524,30 +524,52 @@ test('resident: Useful Contacts card opens the sewer-cleaning numbers with Call,
   noErrors(page);
 }, 'resident');
 
-test('admin: adds a plumber under a new service to Useful Contacts', async page => {
+test('admin: sees every ready-made section, adds a plumber from the empty Plumber section, and can add a new section', async page => {
   await page.click('#useful-card');
   await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
   assert(await page.locator('#uc-body [aria-label="Edit"]').count() === 3, 'admin should get an edit button per contact');
-  await page.click('#uc-body button:has-text("Add contact")');
+  const before = await page.$eval('#uc-body', el => el.innerText);
+  assert(/Plumber/.test(before) && /Electrician/.test(before) && /Gas/.test(before) && /No numbers yet/.test(before), 'admin should see empty ready-made sections');
+  await page.click('#uc-body button:has-text("+ Add a Plumber")');
   await page.waitForSelector('#uc-form', { timeout: 5000 });
-  await page.selectOption('#uc-service', '__new');
-  await page.fill('#uc-sname', 'Plumber');
+  assert(await page.$eval('#uc-service', el => el.value) === 'plumber', 'Plumber section should be preselected');
   await page.fill('#uc-name', 'Akram');
   await page.fill('#uc-phone', '0300-1234567');
   await page.fill('#uc-note', 'Leaks and tank fittings.');
   await page.click('#uc-form button[type=submit]');
   await page.waitForFunction(() => { const d = window.__mockStore.settings.get('usefulContacts'); return d && d.contacts.length === 4; }, null, { timeout: 8000 })
     .catch(() => { throw new Error('useful contacts were not saved'); });
-  const d = await page.evaluate(() => window.__mockStore.settings.get('usefulContacts'));
+  let d = await page.evaluate(() => window.__mockStore.settings.get('usefulContacts'));
   const akram = d.contacts.find(c => c.name === 'Akram');
-  const svc = d.services.find(s => s.id === akram.serviceId);
-  assert(svc && svc.name === 'Plumber' && akram.phone === '0300-1234567' && akram.note === 'Leaks and tank fittings.' && d.contacts.filter(c => c.serviceId === 'sewer').length === 3,
+  assert(akram && akram.serviceId === 'plumber' && akram.phone === '0300-1234567' && akram.note === 'Leaks and tank fittings.' && d.contacts.filter(c => c.serviceId === 'sewer').length === 3,
     `saved wrongly: ${JSON.stringify(d)}`);
   await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
   const text = await page.$eval('#uc-body', el => el.innerText);
-  assert(/Plumber/.test(text) && /Akram/.test(text) && /Basharat/.test(text), 'list should show the new plumber alongside the sewer cleaners');
+  assert(/Akram/.test(text) && /Basharat/.test(text), 'list should show the new plumber alongside the sewer cleaners');
+  // a section that is not in the ready-made list
+  await page.click('#uc-body button:has-text("Add contact")');
+  await page.waitForSelector('#uc-form', { timeout: 5000 });
+  await page.selectOption('#uc-service', '__new');
+  await page.fill('#uc-sname', 'Generator repair');
+  await page.fill('#uc-name', 'Zubair');
+  await page.fill('#uc-phone', '0311-7654321');
+  await page.click('#uc-form button[type=submit]');
+  await page.waitForFunction(() => { const d = window.__mockStore.settings.get('usefulContacts'); return d && d.contacts.length === 5; }, null, { timeout: 8000 })
+    .catch(() => { throw new Error('new section was not saved'); });
+  d = await page.evaluate(() => window.__mockStore.settings.get('usefulContacts'));
+  const z = d.contacts.find(c => c.name === 'Zubair');
+  const svc = d.services.find(s => s.id === z.serviceId);
+  assert(svc && svc.name === 'Generator repair' && d.services.some(s => s.id === 'electrician'), `new section saved wrongly: ${JSON.stringify(d.services)}`);
   noErrors(page);
 }, 'admin');
+
+test('resident: Useful Contacts shows only sections that have numbers', async page => {
+  await page.click('#useful-card');
+  await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
+  const text = await page.$eval('#uc-body', el => el.innerText);
+  assert(/Basharat/.test(text) && !/No numbers yet/.test(text) && !/Electrician/.test(text), 'residents should not see empty sections');
+  noErrors(page);
+}, 'resident');
 
 test('board: sees Useful Contacts but cannot edit them', async page => {
   await page.click('#useful-card');

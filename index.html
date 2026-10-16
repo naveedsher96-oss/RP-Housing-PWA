@@ -486,6 +486,8 @@
   .uc-act.call{ background:var(--accent); color:#1a1300; }
   .uc-act.wa{ background:var(--success-soft); color:var(--success); }
   .uc-act[aria-label="Edit"]{ flex:0 0 40px; }
+  .uc-empty{ border-top:1px solid var(--border); margin-top:10px; padding-top:10px; font-size:13px; color:var(--text-faint); }
+  .uc-add{ border:0; background:none; color:var(--accent-2); font:inherit; font-weight:700; cursor:pointer; padding:0; }
   /* full-screen emergency alarm */
   #emg-alarm{ position:fixed; inset:0; z-index:1000; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); text-align:center; color:#fff; background:#b3261e; animation:emgFlash 1s steps(1, end) infinite; overflow-y:auto; }
   #emg-alarm.show{ display:flex; }
@@ -3638,10 +3640,29 @@
   // settings/usefulContacts = { services: [{ id, name, nameUr, icon, note, noteUr, h24 }],
   // contacts: [{ id, serviceId, name, nameUr, phone, note, noteUr }] }; until
   // management saves a list, the society's sewer-cleaning poster is shown.
-  const DEFAULT_USEFUL = {
-    services: [{ id: 'sewer', name: 'Sewer & Drain Cleaning', nameUr: 'گٹروں اور نالیوں کی صفائی', icon: '🚛', h24: true,
+  // Ready-made sections; management fills them in and can add their own.
+  const USEFUL_SECTIONS = [
+    { id: 'sewer', name: 'Sewer & Drain Cleaning', nameUr: 'گٹروں اور نالیوں کی صفائی', icon: '🚛', h24: true,
       note: 'Call for blocked sewers (gutters) and drains. They come with a suction tanker and water pump. Any of the three numbers below.',
-      noteUr: 'گٹر یا نالی بند ہونے پر رابطہ کریں۔ سکشن ٹینکر اور پانی کا پمپ ساتھ لاتے ہیں۔ نیچے دیے گئے کسی بھی نمبر پر کال کریں۔' }],
+      noteUr: 'گٹر یا نالی بند ہونے پر رابطہ کریں۔ سکشن ٹینکر اور پانی کا پمپ ساتھ لاتے ہیں۔ نیچے دیے گئے کسی بھی نمبر پر کال کریں۔' },
+    ...[
+      ['plumber', 'Plumber', 'پلمبر', '🔧', 'Leaking taps and pipes, tanks, motors and bathroom fittings.', 'ٹونٹی اور پائپ کی لیکیج، ٹینکی، موٹر اور باتھ روم فٹنگ۔'],
+      ['electrician', 'Electrician', 'الیکٹریشن', '💡', 'Wiring, switches, fans, UPS and breaker faults.', 'وائرنگ، سوئچ، پنکھے، یو پی ایس اور بریکر کی خرابی۔'],
+      ['gas', 'Gas Fitter', 'گیس فٹر', '🔥', 'Gas pipes, stoves and geysers. For a gas leak call SNGPL 1199 first.', 'گیس پائپ، چولہے اور گیزر۔ گیس لیک ہو تو پہلے ایس این جی پی ایل 1199 پر کال کریں۔'],
+      ['water', 'Water Tanker', 'پانی کا ٹینکر', '💧', 'Water delivery when the supply is off.', 'پانی بند ہونے پر ٹینکر سے پانی۔'],
+      ['ac', 'AC & Fridge Repair', 'اے سی اور فریج مرمت', '❄️', 'AC service, gas refilling, fridge and freezer repair.', 'اے سی سروس، گیس بھرائی، فریج اور فریزر کی مرمت۔'],
+      ['carpenter', 'Carpenter', 'بڑھئی', '🪚', 'Doors, locks, cupboards and furniture repair.', 'دروازے، تالے، الماریاں اور فرنیچر کی مرمت۔'],
+      ['painter', 'Painter', 'پینٹر', '🎨', 'House painting and polish.', 'گھر کا رنگ و روغن اور پالش۔'],
+      ['mason', 'Mason', 'مستری', '🧱', 'Brick, plaster, tiles and small construction work.', 'اینٹ، پلستر، ٹائل اور چھوٹا تعمیراتی کام۔'],
+      ['welder', 'Welder', 'ویلڈر', '⚙️', 'Gates, grills and steel work.', 'گیٹ، گرل اور لوہے کا کام۔'],
+      ['doctor', 'Doctor & Clinic', 'ڈاکٹر اور کلینک', '🩺', 'Nearby doctors and clinics. In an emergency call Rescue 1122.', 'قریبی ڈاکٹر اور کلینک۔ ایمرجنسی میں ریسکیو 1122 پر کال کریں۔'],
+      ['pharmacy', 'Pharmacy', 'میڈیکل اسٹور', '💊', 'Medicines and home delivery.', 'دوائیں اور گھر پر ڈیلیوری۔'],
+      ['cleaning', 'Cleaning Staff', 'صفائی کا عملہ', '🧹', 'House cleaning and helpers.', 'گھر کی صفائی اور مددگار۔'],
+      ['other', 'Other', 'دیگر', '📞', '', '']
+    ].map(([id, name, nameUr, icon, note, noteUr]) => ({ id, name, nameUr, icon, note, noteUr, h24: false }))
+  ];
+  const DEFAULT_USEFUL = {
+    services: USEFUL_SECTIONS,
     contacts: [
       ['basharat', 'Basharat', 'بشارت', '0347-2465242'],
       ['rafaqat', 'Rafaqat', 'رفاقت', '0317-5297544'],
@@ -3652,9 +3673,16 @@
   let usefulData = null;               // settings/usefulContacts, null = not saved yet
   let usefulLang = uiLang;             // language of the Useful Contacts list
   let usefulFilter = 'all';
+  // Saved sections override the ready-made ones by id; ready-made sections the
+  // saved list does not have yet (added in a later app version) still appear.
   function usefulList() {
     const d = usefulData && Array.isArray(usefulData.services) ? usefulData : DEFAULT_USEFUL;
-    return { services: d.services || [], contacts: Array.isArray(d.contacts) ? d.contacts : [] };
+    const saved = d.services || [];
+    const services = [
+      ...USEFUL_SECTIONS.map(sec => saved.find(x => x.id === sec.id) || sec),
+      ...saved.filter(x => !USEFUL_SECTIONS.some(sec => sec.id === x.id))
+    ];
+    return { services, contacts: Array.isArray(d.contacts) ? d.contacts : [] };
   }
   function canEditUseful() { return canBroadcastEmergency(); }
   async function loadUsefulContacts() {
@@ -3704,7 +3732,8 @@
     const ur = usefulLang === 'ur';
     if (ur) loadUrduFont();
     const { services, contacts } = usefulList();
-    const used = services.filter(s => contacts.some(c => c.serviceId === s.id));
+    // Members see sections that have numbers; management also sees the empty ones to fill in.
+    const used = services.filter(s => canEditUseful() || contacts.some(c => c.serviceId === s.id));
     if (usefulFilter !== 'all' && !used.some(s => s.id === usefulFilter)) usefulFilter = 'all';
     const shown = used.filter(s => usefulFilter === 'all' || s.id === usefulFilter);
     el.innerHTML = `
@@ -3727,7 +3756,8 @@
             ${canEditUseful() ? `<button type="button" class="dots-btn" onclick="openUsefulServiceForm('${escapeHtml(s.id)}')" aria-label="Edit service">${icon('edit')}</button>` : ''}
           </div>
           ${pickLang(s.note, s.noteUr) ? `<div class="uc-gnote">${escapeHtml(pickLang(s.note, s.noteUr))}</div>` : ''}
-          ${contacts.filter(c => c.serviceId === s.id).map(usefulPersonHtml).join('')}
+          ${contacts.filter(c => c.serviceId === s.id).map(usefulPersonHtml).join('') || `
+            <div class="uc-empty" data-no-ur>No numbers yet · <button type="button" class="uc-add" onclick="openUsefulContactForm(null, '${escapeHtml(s.id)}')">+ Add a ${escapeHtml(s.name.toLowerCase())}</button></div>`}
         </div>`).join('') : `<div class="card" style="cursor:default; color:var(--text-muted);">No useful contacts yet.</div>`}
       ${canEditUseful() ? `<button type="button" class="btn primary block" style="margin-top:6px;" onclick="openUsefulContactForm()">+ Add contact</button>` : ''}`;
   }
@@ -3767,10 +3797,10 @@
   const ucInput = (id, label, value, opts = '') => `<label>${label}</label><input type="text" id="${id}" value="${escapeHtml(value || '')}" ${opts} />`;
 
   // Add / edit one person. A new service can be started from the same form.
-  window.openUsefulContactForm = function(id) {
+  window.openUsefulContactForm = function(id, sectionId) {
     if (!canEditUseful()) return;
     const { services, contacts } = usefulList();
-    const c = contacts.find(x => x.id === id) || { serviceId: usefulFilter !== 'all' ? usefulFilter : (services[0] && services[0].id) || '' };
+    const c = contacts.find(x => x.id === id) || { serviceId: sectionId || (usefulFilter !== 'all' ? usefulFilter : (services[0] && services[0].id)) || '' };
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">${id ? 'Edit' : 'Add'} Useful Contact</div>
       <div style="font-size:13px; color:var(--text-muted); margin-bottom:6px;">Shown to every member with Call, WhatsApp and Copy buttons.</div>
@@ -3830,7 +3860,7 @@
     if (!(await confirmSheet({ title: 'Remove contact?', body: `${c.name} (${c.phone}) will be removed for everyone.`, okLabel: 'Remove', danger: true }))) return;
     const rest = contacts.filter(x => x.id !== id);
     try {
-      await saveUseful({ services: services.filter(s => rest.some(x => x.serviceId === s.id)), contacts: rest }, `Removed useful contact ${c.name} (${c.phone})`);
+      await saveUseful({ services, contacts: rest }, `Removed useful contact ${c.name} (${c.phone})`);
       toast('Contact removed');
       openUsefulContacts();
     } catch (err) { toast('Could not remove: ' + err.message, 'bad'); }
