@@ -751,6 +751,36 @@ async function notifyAllMembers(db, skipUid, title, body, type, category) {
   }
 }
 
+// Society calendar reminder: every evening, a notification to every member for
+// each calendar item happening tomorrow (one-off, weekly or monthly repeats).
+function eventFallsOn(ev, key) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ev.date || "")) || ev.date > key) return false;
+  if (ev.repeat === "weekly") return daysBetween(ev.date, key) % 7 === 0;
+  if (ev.repeat === "monthly") return ev.date.slice(8, 10) === key.slice(8, 10);
+  return ev.date === key;
+}
+function eventTimeLabel(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
+  if (!m) return "";
+  const h = Number(m[1]);
+  return `${((h + 11) % 12) + 1}:${m[2]} ${h < 12 ? "am" : "pm"}`;
+}
+exports.sendEventReminders = onSchedule(
+  { schedule: "every day 18:00", timeZone: TIME_ZONE },
+  async () => {
+    const db = admin.firestore();
+    const tomorrow = addDays(todayKey(), 1);
+    const snap = await db.collection("events").get();
+    const due = snap.docs.map((d) => d.data()).filter((ev) => !ev.isDeleted && eventFallsOn(ev, tomorrow));
+    for (const ev of due) {
+      const when = [eventTimeLabel(ev.time), ev.place || ""].filter(Boolean).join(" · ");
+      await notifyAllMembers(db, null, `Tomorrow: ${String(ev.title || "Society calendar").slice(0, 90)}`,
+        `${when ? when + ". " : ""}${String(ev.note || "Open Calendar in the RPHS app for details.").slice(0, 250)}`, "notice", "notices");
+    }
+    console.log(`Event reminders for ${tomorrow}: ${due.length}`);
+  }
+);
+
 // Lost & Found alert: a new listing with alertAll: true (lost/found only, see
 // firestore.rules) notifies every approved member except the poster.
 exports.listingAlert = onDocumentCreated(

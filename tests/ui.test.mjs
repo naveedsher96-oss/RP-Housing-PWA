@@ -17,6 +17,11 @@ const ERROR_TEXT = /Could not|Error|\bundefined\b|\bNaN\b/;
 // ---------- tiny runner ----------
 const tests = [];
 const test = (name, fn, role) => tests.push({ name, fn, role });
+// Useful Contacts live in the Contacts sheet (quick button on the dashboard), second tab.
+async function openUseful(page) {
+  await page.click('.qa-btn:has-text("Contacts")');
+  await page.click('#contacts-tabs [data-tab="useful"]');
+}
 
 // CI installs Chromium with `npx playwright install`; set PLAYWRIGHT_BROWSERS_PATH
 // (or CHROMIUM_PATH) to use a browser that is already on your machine.
@@ -115,8 +120,8 @@ test('admin: Defaulters reads fresh bills (not a stale cache)', async page => {
 }, 'admin');
 
 test('admin: approving a proof marks the bill paid and updates the dashboard tiles', async page => {
-  await page.waitForSelector('.need-tiles', { timeout: 8000 });
-  const before = await page.$eval('.need-tiles', el => el.innerText);
+  await page.waitForSelector('#todo-list', { timeout: 8000 });
+  const before = await page.$eval('#todo-list', el => el.innerText);
   await page.evaluate(() => openNextProof());
   const approve = page.locator('#modal-body button', { hasText: 'Approve' }).first();
   await approve.waitFor({ timeout: 8000 });
@@ -126,8 +131,8 @@ test('admin: approving a proof marks the bill paid and updates the dashboard til
   await page.locator('[data-ui=ok]').click({ timeout: 5000 });
   await page.waitForFunction(no => [...window.__mockStore.bills.values()].some(b => b.billNo === no && b.status === 'paid'), billNo, { timeout: 8000 })
     .catch(() => { throw new Error(`${billNo} not marked paid in the store`); });
-  await page.waitForFunction(b => { const el = document.querySelector('.need-tiles'); return el && el.innerText !== b; }, before, { timeout: 8000 })
-    .catch(() => { throw new Error(`dashboard tiles did not update after approval (still "${before.replace(/\s+/g, ' ')}")`); });
+  await page.waitForFunction(b => { const el = document.querySelector('#todo-list'); return el && el.innerText !== b; }, before, { timeout: 8000 })
+    .catch(() => { throw new Error(`dashboard To do list did not update after approval (still "${before.replace(/\s+/g, ' ')}")`); });
   noErrors(page);
 }, 'admin');
 
@@ -384,24 +389,19 @@ test('resident: active emergency is pinned on the dashboard with contacts; no br
   let text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
   assert(/Gas leak near House 24/.test(text) && /EMERGENCY · GAS LEAK/i.test(text), `active emergency should be pinned on top, got: ${text.slice(0, 160)}`);
   assert(!/Stray dog pack/.test(text), 'resolved emergency must not be pinned');
-  assert(/Emergency Contacts/.test(text) && /7 numbers · tap to show/.test(text) && !/Main gate security/.test(text), 'emergency contacts card should start collapsed with a count');
-  assert(await page.$eval('#emg-contacts-card [aria-expanded]', b => b.getAttribute('aria-expanded')) === 'false', 'caret button should report collapsed');
-  await page.click('#emg-contacts-card [aria-expanded]');
-  await page.waitForSelector('#emg-contacts-body', { timeout: 5000 });
-  assert(await page.locator('#emg-contacts-body .contact-row').count() === 7, 'expanding should show every contact on the card');
-  text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
-  assert(/Main gate security/.test(text), 'expanded card should list society contacts');
-  const tel = await page.$eval('#emg-contacts-card .contact-call', a => a.getAttribute('href'));
-  assert(tel === 'tel:03001112233', `Call button should dial the number, got ${tel}`);
-  assert(await page.locator('.emg-btn').count() === 1 && /Emergency Alarm/.test(await page.locator('.emg-btn').innerText()), 'residents should see the Emergency Alarm button');
+  assert(!/Main gate security/.test(text), 'contacts live behind the Contacts button, not on the dashboard');
+  assert(await page.locator('.emg-btn').count() === 1 && /Emergency Alarm/.test(await page.locator('.emg-btn').innerText()), 'residents should keep the big Emergency Alarm button');
   assert(!/Mark resolved|Cancel alarm/.test(text), 'residents must not be able to resolve someone else\'s emergency');
   assert(!(await page.locator('#emg-alarm.show').count()), 'an emergency older than an hour must not sound the alarm');
-  assert(await page.locator('#emg-contacts-card .btn:has-text("Edit")').count() === 0, 'residents must not edit contacts');
-  await page.click('#emg-contacts-card [aria-expanded]');
-  await page.waitForSelector('#emg-contacts-body', { state: 'detached', timeout: 5000 });
+  await page.click('.qa-btn:has-text("Contacts")');
+  await page.waitForSelector('#emg-contacts-all', { timeout: 5000 });
+  assert(await page.locator('#emg-contacts-all .contact-row').count() === 7, 'all 7 contacts should be listed in the Contacts sheet');
+  const tel = await page.$eval('#emg-contacts-all .contact-call', a => a.getAttribute('href'));
+  assert(tel === 'tel:03001112233', `Call button should dial the number, got ${tel}`);
+  assert(await page.locator('#contacts-pane .btn:has-text("Edit")').count() === 0, 'residents must not edit contacts');
   await page.evaluate(() => openEmergencyContactsModal());
   await page.waitForSelector('#emg-contacts-all', { timeout: 5000 });
-  assert(await page.locator('#emg-contacts-all .contact-row').count() === 7, 'all 7 contacts should be listed in the sheet');
+  assert(await page.locator('#emg-contacts-all .contact-row').count() === 7, 'the banner\'s contacts sheet lists all 7 too');
   await page.evaluate(() => closeModal());
   await page.evaluate(() => selectTab('notices'));
   await settle(page);
@@ -505,9 +505,10 @@ test('resident: a fresh alarm from someone else takes over the screen with Call 
 }, 'resident');
 
 test('resident: Useful Contacts card opens the sewer-cleaning numbers with Call, WhatsApp, Copy and an Urdu view', async page => {
-  let text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
-  assert(/Useful Contacts/.test(text) && /3 numbers/.test(text), `dashboard should show the Useful Contacts card: ${text.slice(0, 400)}`);
-  await page.click('#useful-card');
+  const quick = await page.$eval('.qa-row', el => el.innerText);
+  assert(/Pay/.test(quick) && /Complaint/.test(quick) && /Contacts/.test(quick), `quick buttons should be Pay, Complaint, Contacts: ${quick}`);
+  await openUseful(page);
+  let text;
   await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
   text = await page.$eval('#uc-body', el => el.innerText);
   assert(/Sewer & Drain Cleaning/.test(text) && /24-hour service/i.test(text) && /Basharat/.test(text) && /0347-2465242/.test(text) && /0317-5297544/.test(text) && /0343-0837204/.test(text),
@@ -525,7 +526,7 @@ test('resident: Useful Contacts card opens the sewer-cleaning numbers with Call,
 }, 'resident');
 
 test('admin: sees every ready-made section, adds a plumber from the empty Plumber section, and can add a new section', async page => {
-  await page.click('#useful-card');
+  await openUseful(page);
   await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
   assert(await page.locator('#uc-body [aria-label="Edit"]').count() === 3, 'admin should get an edit button per contact');
   const before = await page.$eval('#uc-body', el => el.innerText);
@@ -564,7 +565,7 @@ test('admin: sees every ready-made section, adds a plumber from the empty Plumbe
 }, 'admin');
 
 test('resident: Useful Contacts shows only sections that have numbers', async page => {
-  await page.click('#useful-card');
+  await openUseful(page);
   await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
   const text = await page.$eval('#uc-body', el => el.innerText);
   assert(/Basharat/.test(text) && !/No numbers yet/.test(text) && !/Electrician/.test(text), 'residents should not see empty sections');
@@ -572,7 +573,7 @@ test('resident: Useful Contacts shows only sections that have numbers', async pa
 }, 'resident');
 
 test('board: sees Useful Contacts but cannot edit them', async page => {
-  await page.click('#useful-card');
+  await openUseful(page);
   await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
   assert(await page.locator('#uc-body [aria-label="Edit"]').count() === 0 && await page.locator('#uc-body button:has-text("Add contact")').count() === 0, 'board must not edit useful contacts');
   noErrors(page);
@@ -968,6 +969,105 @@ test('resident: Urdu mode translates navigation, titles, badges, buttons and pla
   assert(labels.includes('Dashboard') && labels.includes('Bills'), `tabs back to English, got ${labels}`);
   noErrors(page);
 }, 'resident');
+
+// ---------- home screen upgrades ----------
+test('resident: home shows quick buttons, mosque times, This week with an important notice, and a folded money report', async page => {
+  const text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
+  assert(/Society Mosque/.test(text) && /5:15/.test(text) && /8:15/.test(text) && /Next:/.test(text), `mosque card should show the jamaat times: ${text.slice(0, 600)}`);
+  const week = await page.$eval('#week-card', el => el.innerText);
+  assert(/LESCO shutdown/.test(week) && /Garbage pickup/.test(week) && /Water supply off Tuesday/.test(week), `This week should list the calendar and the important notice: ${week}`);
+  assert(!/Old picnic/.test(week), 'removed calendar items must not show');
+  assert(await page.$eval('#dash-full', el => el.hidden) === true, 'the full money report should start folded');
+  assert(/Society money/.test(text) && /Bills account/.test(text), 'money card should show the balances');
+  await page.click('#dash-full-btn');
+  assert(await page.$eval('#dash-full', el => el.hidden) === false && /Recent Spending/.test(await page.$eval('#dash-full', el => el.innerText)), 'See full report should open the charts');
+  await page.click('#week-card .imp-row button:has-text("Got it")');
+  await page.waitForFunction(() => { const m = window.__mockStore['announcements/a6/reads']; return m && m.get('u_res1'); }, null, { timeout: 8000 })
+    .catch(() => { throw new Error('Got it was not saved'); });
+  const r = await page.evaluate(() => window.__mockStore['announcements/a6/reads'].get('u_res1'));
+  assert(r.house === 'House 14, Block B' && r.uid === 'u_res1', `read receipt saved wrongly: ${JSON.stringify(r)}`);
+  await page.waitForFunction(() => !/Water supply off Tuesday/.test(document.getElementById('week-card').innerText), null, { timeout: 5000 })
+    .catch(() => { throw new Error('a confirmed notice should leave This week'); });
+  await page.evaluate(() => selectTab('notices'));
+  await settle(page);
+  assert(/You confirmed you read this/.test(await page.$eval('#notices-list', el => el.innerText)), 'Announcements should show it was confirmed');
+  noErrors(page);
+}, 'resident');
+
+test('resident: Calendar tab shows the month with board meetings and repeats; residents cannot add', async page => {
+  await page.evaluate(() => selectTab('calendar'));
+  await page.waitForSelector('.cal-grid', { timeout: 8000 });
+  await page.waitForFunction(() => /LESCO shutdown/.test(document.getElementById('calendar-body').innerText), null, { timeout: 8000 });
+  const body = await page.$eval('#calendar-body', el => el.innerText);
+  assert(/Garbage pickup/.test(body) && /Every week/.test(body), `weekly garbage pickup should repeat: ${body}`);
+  assert(await page.locator('text=+ Add').count() === 0, 'residents must not add calendar items');
+  await page.click('#calendar-body .ev-row:has-text("LESCO shutdown")');
+  await page.waitForFunction(() => /Store water/.test(document.getElementById('modal-body').innerText), null, { timeout: 5000 });
+  assert(await page.locator('#modal-body button:has-text("Remove")').count() === 0, 'residents must not remove items');
+  noErrors(page);
+}, 'resident');
+
+test('admin: To do list, edits mosque times, adds a calendar item, and sees who has read an important notice', async page => {
+  const todo = await page.$eval('#todo-list', el => el.innerText);
+  assert(/Proofs to check/.test(todo) && /Registrations to approve/.test(todo) && /Houses overdue/.test(todo), `To do should list what is waiting: ${todo}`);
+  const quick = await page.$eval('.qa-row', el => el.innerText);
+  assert(/Issue bill/.test(quick) && /Notice/.test(quick) && /Expense/.test(quick) && /Contacts/.test(quick), `admin quick buttons: ${quick}`);
+  assert(await page.locator('.emg-btn').count() === 1, 'the big emergency button stays');
+  await page.click('#mosque-card button:has-text("Edit")');
+  await page.waitForSelector('#mosque-form', { timeout: 5000 });
+  await page.fill('#mq-isha', '20:30');
+  await page.check('#mq-ramadan');
+  await page.fill('#mq-sehri', '04:38');
+  await page.fill('#mq-iftar', '18:02');
+  await page.click('#mosque-form button[type=submit]');
+  await page.waitForFunction(() => { const d = window.__mockStore.settings.get('mosque'); return d && d.isha === '20:30'; }, null, { timeout: 8000 })
+    .catch(() => { throw new Error('mosque times not saved'); });
+  await page.waitForFunction(() => /8:30/.test((document.getElementById('mosque-card') || {}).innerText || ''), null, { timeout: 5000 }).catch(() => {});
+  const card = await page.$eval('#mosque-card', el => el.innerText);
+  assert(/8:30/.test(card) && /Sehri ends/.test(card) && /4:38/.test(card) && /6:02/.test(card), `card should show the new times and Ramadan row: ${card}`);
+  await page.evaluate(() => selectTab('calendar'));
+  await page.waitForSelector('.cal-grid', { timeout: 8000 });
+  await page.click('.section-title button:has-text("+ Add")');
+  await page.waitForSelector('#event-form', { timeout: 5000 });
+  await page.selectOption('#ev-kind', 'meeting');
+  await page.fill('#ev-title', 'General body meeting');
+  const d = new Date(); d.setDate(d.getDate() + 3);
+  const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  await page.fill('#ev-date', key);
+  await page.fill('#ev-time', '17:00');
+  await page.fill('#ev-place', 'Mosque hall');
+  await page.click('#event-form button[type=submit]');
+  await page.waitForFunction(() => [...window.__mockStore.events.values()].some(e => e.title === 'General body meeting'), null, { timeout: 8000 })
+    .catch(() => { throw new Error('calendar item not saved'); });
+  const ev = await page.evaluate(() => [...window.__mockStore.events.values()].find(e => e.title === 'General body meeting'));
+  assert(ev.date === key && ev.time === '17:00' && ev.createdBy === 'u_admin' && ev.repeat === 'none', `saved wrongly: ${JSON.stringify(ev)}`);
+  await page.waitForFunction(() => /General body meeting/.test(document.getElementById('calendar-body').innerText), null, { timeout: 5000 })
+    .catch(() => { throw new Error('new item not on the calendar'); });
+  await page.evaluate(() => selectTab('notices'));
+  await settle(page);
+  await page.waitForFunction(() => /Read by 2 of \d+ houses/.test(document.getElementById('notices-list').innerText), null, { timeout: 8000 })
+    .catch(async () => { throw new Error('read count missing: ' + (await page.$eval('#notices-list', el => el.innerText)).slice(0, 500)); });
+  await page.click('#notices-list button:has-text("not read yet")');
+  await page.waitForFunction(() => /Not read yet/.test(document.getElementById('modal-body').innerText), null, { timeout: 5000 });
+  const sheet = await page.$eval('#modal-body', el => el.innerText);
+  assert(/House 14, Block B/.test(sheet) && !/House 3, Block A/.test(sheet) && !/House 21, Block C/.test(sheet), `not-read list should leave out readers and suspended members: ${sheet}`);
+  await page.evaluate(() => { closeModal(); openPostNoticeModal(); });
+  await page.fill('#notice-title', 'Fee change from November');
+  await page.fill('#notice-content', 'The monthly fee becomes PKR 2,800.');
+  await page.check('#notice-confirm');
+  await page.uncheck('#notice-share-wa');
+  await page.click('#notice-form button[type=submit]');
+  await page.waitForFunction(() => [...window.__mockStore.announcements.values()].some(n => n.title === 'Fee change from November' && n.confirm === true), null, { timeout: 8000 })
+    .catch(() => { throw new Error('important notice not saved with confirm'); });
+  noErrors(page);
+}, 'admin');
+
+test('board: To do shows votes waiting; quick buttons offer Notice and Add event', async page => {
+  const quick = await page.$eval('.qa-row', el => el.innerText);
+  assert(/Notice/.test(quick) && /Add event/.test(quick) && /Contacts/.test(quick) && !/Issue bill/.test(quick), `board quick buttons: ${quick}`);
+  assert(await page.locator('#mosque-card button:has-text("Edit")').count() === 0, 'board must not edit mosque times');
+  noErrors(page);
+}, 'board');
 
 // ---------- run ----------
 let passed = 0, failed = 0;

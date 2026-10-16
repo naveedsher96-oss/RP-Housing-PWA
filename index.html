@@ -393,6 +393,7 @@
   .tab-btn.active .pill{background:var(--accent-soft);}
   .tab-btn .lbl{font-size:11px; font-weight:700; line-height:1.15; text-align:center;}
   .ico-svg{ width:20px; height:20px; flex:none; }
+  .ico-svg-sm{ width:16px; height:16px; flex:none; vertical-align:-3px; }
   .top-back{ background:var(--bg-elevated-2); color:var(--text); border:1px solid var(--border); border-radius:12px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none; }
   .top-back svg{ width:20px; height:20px; }
   .more-user{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
@@ -440,6 +441,77 @@
   /* Dashboard additions */
   .dash-hello{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 14px; }
   .dash-hello h2{ font-family:var(--font-display); font-size:22px; font-weight:600; margin:0; min-width:0; }
+  /* Home screen: quick buttons, To do, money, mosque, This week, calendar, read receipts */
+  .qa-row{ display:grid; gap:8px; margin:0 0 14px; }
+  .qa-btn{ background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:12px 4px 10px; display:flex; flex-direction:column; align-items:center; gap:6px; color:var(--text); font:inherit; font-size:13px; font-weight:700; cursor:pointer; min-width:0; }
+  .qa-btn svg{ width:22px; height:22px; color:var(--accent); }
+  .qa-btn span{ max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .qa-btn:active{ transform:scale(.97); }
+  .seg2{ display:grid; grid-template-columns:1fr 1fr; gap:4px; background:var(--bg-elevated-2); border-radius:12px; padding:4px; margin-bottom:14px; }
+  .seg2 button{ border:0; border-radius:9px; padding:9px 6px; background:none; color:var(--text-muted); font:inherit; font-weight:700; font-size:14px; cursor:pointer; }
+  .seg2 button.on{ background:var(--accent); color:#2A1A00; }
+  .mc-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+  .mc-bals{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+  .mc-bals div{ background:var(--bg-elevated-2); border-radius:var(--radius-sm); padding:9px 11px; min-width:0; }
+  .mc-bals span{ display:block; font-size:12.5px; color:var(--text-muted); }
+  .mc-bals b{ display:block; font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mc-spark{ display:flex; align-items:flex-end; gap:6px; height:52px; }
+  .mc-spark i{ flex:1; background:var(--bg-elevated-3); border-radius:4px 4px 0 0; min-height:4px; }
+  .mc-spark i.on{ background:var(--accent); }
+  .mc-lab{ display:flex; gap:6px; margin-top:4px; }
+  .mc-lab span{ flex:1; text-align:center; font-size:11px; color:var(--text-faint); }
+  .mc-foot{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:12.5px; color:var(--text-faint); margin:8px 0 10px; }
+  #mosque-card .mc-foot{ margin-bottom:0; }
+  .pray-row{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:5px; text-align:center; }
+  .pray-row div{ background:var(--bg-elevated-2); border-radius:10px; padding:7px 0; min-width:0; }
+  .pray-row div.now{ background:var(--accent); color:#2A1A00; }
+  .pray-row small{ display:block; font-size:11px; font-weight:700; opacity:.85; }
+  .pray-row b{ display:block; font-size:14px; font-variant-numeric:tabular-nums; }
+  .ramadan-row{ display:flex; justify-content:space-between; gap:10px; margin-top:10px; padding:10px 12px; border-radius:var(--radius-sm); background:var(--accent-soft); }
+  .ramadan-row span{ display:block; font-size:12px; color:var(--text-muted); }
+  .ramadan-row b{ font-size:17px; }
+  .form-grid2{ display:grid; grid-template-columns:1fr 1fr; gap:0 10px; }
+  .form-grid2 > div{ min-width:0; }
+  .link-btn{ background:none; border:0; padding:0; color:var(--accent); font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .ev-row{ display:flex; align-items:center; gap:10px; width:100%; padding:8px 0; border:0; border-top:1px solid var(--border); background:none; color:var(--text); font:inherit; text-align:left; cursor:pointer; }
+  .ev-row:first-of-type{ border-top:0; }
+  .ev-day{ flex:none; width:40px; height:40px; border-radius:11px; background:var(--bg-elevated-2); display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.05; }
+  .ev-day small{ font-size:9.5px; font-weight:800; color:var(--accent); letter-spacing:.04em; }
+  .ev-day b{ font-size:15px; }
+  .ev-day.today{ background:var(--accent); }
+  .ev-day.today small, .ev-day.today b{ color:#2A1A00; }
+  .ev-title{ display:block; font-weight:700; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ev-sub{ display:block; font-size:12.5px; color:var(--text-muted); }
+  .imp-row{ display:flex; align-items:center; gap:8px; padding:9px 10px; margin-bottom:8px; border-radius:var(--radius-sm); background:var(--accent-soft); }
+  .imp-title{ flex:1; min-width:0; background:none; border:0; padding:0; color:var(--text); font:inherit; font-weight:700; font-size:13.5px; text-align:left; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .cal-head b{ font-family:var(--font-display); font-size:18px; font-weight:600; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:3px; }
+  .cal-wd{ text-align:center; font-size:11px; font-weight:700; color:var(--text-faint); padding-bottom:4px; }
+  .cal-cell{ aspect-ratio:1; max-width:100%; border:0; border-radius:10px; background:none; color:var(--text); font:inherit; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; padding:0; }
+  .cal-cell.empty{ cursor:default; }
+  .cal-cell b{ font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .cal-cell i{ display:flex; gap:2px; height:5px; }
+  .cal-cell s{ width:5px; height:5px; border-radius:50%; background:var(--accent); text-decoration:none; }
+  .cal-cell.today b{ color:var(--accent); font-weight:800; }
+  .cal-cell.picked{ background:var(--accent); }
+  .cal-cell.picked b{ color:#2A1A00; }
+  .cal-cell.picked s{ background:#2A1A00; }
+  .dash-date{ font-size:13px; color:var(--text-faint); white-space:nowrap; }
+  .todo-row{ display:flex; align-items:center; gap:11px; width:100%; padding:9px 0; border:0; border-top:1px solid var(--border); background:none; color:var(--text); font:inherit; text-align:left; cursor:pointer; }
+  #todo-list > .todo-row:first-child, #todo-list > #backup-reminder:first-child .todo-row{ border-top:0; }
+  .todo-n{ flex:none; min-width:36px; height:36px; padding:0 6px; border-radius:11px; display:grid; place-items:center; font-weight:800; font-size:15px; font-variant-numeric:tabular-nums; }
+  .todo-n.bad{ background:var(--danger-soft); color:var(--danger); }
+  .todo-n.am{ background:var(--warning-soft); color:var(--warning); }
+  .todo-n.in{ background:var(--info-soft); color:var(--info); }
+  .todo-n.ok{ background:var(--success-soft); color:var(--success); }
+  .todo-t{ display:block; font-weight:700; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .todo-s{ display:block; font-size:12.5px; color:var(--text-muted); }
+  .todo-empty{ font-size:14px; color:var(--success); font-weight:700; padding:4px 0; }
+  .rr-box{ margin-top:12px; padding:10px 12px; border-radius:var(--radius-sm); background:var(--bg-elevated-2); }
+  .rr-bar{ height:6px; border-radius:6px; background:var(--bg-elevated-3); overflow:hidden; }
+  .rr-bar i{ display:block; height:100%; background:var(--success); }
+  .rr-done{ margin-top:10px; font-size:13px; font-weight:700; color:var(--success); }
   .need-tiles{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:14px; }
   .need-tile{ background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:12px 10px; text-align:left; color:var(--text); font-family:inherit; cursor:pointer; min-width:0; }
   .need-tile b{ display:block; font-size:26px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; }
@@ -1719,6 +1791,17 @@
       `;
     }
 
+    if (activeTab === 'calendar') {
+      return `
+        <div class="section-title">
+          Calendar
+          ${canAddEvent() ? '<button class="btn sm primary" onclick="openEventForm()">+ Add</button>' : ''}
+        </div>
+        <div class="section-sub">Meetings, garbage days, water and power shutdowns and society events. Everyone gets a reminder the evening before.</div>
+        <div id="calendar-body">Loading calendar...</div>
+      `;
+    }
+
     if (activeTab === 'documents') {
       const meetings = docsView === 'meetings';
       return `
@@ -2162,7 +2245,9 @@
     file:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
     tag:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
     copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
-    bank:'<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>'
+    bank:'<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>',
+    phone:'<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+    calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>'
   };
   function icon(name, cls) {
     return `<svg class="${cls || 'ico-svg'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ICON_PATHS.grid}</svg>`;
@@ -2374,8 +2459,16 @@
   // --- APP VERSION & WHAT'S NEW (per device) ---
   // Bump APP_VERSION and add an entry at the top of WHATS_NEW with every release.
   // The sheet opens once per device after an update (first installs only record the version).
-  const APP_VERSION = '2026.10.05';
+  const APP_VERSION = '2026.10.16';
   const WHATS_NEW = [
+    { version: '2026.10.16', items: [
+      'A cleaner home screen: Pay, Complaint and Contacts buttons, and the society money in one card (tap See full report for the charts).',
+      'Emergency and Useful Contacts are together under the Contacts button.',
+      'Society Mosque jamaat times on the dashboard, with sehri and iftar in Ramadan.',
+      'New Calendar (More → Calendar) and a This week card: meetings, garbage days, water and power shutdowns, with a reminder the evening before.',
+      'Important notices ask you to tap "Got it", so management knows everyone has read them.',
+      'Admins get a To do list of everything waiting on them.',
+    ] },
     { version: '2026.10.05', items: [
       'Late fees on overdue maintenance are now added automatically every morning (if enabled in the Recurring Bill settings).',
       'Phone and CNIC numbers are checked when you fill in or edit your biodata.',
@@ -2518,6 +2611,7 @@
         ['notices', 'megaphone', 'Announcements'],
         ['polls', 'vote', 'Polls'],
         ['documents', 'file', 'Documents & Minutes'],
+        ['calendar', 'calendar', 'Calendar'],
         ['market', 'tag', 'Lost & Found / Classifieds'],
         ['approvals', 'usercheck', 'Approvals'],
         ['board', 'gavel', 'Board Decisions'],
@@ -2534,6 +2628,7 @@
         ['notices', 'megaphone', 'Announcements'],
         ['polls', 'vote', 'Polls'],
         ['documents', 'file', 'Documents & Minutes'],
+        ['calendar', 'calendar', 'Calendar'],
         ['market', 'tag', 'Lost & Found / Classifieds'],
         ['bills', 'receipt', 'Bills'],
         ['funds', 'wallet', 'Funds'],
@@ -2550,6 +2645,7 @@
         ['notices', 'megaphone', 'Announcements'],
         ['polls', 'vote', 'Polls'],
         ['documents', 'file', 'Documents & Minutes'],
+        ['calendar', 'calendar', 'Calendar'],
         ['market', 'tag', 'Lost & Found / Classifieds'],
         ['tickets', 'wrench', 'Complaints'],
         ['bills', 'receipt', 'Bills'],
@@ -2570,6 +2666,7 @@
       ['notices', 'megaphone', 'Announcements'],
       ['polls', 'vote', 'Polls'],
       ['documents', 'file', 'Documents & Minutes'],
+      ['calendar', 'calendar', 'Calendar'],
       ['market', 'tag', 'Lost & Found / Classifieds'],
       ['tickets', 'wrench', 'Complaints'],
       ['bills', 'receipt', 'Bills'],
@@ -2588,6 +2685,7 @@
     if (activeTab === 'notices') loadNotices();
     if (activeTab === 'polls') loadPolls();
     if (activeTab === 'documents') loadDocumentsTab();
+    if (activeTab === 'calendar') loadCalendarTab();
     if (activeTab === 'market') loadListings();
     if (activeTab === 'tickets') loadTickets();
     if (activeTab === 'bills') loadBills();
@@ -3057,6 +3155,8 @@
       noticeComments = {};
       noticesList.forEach((n, i) => { noticeComments[n.id] = threads[i]; });
       renderNoticesList();
+      if (currentUserProfile.role === 'resident') syncImportantReads(noticesList).then(renderNoticesList);
+      else loadNoticeReads();
     }).catch(e => { console.error("Error loading notices:", e); showLoadError('notices-list', e); });
   }
 
@@ -3193,6 +3293,7 @@
     listEl.innerHTML = noticesList.map(n => `
       <div class="card ${isActiveEmergency(n) ? 'notice-emg' : ''}" style="cursor:default;">
         ${n.emergency ? `<div style="margin-bottom:8px;">${emergencyTag(n)}</div>` : ''}
+        ${isImportant(n) ? `<div style="margin-bottom:8px;"><span class="badge pending">📌 Important</span></div>` : ''}
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
           <div class="clickable" onclick="openNoticeDetail('${n.id}')" style="font-weight:700; font-size:16px; color:${n.emergency ? 'var(--danger)' : 'var(--accent-2)'};">${escapeHtml(n.title)}</div>
           ${isStaff() || canDeletePost(n) ? `<button class="dots-btn" onclick="openNoticeMenu('${n.id}')" aria-label="More actions">${icon('dots')}</button>` : ''}
@@ -3200,6 +3301,7 @@
         <div class="clickable" onclick="openNoticeDetail('${n.id}')" style="font-size:14.5px; color:var(--text); line-height:1.5; white-space:pre-wrap; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(n.content)}</div>
         ${String(n.content || '').length > 220 || String(n.content || '').split('\n').length > 4 ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="openNoticeDetail('${n.id}')">Read more</button>` : ''}
         <div style="font-size:13px; color:var(--text-faint); margin-top:10px;">${postedByLabel(n)}${n.createdAt ? ' · ' + escapeHtml(formatDate(n.createdAt)) : ''}</div>
+        ${readReceiptHtml(n)}
         ${n.summaryMonth ? `<div style="display:flex; gap:8px; margin-top:10px;">
           <button class="btn sm secondary block" onclick="openMonthlySummaryModal('${escapeHtml(n.summaryMonth)}')">📊 Breakdown</button>
           <button class="btn sm secondary block" onclick="downloadMonthlySummaryPDF('${escapeHtml(n.summaryMonth)}')">📄 PDF</button>
@@ -3266,6 +3368,7 @@
       <div style="font-family:var(--font-display); font-size:21px; font-weight:600; margin-bottom:10px;">${escapeHtml(n.title || '')}</div>
       <div style="font-size:15.5px; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere;">${escapeHtml(n.content || '')}</div>
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
+        ${isImportant(n) && currentUserProfile.role === 'resident' && !confirmedReads.has(n.id) ? `<button class="btn primary block" id="notice-gotit" onclick="confirmNoticeRead('${n.id}')">✓ Got it</button>` : ''}
         ${n.summaryMonth ? `<button class="btn secondary block" onclick="openMonthlySummaryModal('${escapeHtml(n.summaryMonth)}')">See the breakdown</button>` : ''}
         ${isStaff() ? `<button class="btn secondary block" onclick="shareNoticeOnWhatsApp('${n.id}')">${icon('share')} Share on WhatsApp</button>` : ''}
       </div>
@@ -3295,6 +3398,10 @@
           <input type="checkbox" id="notice-allow-comments" checked style="width:auto; margin:0;" />
           <span>Allow residents to comment</span>
         </label>
+        <label style="display:flex; align-items:flex-start; gap:8px; margin-top:12px; cursor:pointer;">
+          <input type="checkbox" id="notice-confirm" style="width:auto; margin:3px 0 0;" />
+          <span>Important: ask residents to tap "Got it", so you can see which houses have read it</span>
+        </label>
         <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
           <input type="checkbox" id="notice-share-wa" checked style="width:auto; margin:0;" />
           <span>Also share on WhatsApp after posting</span>
@@ -3310,16 +3417,18 @@
       const content = document.getElementById('notice-content').value.trim();
       const allowComments = document.getElementById('notice-allow-comments').checked;
       const shareWa = document.getElementById('notice-share-wa').checked;
+      const important = document.getElementById('notice-confirm').checked;
 
       try {
         await db.collection('announcements').add({
           title,
           content,
           allowComments,
+          ...(important ? { confirm: true } : {}),
           ...publisherFields(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        await broadcastNotification("New Announcement: " + title, content, 'notices');
+        await broadcastNotification((important ? "📌 Important: " : "New Announcement: ") + title, content, 'notices');
         closeModal();
         loadNotices();
         toast('Announcement posted');
@@ -3390,7 +3499,8 @@
     if (!db) return;
     try {
       const snap = await db.collection('announcements').orderBy('createdAt', 'desc').limit(15).get();
-      activeEmergencies = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(isActiveEmergency);
+      recentNotices = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(n => !n.isDeleted);
+      activeEmergencies = recentNotices.filter(isActiveEmergency);
     } catch (e) { console.error('Emergency load failed:', e); }
   }
 
@@ -3908,6 +4018,566 @@
         openUsefulContacts();
       } catch (err) { toast('Could not save: ' + err.message, 'bad'); }
     });
+  };
+
+  // --- HOME SCREEN: QUICK BUTTONS, CONTACTS SHEET, SOCIETY MONEY ---
+  function quickActionsHtml() {
+    const role = currentUserProfile.role;
+    const qa = (ic, label, action) => `<button type="button" class="qa-btn" onclick="${action}">${icon(ic)}<span>${label}</span></button>`;
+    let items;
+    if (role === 'resident') {
+      items = [qa('receipt', 'Pay', "goTab('bills')"), qa('wrench', 'Complaint', 'openNewTicketModal()'), qa('phone', 'Contacts', 'openContactsSheet()')];
+    } else if (role === 'admin') {
+      items = [qa('receipt', 'Issue bill', 'openIssueBillModal()'), qa('megaphone', 'Notice', 'openPostNoticeModal()'), qa('cash', 'Expense', 'openAddExpenseModal()'), qa('phone', 'Contacts', 'openContactsSheet()')];
+    } else {
+      items = [qa('megaphone', 'Notice', 'openPostNoticeModal()'), qa('calendar', 'Add event', 'openEventForm()'), qa('phone', 'Contacts', 'openContactsSheet()')];
+    }
+    return `<div class="qa-row" style="grid-template-columns:repeat(${items.length},minmax(0,1fr));">${items.join('')}</div>`;
+  }
+
+  let contactsTab = 'emergency';
+  window.openContactsSheet = async function(tab) {
+    contactsTab = tab === 'useful' ? 'useful' : 'emergency';
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:10px;">Contacts</div>
+      <div class="seg2" role="tablist" id="contacts-tabs">
+        <button type="button" role="tab" data-tab="emergency" onclick="setContactsTab('emergency')">📞 Emergency</button>
+        <button type="button" role="tab" data-tab="useful" onclick="setContactsTab('useful')">🧰 Useful</button>
+      </div>
+      <div id="contacts-pane"></div>`;
+    openModal();
+    renderContactsPane();
+    if (contactsTab === 'useful') { await loadUsefulContacts(); renderUsefulBody(); }
+  };
+  window.setContactsTab = function(tab) {
+    contactsTab = tab;
+    renderContactsPane();
+  };
+  function renderContactsPane() {
+    const el = document.getElementById('contacts-pane');
+    if (!el) return;
+    document.querySelectorAll('#contacts-tabs button').forEach(b => {
+      const on = b.dataset.tab === contactsTab;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', on);
+    });
+    if (contactsTab === 'useful') {
+      el.innerHTML = `<div style="font-size:13px; color:var(--text-muted); margin-bottom:12px; line-height:1.5;">Trusted local services for RPHS residents. Tap Copy to copy a number.</div><div id="uc-body"></div>`;
+      renderUsefulBody();
+      return;
+    }
+    const list = contactsToShow();
+    el.innerHTML = `
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Tap Call. It works even when the app is offline.</div>
+      <div class="contact-list" id="emg-contacts-all">${list.map(contactRow).join('')}</div>
+      <button class="btn sm secondary block" style="margin-top:12px;" onclick="testEmergencyAlarm()">🔔 Test alarm sound</button>
+      ${canBroadcastEmergency() ? `<button class="btn secondary block" style="margin-top:10px;" onclick="openEditEmergencyContactsModal()">${icon('edit')} Edit contacts</button>` : ''}`;
+  }
+
+  // One small card on the dashboard; the full charts open under it.
+  let dashFullOpen = false;
+  window.toggleDashFull = function() {
+    dashFullOpen = !dashFullOpen;
+    const el = document.getElementById('dash-full');
+    const btn = document.getElementById('dash-full-btn');
+    if (el) el.hidden = !dashFullOpen;
+    if (btn) {
+      btn.setAttribute('aria-expanded', dashFullOpen);
+      btn.innerHTML = `${dashFullOpen ? 'Hide full report' : 'See full report'} ${icon('chevron-down', 'ico-svg-sm')}`;
+    }
+  };
+  function moneyCardHtml(o) {
+    const latest = monthlySummaries.slice().sort((a, b) => String(b.month || b.id).localeCompare(String(a.month || a.id)))[0];
+    const tot = (latest && latest.totals) || {};
+    const net = Number(tot.net != null ? tot.net : Number(tot.in || 0) - Number(tot.out || 0));
+    const max = Math.max(...o.months.map(m => m.value), 1);
+    return `
+      <div class="card money-card" style="cursor:default; margin-bottom:14px;">
+        <div class="mc-head">
+          <div style="font-weight:700; font-size:14px;">Society money</div>
+          ${latest ? `<span class="badge ${net >= 0 ? 'paid' : 'overdue'}">${net >= 0 ? '+' : '−'}${kAmount(Math.abs(net))} ${escapeHtml(monthLabel(latest.month || latest.id).split(' ')[0].slice(0, 3))}</span>` : ''}
+        </div>
+        <div class="mc-bals">
+          <div><span>Bills account</span><b style="color:${balanceColor(o.billsBalance)};">${formatMoney(o.billsBalance)}</b></div>
+          <div><span>Funds</span><b style="color:${balanceColor(o.fundsBalance)};">${formatMoney(o.fundsBalance)}</b></div>
+        </div>
+        <div class="mc-spark" aria-label="${escapeHtml(o.label)}">${o.months.map((m, i) => `<i title="${escapeHtml(m.label)}: ${formatMoney(m.value)}" class="${i === o.months.length - 2 ? 'on' : ''}" style="height:${Math.max(6, Math.round(m.value / max * 100))}%"></i>`).join('')}</div>
+        <div class="mc-lab">${o.months.map(m => `<span>${escapeHtml(m.label)}</span>`).join('')}</div>
+        <div class="mc-foot">
+          <span>${escapeHtml(o.label)}</span>
+          ${latest ? `<span>${escapeHtml(monthLabel(latest.month || latest.id).split(' ')[0])}: in ${kAmount(tot.in)} · out ${kAmount(tot.out)}</span>` : ''}
+        </div>
+        <button type="button" class="btn sm secondary block" id="dash-full-btn" aria-expanded="${dashFullOpen}" aria-controls="dash-full" onclick="toggleDashFull()">${dashFullOpen ? 'Hide full report' : 'See full report'} ${icon('chevron-down', 'ico-svg-sm')}</button>
+      </div>`;
+  }
+
+  // --- MOSQUE JAMAAT TIMINGS (settings/mosque, admin / super admin edit) ---
+  const PRAYERS = [['fajr', 'Fajr', 'فجر'], ['zuhr', 'Zuhr', 'ظہر'], ['asr', 'Asr', 'عصر'], ['maghrib', 'Maghrib', 'مغرب'], ['isha', 'Isha', 'عشاء']];
+  let mosqueData = null;
+  function canEditMosque() { return !!currentUserProfile && (currentUserProfile.role === 'admin' || isSuperAdmin()); }
+  async function loadMosque() {
+    if (!db) return;
+    try {
+      const doc = await db.collection('settings').doc('mosque').get();
+      mosqueData = doc.exists ? doc.data() : null;
+    } catch (e) { console.error('Mosque times load failed:', e); }
+  }
+  function to12h(hm) {
+    const m = /^(\d{1,2}):(\d{2})/.exec(String(hm || ''));
+    if (!m) return '';
+    const h = Number(m[1]);
+    return `${((h + 11) % 12) + 1}:${m[2]}`;
+  }
+  function minutesOf(hm) {
+    const m = /^(\d{1,2}):(\d{2})/.exec(String(hm || ''));
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  }
+  // The next jamaat from now (after Isha it is tomorrow's Fajr). Friday's Zuhr is Jummah.
+  function nextPrayerKey(d, now) {
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const friday = now.getDay() === 5;
+    const list = PRAYERS.map(([k]) => [k, minutesOf(k === 'zuhr' && friday && d.jummah ? d.jummah : d[k])]).filter(x => x[1] != null);
+    const next = list.find(x => x[1] >= mins);
+    return next ? next[0] : (list[0] && list[0][0]);
+  }
+  function renderMosqueCard() {
+    const d = mosqueData;
+    const has = d && PRAYERS.some(([k]) => d[k]);
+    if (!has && !canEditMosque()) return '';
+    if (!has) return `
+      <div class="card" style="cursor:default; margin-bottom:14px;" id="mosque-card">
+        <div style="font-weight:700; font-size:14px;">🕌 Society Mosque · Jamaat times</div>
+        <div style="font-size:13px; color:var(--text-muted); margin:4px 0 10px;">Residents will see the jamaat times here once you add them.</div>
+        <button class="btn sm primary" onclick="openMosqueForm()">Set jamaat times</button>
+      </div>`;
+    const now = new Date();
+    const friday = now.getDay() === 5;
+    const nk = nextPrayerKey(d, now);
+    const ur = uiLang === 'ur';
+    const label = (k, en, urName) => (k === 'zuhr' && friday && d.jummah) ? (ur ? 'جمعہ' : 'Jummah') : (ur ? urName : en);
+    const time = k => to12h(k === 'zuhr' && friday && d.jummah ? d.jummah : d[k]);
+    const nextRow = PRAYERS.find(p => p[0] === nk);
+    return `
+      <div class="card" style="cursor:default; margin-bottom:14px;" id="mosque-card">
+        <div class="mc-head">
+          <div style="font-weight:700; font-size:14px;">🕌 Society Mosque · Jamaat</div>
+          ${nextRow && time(nk) ? `<span class="badge pending">Next: ${escapeHtml(label(...nextRow))} ${escapeHtml(time(nk))}</span>` : ''}
+        </div>
+        <div class="pray-row">
+          ${PRAYERS.map(p => `<div class="${p[0] === nk ? 'now' : ''}"><small>${escapeHtml(label(...p))}</small><b>${escapeHtml(time(p[0]) || '–')}</b></div>`).join('')}
+        </div>
+        ${d.ramadan && (d.sehri || d.iftar) ? `
+          <div class="ramadan-row">
+            <div><span>Sehri ends</span><b>${escapeHtml(to12h(d.sehri) || '–')} am</b></div>
+            <div style="text-align:right;"><span>Iftar</span><b>${escapeHtml(to12h(d.iftar) || '–')} pm</b></div>
+          </div>` : ''}
+        <div class="mc-foot">
+          <span>${d.jummah ? `Jummah${d.jummahKhutbah ? ' khutbah ' + escapeHtml(to12h(d.jummahKhutbah)) + ' ·' : ''} jamaat ${escapeHtml(to12h(d.jummah))}` : ''}${d.updatedAt ? `${d.jummah ? ' · ' : ''}Updated ${escapeHtml(formatDate(d.updatedAt))}` : ''}</span>
+          ${canEditMosque() ? `<button class="btn sm secondary" onclick="openMosqueForm()">${icon('edit', 'ico-svg-sm')} Edit</button>` : ''}
+        </div>
+        ${d.note ? `<div style="font-size:13px; color:var(--text-muted); margin-top:6px;">${escapeHtml(d.note)}</div>` : ''}
+      </div>`;
+  }
+  window.openMosqueForm = function() {
+    if (!canEditMosque()) return;
+    const d = mosqueData || {};
+    const f = (id, label, v) => `<div><label for="mq-${id}">${label}</label><input type="time" id="mq-${id}" value="${escapeHtml(v || '')}" /></div>`;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Jamaat times</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">Shown on every dashboard. Change them whenever the mosque does.</div>
+      <form id="mosque-form">
+        <div class="form-grid2">
+          ${PRAYERS.map(([k, en]) => f(k, en, d[k])).join('')}
+          ${f('jummahKhutbah', 'Jummah khutbah', d.jummahKhutbah)}
+          ${f('jummah', 'Jummah jamaat', d.jummah)}
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px; cursor:pointer;">
+          <input type="checkbox" id="mq-ramadan" ${d.ramadan ? 'checked' : ''} style="width:auto; margin:0;" />
+          <span>Ramadan: show sehri and iftar</span>
+        </label>
+        <div class="form-grid2">
+          ${f('sehri', 'Sehri ends', d.sehri)}
+          ${f('iftar', 'Iftar', d.iftar)}
+        </div>
+        <label for="mq-note">Note (optional)</label>
+        <input type="text" id="mq-note" maxlength="140" value="${escapeHtml(d.note || '')}" placeholder="e.g. Taraweeh 8:45 pm" />
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save times</button>
+      </form>`;
+    openModal();
+    document.getElementById('mosque-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const v = id => document.getElementById('mq-' + id).value.trim();
+      const next = {};
+      ['fajr', 'zuhr', 'asr', 'maghrib', 'isha', 'jummah', 'jummahKhutbah', 'sehri', 'iftar', 'note'].forEach(k => { next[k] = v(k); });
+      next.ramadan = document.getElementById('mq-ramadan').checked;
+      try {
+        await db.collection('settings').doc('mosque').set({
+          ...next,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: currentUserProfile.name || ''
+        });
+        mosqueData = { ...next, updatedAt: new Date() };
+        logAudit('Updated mosque jamaat times');
+        closeModal();
+        toast('Jamaat times saved');
+        if (activeTab === 'dashboard') { const c = document.getElementById('mosque-card'); if (c) c.outerHTML = renderMosqueCard(); else render(); }
+      } catch (err) { toast('Could not save: ' + err.message, 'bad'); }
+    });
+  };
+
+  // --- SOCIETY CALENDAR (events/{id}) + "This week" ---
+  // An event has a date (YYYY-MM-DD), optional time and place, and may repeat
+  // weekly or monthly. Publishers add them; admin/super admin or the person who
+  // added one edit or remove it (soft delete).
+  const EVENT_KINDS = [
+    ['meeting', 'Meeting', '🗓️'], ['garbage', 'Garbage pickup', '🗑️'], ['water', 'Water', '💧'],
+    ['power', 'Power shutdown', '⚡'], ['cleaning', 'Cleaning / repair', '🧹'], ['event', 'Event', '🎉'], ['other', 'Other', '📌']
+  ];
+  let eventsList = [];
+  let calMonth = null; // Date of the 1st of the month shown on the Calendar tab
+  let calDay = null;   // 'YYYY-MM-DD' picked on the grid
+  function eventKind(k) { return EVENT_KINDS.find(x => x[0] === k) || EVENT_KINDS[EVENT_KINDS.length - 1]; }
+  function canAddEvent() { return canPublish(); }
+  function canEditEvent(ev) { return !!currentUserProfile && (currentUserProfile.role === 'admin' || isSuperAdmin() || (!!auth.currentUser && ev.createdBy === auth.currentUser.uid)); }
+  function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function parseYmd(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '')); return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null; }
+  async function loadEvents() {
+    if (!db) return;
+    try {
+      const [snap, mSnap] = await Promise.all([
+        db.collection('events').get(),
+        db.collection('meetings').get().catch(() => null)
+      ]);
+      const events = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => !e.isDeleted && parseYmd(e.date));
+      // Board meetings from Documents & Minutes show on the calendar too.
+      const meetings = mSnap ? mSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => !m.isDeleted && parseYmd(m.date))
+        .map(m => ({ id: 'mtg_' + m.id, meetingId: m.id, kind: 'meeting', title: m.title || 'Meeting', date: m.date, timeText: m.time || '', place: m.venue || '', note: m.description || '', repeat: 'none', createdByName: m.createdByName || '' })) : [];
+      eventsList = events.concat(meetings);
+    } catch (e) { console.error('Events load failed:', e); }
+  }
+  // Every date an event falls on between from and to (inclusive), as YYYY-MM-DD.
+  function eventDates(ev, from, to) {
+    const start = parseYmd(ev.date);
+    const out = [];
+    if (!start || start > to) return out;
+    if (ev.repeat === 'weekly') {
+      const d = new Date(start);
+      if (d < from) d.setDate(d.getDate() + Math.ceil((from - d) / (7 * 86400000)) * 7);
+      for (; d <= to; d.setDate(d.getDate() + 7)) if (d >= from) out.push(ymd(d));
+    } else if (ev.repeat === 'monthly') {
+      for (let i = 0; i < 400; i++) {
+        const d = new Date(start.getFullYear(), start.getMonth() + i, start.getDate());
+        if (d.getDate() !== start.getDate()) continue; // no 31st in this month
+        if (d > to) break;
+        if (d >= from) out.push(ymd(d));
+      }
+    } else if (start >= from) out.push(ymd(start));
+    return out;
+  }
+  function occurrences(from, to) {
+    const list = [];
+    eventsList.forEach(ev => eventDates(ev, from, to).forEach(day => list.push({ ev, day })));
+    return list.sort((a, b) => a.day.localeCompare(b.day) || String(a.ev.time || '99').localeCompare(String(b.ev.time || '99')) || String(a.ev.title).localeCompare(String(b.ev.title)));
+  }
+  function eventWhen(ev) {
+    const time = ev.time ? to12h(ev.time) + (minutesOf(ev.time) < 720 ? ' am' : ' pm') : (ev.timeText || '');
+    return [time, ev.place || ''].filter(Boolean).join(' · ');
+  }
+  function eventRepeatLabel(ev) { return ev.repeat === 'weekly' ? 'Every week' : (ev.repeat === 'monthly' ? 'Every month' : ''); }
+  function occRow(o, showDay) {
+    const k = eventKind(o.ev.kind);
+    const d = parseYmd(o.day);
+    const today = ymd(new Date()) === o.day;
+    return `
+      <button type="button" class="ev-row" onclick="openEventDetail('${escapeHtml(o.ev.id)}', '${o.day}')">
+        <span class="ev-day ${today ? 'today' : ''}">${showDay ? `<small>${d.toLocaleString('en', { weekday: 'short' }).toUpperCase()}</small><b>${d.getDate()}</b>` : escapeHtml(k[2])}</span>
+        <span style="flex:1; min-width:0;">
+          <span class="ev-title">${showDay ? escapeHtml(k[2]) + ' ' : ''}${escapeHtml(o.ev.title || k[1])}</span>
+          <span class="ev-sub">${escapeHtml([today ? 'Today' : '', eventWhen(o.ev), eventRepeatLabel(o.ev)].filter(Boolean).join(' · '))}</span>
+        </span>
+      </button>`;
+  }
+
+  // Dashboard widget: important notices still waiting for "Got it", then the next 7 days.
+  function renderThisWeekCard() {
+    const from = new Date(); from.setHours(0, 0, 0, 0);
+    const to = new Date(from); to.setDate(to.getDate() + 6);
+    const occ = occurrences(from, to);
+    const pending = importantPending();
+    if (!occ.length && !pending.length && !canAddEvent()) return '';
+    return `
+      <div class="card" style="cursor:default; margin-bottom:14px;" id="week-card">
+        <div class="mc-head">
+          <div style="font-weight:700; font-size:14px;">This week</div>
+          <button type="button" class="link-btn" onclick="goTab('calendar')">Calendar ›</button>
+        </div>
+        ${pending.map(n => `
+          <div class="imp-row">
+            <span class="badge pending">Important</span>
+            <button type="button" class="imp-title" onclick="openImportantNotice('${n.id}')">${escapeHtml(n.title || '')}</button>
+            <button type="button" class="btn sm primary" onclick="confirmNoticeRead('${n.id}')">✓ Got it</button>
+          </div>`).join('')}
+        ${occ.length ? occ.slice(0, 6).map(o => occRow(o, true)).join('') : `<div style="font-size:13px; color:var(--text-muted); padding:6px 0;">Nothing on the calendar this week.</div>`}
+        ${occ.length > 6 ? `<button type="button" class="link-btn" style="margin-top:6px;" onclick="goTab('calendar')">+${occ.length - 6} more this week</button>` : ''}
+        ${canAddEvent() ? `<button class="btn sm secondary block" style="margin-top:10px;" onclick="openEventForm()">+ Add to calendar</button>` : ''}
+      </div>`;
+  }
+  function refreshWeekCard() {
+    const c = document.getElementById('week-card');
+    if (c) c.outerHTML = renderThisWeekCard() || '<div id="week-card"></div>';
+  }
+
+  window.openEventDetail = function(id, day) {
+    const ev = eventsList.find(x => x.id === id);
+    if (!ev) return;
+    const k = eventKind(ev.kind);
+    const d = parseYmd(day || ev.date);
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">${escapeHtml(k[2] + ' ' + k[1])}${eventRepeatLabel(ev) ? ' · ' + escapeHtml(eventRepeatLabel(ev)) : ''}</div>
+      <div style="font-family:var(--font-display); font-size:21px; font-weight:600; margin-bottom:6px;">${escapeHtml(ev.title || '')}</div>
+      <div style="font-weight:700;">${escapeHtml(d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</div>
+      ${eventWhen(ev) ? `<div style="color:var(--text-muted); margin-top:2px;">${escapeHtml(eventWhen(ev))}</div>` : ''}
+      ${ev.note ? `<div style="font-size:15px; line-height:1.6; white-space:pre-wrap; margin-top:12px;">${escapeHtml(ev.note)}</div>` : ''}
+      <div style="font-size:13px; color:var(--text-faint); margin-top:12px;">Added by ${escapeHtml(ev.createdByName || 'management')}</div>
+      ${ev.meetingId ? `<button class="btn secondary block" style="margin-top:16px;" onclick="openMeetingFromCalendar()">Open agenda in Documents &amp; Minutes</button>` : ''}
+      ${!ev.meetingId && canEditEvent(ev) ? `<div style="display:flex; gap:8px; margin-top:16px;">
+        <button class="btn secondary block" onclick="openEventForm('${escapeHtml(ev.id)}')">${icon('edit')} Edit</button>
+        <button class="btn danger block" onclick="removeEvent('${escapeHtml(ev.id)}')">${icon('trash')} Remove</button>
+      </div>` : ''}`;
+    openModal();
+  };
+
+  window.openMeetingFromCalendar = function() { docsView = 'meetings'; goTab('documents'); };
+
+  window.openEventForm = function(id) {
+    if (!canAddEvent()) return;
+    const ev = id ? eventsList.find(x => x.id === id) : null;
+    if (id && (!ev || !canEditEvent(ev))) return;
+    const e0 = ev || { date: calDay || ymd(new Date()), kind: 'meeting', repeat: 'none' };
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">${ev ? 'Edit calendar item' : 'Add to calendar'}</div>
+      <form id="event-form">
+        <label for="ev-kind">Type</label>
+        <select id="ev-kind">${EVENT_KINDS.map(k => `<option value="${k[0]}" ${e0.kind === k[0] ? 'selected' : ''}>${k[2]} ${k[1]}</option>`).join('')}</select>
+        <label for="ev-title">Title</label>
+        <input type="text" id="ev-title" maxlength="100" required value="${escapeHtml(e0.title || '')}" placeholder="e.g. General body meeting" />
+        <div class="form-grid2">
+          <div><label for="ev-date">Date</label><input type="date" id="ev-date" required value="${escapeHtml(e0.date || '')}" /></div>
+          <div><label for="ev-time">Time (optional)</label><input type="time" id="ev-time" value="${escapeHtml(e0.time || '')}" /></div>
+        </div>
+        <label for="ev-place">Place (optional)</label>
+        <input type="text" id="ev-place" maxlength="80" value="${escapeHtml(e0.place || '')}" placeholder="e.g. Mosque hall, Block B" />
+        <label for="ev-repeat">Repeats</label>
+        <select id="ev-repeat">
+          <option value="none" ${e0.repeat === 'weekly' || e0.repeat === 'monthly' ? '' : 'selected'}>Does not repeat</option>
+          <option value="weekly" ${e0.repeat === 'weekly' ? 'selected' : ''}>Every week</option>
+          <option value="monthly" ${e0.repeat === 'monthly' ? 'selected' : ''}>Every month</option>
+        </select>
+        <label for="ev-note">Details (optional)</label>
+        <textarea id="ev-note" maxlength="500" placeholder="What residents should know or do">${escapeHtml(e0.note || '')}</textarea>
+        <div style="font-size:13px; color:var(--text-muted); margin-top:8px;">Everyone gets a reminder the evening before.</div>
+        <button type="submit" class="btn primary block" style="margin-top:14px;">${ev ? 'Save changes' : 'Add to calendar'}</button>
+      </form>`;
+    openModal();
+    document.getElementById('event-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const v = k => document.getElementById('ev-' + k).value.trim();
+      const data = { kind: v('kind'), title: v('title'), date: v('date'), time: v('time'), place: v('place'), repeat: v('repeat'), note: v('note') };
+      if (!data.title || !parseYmd(data.date)) { toast('Add a title and a date.', 'bad'); return; }
+      try {
+        if (ev) {
+          await db.collection('events').doc(ev.id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          Object.assign(ev, data);
+          logAudit('Edited calendar item: ' + data.title);
+        } else {
+          const ref = await db.collection('events').add({
+            ...data,
+            createdBy: auth.currentUser.uid,
+            createdByName: currentUserProfile.name || '',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          eventsList.push({ id: ref.id, ...data, createdBy: auth.currentUser.uid, createdByName: currentUserProfile.name || '' });
+          logAudit('Added calendar item: ' + data.title);
+        }
+        closeModal();
+        toast(ev ? 'Saved' : 'Added to the calendar');
+        if (activeTab === 'calendar') renderCalendarBody(); else refreshWeekCard();
+      } catch (err) { toast('Could not save: ' + err.message, 'bad'); }
+    });
+  };
+
+  window.removeEvent = async function(id) {
+    const ev = eventsList.find(x => x.id === id);
+    if (!ev || !canEditEvent(ev)) return;
+    const ok = await confirmSheet({ title: 'Remove from calendar?', body: `"${ev.title}"${ev.repeat && ev.repeat !== 'none' ? ' and all its repeats' : ''} will be removed for everyone.`, okLabel: 'Remove', danger: true });
+    if (!ok) return;
+    try {
+      await db.collection('events').doc(id).update({ isDeleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp(), deletedBy: currentUserProfile.name || '' });
+      eventsList = eventsList.filter(x => x.id !== id);
+      logAudit('Removed calendar item: ' + (ev.title || ''));
+      closeModal();
+      toast('Removed');
+      if (activeTab === 'calendar') renderCalendarBody(); else refreshWeekCard();
+    } catch (err) { toast('Could not remove: ' + err.message, 'bad'); }
+  };
+
+  // Calendar tab: month grid with dots, the picked day's items, then the rest of the month.
+  async function loadCalendarTab() {
+    if (!calMonth) { const n = new Date(); calMonth = new Date(n.getFullYear(), n.getMonth(), 1); }
+    renderCalendarBody();
+    await loadEvents();
+    renderCalendarBody();
+  }
+  window.calShift = function(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); calDay = null; renderCalendarBody(); };
+  window.calPick = function(day) { calDay = calDay === day ? null : day; renderCalendarBody(); };
+  function renderCalendarBody() {
+    const el = document.getElementById('calendar-body');
+    if (!el || !calMonth) return;
+    const first = calMonth;
+    const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+    const occ = occurrences(first, last);
+    const byDay = {};
+    occ.forEach(o => { (byDay[o.day] = byDay[o.day] || []).push(o); });
+    const lead = (first.getDay() + 6) % 7; // weeks start on Monday
+    const todayKey = ymd(new Date());
+    let cells = '';
+    for (let i = 0; i < lead; i++) cells += '<span class="cal-cell empty"></span>';
+    for (let d = 1; d <= last.getDate(); d++) {
+      const key = ymd(new Date(first.getFullYear(), first.getMonth(), d));
+      const n = (byDay[key] || []).length;
+      cells += `<button type="button" class="cal-cell ${key === todayKey ? 'today' : ''} ${key === calDay ? 'picked' : ''}" onclick="calPick('${key}')" aria-label="${d}${n ? ', ' + n + ' item' + (n > 1 ? 's' : '') : ''}"><b>${d}</b>${n ? `<i>${'<s></s>'.repeat(Math.min(n, 3))}</i>` : ''}</button>`;
+    }
+    const shown = calDay ? (byDay[calDay] || []) : occ.filter(o => o.day >= (first <= new Date() && new Date() <= last ? todayKey : ymd(first)));
+    el.innerHTML = `
+      <div class="card" style="cursor:default; margin-bottom:14px;">
+        <div class="cal-head">
+          <button type="button" class="dots-btn" onclick="calShift(-1)" aria-label="Previous month">‹</button>
+          <b>${escapeHtml(first.toLocaleString('en', { month: 'long', year: 'numeric' }))}</b>
+          <button type="button" class="dots-btn" onclick="calShift(1)" aria-label="Next month">›</button>
+        </div>
+        <div class="cal-grid">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(w => `<span class="cal-wd">${w}</span>`).join('')}${cells}</div>
+      </div>
+      <div class="dash-h">${calDay ? escapeHtml(parseYmd(calDay).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })) : 'Coming up this month'}</div>
+      <div class="card" style="cursor:default;">
+        ${shown.length ? shown.map(o => occRow(o, true)).join('') : `<div style="font-size:14px; color:var(--text-muted); padding:6px 0;">${calDay ? 'Nothing on this day.' : 'Nothing else on the calendar this month.'}</div>`}
+        ${canAddEvent() ? `<button class="btn sm secondary block" style="margin-top:10px;" onclick="openEventForm()">+ Add${calDay ? ' on this day' : ' to calendar'}</button>` : ''}
+      </div>`;
+  }
+
+  // --- READ RECEIPTS ON IMPORTANT NOTICES ---
+  // A notice posted with confirm: true asks members to tap "Got it", which
+  // writes announcements/{id}/reads/{uid}. Staff see how many houses read it.
+  let recentNotices = [];          // newest announcements, for the dashboard widget
+  let confirmedReads = new Set();  // notice ids this member has confirmed
+  function readCacheKey() { return 'rphs.gotit.' + (auth.currentUser ? auth.currentUser.uid : ''); }
+  function loadReadCache() {
+    try { confirmedReads = new Set(JSON.parse(lsGet(readCacheKey()) || '[]')); } catch (_) { confirmedReads = new Set(); }
+  }
+  function saveReadCache() { try { lsSet(readCacheKey(), JSON.stringify([...confirmedReads].slice(-100))); } catch (_) {} }
+  function isImportant(n) { return n && n.confirm === true && !n.isDeleted && !n.emergency; }
+  function importantPending() {
+    if (!currentUserProfile || currentUserProfile.role !== 'resident') return [];
+    const weekAgo = Date.now() - 14 * 86400000;
+    return recentNotices.filter(n => isImportant(n) && !confirmedReads.has(n.id) && (toDate(n.createdAt) || new Date()).getTime() > weekAgo).slice(0, 3);
+  }
+  // Checks the server for notices not in this phone's cache (e.g. confirmed on another phone).
+  async function syncImportantReads(list) {
+    if (!db || !auth.currentUser || !currentUserProfile || currentUserProfile.role !== 'resident') return;
+    loadReadCache();
+    const unknown = (list || recentNotices).filter(n => isImportant(n) && !confirmedReads.has(n.id));
+    await Promise.all(unknown.map(n => db.collection('announcements').doc(n.id).collection('reads').doc(auth.currentUser.uid).get()
+      .then(d => { if (d.exists) confirmedReads.add(n.id); }).catch(() => {})));
+    saveReadCache();
+  }
+  window.openImportantNotice = function(id) {
+    if (!noticesList.some(x => x.id === id)) { const n = recentNotices.find(x => x.id === id); if (n) noticesList.push(n); }
+    openNoticeDetail(id);
+  };
+  window.confirmNoticeRead = async function(id) {
+    try {
+      await db.collection('announcements').doc(id).collection('reads').doc(auth.currentUser.uid).set({
+        uid: auth.currentUser.uid,
+        name: currentUserProfile.name || '',
+        house: currentUserProfile.house || '',
+        role: currentUserProfile.role || '',
+        at: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      confirmedReads.add(id);
+      saveReadCache();
+      toast('Thanks, marked as read');
+      if (document.getElementById('modal-view').classList.contains('active') && document.getElementById('notice-gotit')) closeModal();
+      refreshWeekCard();
+      if (document.getElementById('notices-list')) renderNoticesList();
+    } catch (err) { toast('Could not save: ' + err.message, 'bad'); }
+  };
+
+  // Staff: reads per important notice, against approved, active resident houses.
+  let noticeReads = {}; // id -> [read docs]
+  let residentHouses = null; // [{ key, house, name }]
+  function houseKey(h) { return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  async function loadNoticeReads() {
+    if (!isStaff()) return;
+    const imp = noticesList.filter(isImportant);
+    if (!imp.length) return;
+    try {
+      if (!residentHouses) {
+        const snap = await db.collection('users').where('approved', '==', true).get();
+        const seen = new Map();
+        snap.docs.map(d => d.data()).filter(u => u.role === 'resident' && u.suspended !== true && u.house).forEach(u => {
+          const k = houseKey(u.house);
+          if (!seen.has(k)) seen.set(k, { key: k, house: u.house, name: u.name || '' });
+        });
+        residentHouses = [...seen.values()];
+      }
+      const all = await Promise.all(imp.map(n => db.collection('announcements').doc(n.id).collection('reads').get().then(s => s.docs.map(d => d.data())).catch(() => [])));
+      imp.forEach((n, i) => { noticeReads[n.id] = all[i]; });
+      renderNoticesList();
+    } catch (e) { console.error('Read receipts load failed:', e); }
+  }
+  function readStats(id) {
+    const reads = noticeReads[id];
+    if (!reads || !residentHouses) return null;
+    const readKeys = new Set(reads.map(r => houseKey(r.house)));
+    const total = residentHouses.length;
+    const notRead = residentHouses.filter(h => !readKeys.has(h.key));
+    return { total, read: total - notRead.length, notRead };
+  }
+  let readCacheLoaded = false;
+  function readReceiptHtml(n) {
+    if (!isImportant(n)) return '';
+    if (!readCacheLoaded) { loadReadCache(); readCacheLoaded = true; }
+    if (currentUserProfile.role === 'resident') {
+      return confirmedReads.has(n.id)
+        ? `<div class="rr-done">✓ You confirmed you read this</div>`
+        : `<button class="btn sm primary" style="margin-top:12px;" onclick="confirmNoticeRead('${n.id}')">✓ Got it</button>`;
+    }
+    if (!isStaff()) return '';
+    const s = readStats(n.id);
+    if (!s) return `<div class="rr-box"><span style="color:var(--text-muted); font-size:13px;">Counting who has read it…</span></div>`;
+    const pct = s.total ? Math.round(s.read / s.total * 100) : 0;
+    return `
+      <div class="rr-box">
+        <div class="mc-head"><span style="font-size:13px; font-weight:700;">Read by ${s.read} of ${s.total} houses</span><span style="font-size:13px; color:var(--text-muted);">${pct}%</span></div>
+        <div class="rr-bar"><i style="width:${pct}%"></i></div>
+        ${s.notRead.length ? `<button class="btn sm secondary" style="margin-top:8px;" onclick="openNotReadSheet('${n.id}')">${s.notRead.length} not read yet</button>` : ''}
+      </div>`;
+  }
+  window.openNotReadSheet = function(id) {
+    const n = noticesList.find(x => x.id === id);
+    const s = readStats(id);
+    if (!n || !s) return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Not read yet</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">${escapeHtml(n.title || '')} · ${s.notRead.length} of ${s.total} houses</div>
+      <button class="btn primary block" style="margin-bottom:12px;" onclick="shareNotRead('${id}')">${icon('share')} Share on WhatsApp</button>
+      <div>${s.notRead.map(h => `<div style="display:flex; justify-content:space-between; gap:10px; padding:9px 0; border-top:1px solid var(--border); font-size:14px;"><span style="min-width:0;">${houseHtml(h.house)}</span><span style="color:var(--text-muted); text-align:right;">${escapeHtml(h.name)}</span></div>`).join('')}</div>`;
+    openModal();
+  };
+  window.shareNotRead = function(id) {
+    const n = noticesList.find(x => x.id === id);
+    const s = readStats(id);
+    if (!n || !s) return;
+    openWhatsAppShare(`*Please read: ${n.title}*\n\nThese houses have not opened this notice in the RPHS app yet:\n${s.notRead.map(h => '• ' + h.house).join('\n')}\n\nOpen Announcements in the app and tap "Got it".\n- RPHS Management`);
   };
 
   // --- EMERGENCY ALARM (full screen + siren) ---
@@ -5728,11 +6398,13 @@
       const last = doc.exists ? toDate(doc.data().lastAt) : null;
       if (last && Date.now() - last.getTime() < 7 * 24 * 3600 * 1000) { el.innerHTML = ''; return; }
       el.innerHTML = `
-        <div class="card" style="cursor:default; margin-bottom:14px; border-color:rgba(245,177,76,0.45);">
-          <div style="font-weight:700; font-size:14px;">Weekly backup due</div>
-          <div style="font-size:13px; color:var(--text-muted); margin:4px 0 10px;">${last ? 'Last backup: ' + escapeHtml(formatDate(last)) + '.' : 'No backup has been downloaded yet.'} One tap saves a copy of every record to this phone.</div>
-          <button class="btn sm primary" onclick="downloadBackup(this)">⬇ Download full backup</button>
-        </div>`;
+        <button type="button" class="todo-row" onclick="downloadBackup(this)">
+          <span class="todo-n ok">⬇</span>
+          <span style="flex:1; min-width:0;"><span class="todo-t">Weekly backup due</span><span class="todo-s">${last ? 'Last backup ' + escapeHtml(formatDate(last)) : 'No backup downloaded yet'} · tap to save a copy to this phone</span></span>
+          <span style="color:var(--text-muted);">${icon('chevron-right', 'ico-svg-sm')}</span>
+        </button>`;
+      const empty = document.getElementById('todo-empty');
+      if (empty) empty.hidden = true;
     }).catch(() => {});
   }
 
@@ -8210,7 +8882,9 @@
       loadActiveEmergencies(),
       canSeeHealth() ? db.collection('client_errors').orderBy('createdAt', 'desc').limit(100).get() : null,
       canSeeHealth() ? db.collection('settings').doc('recurringBill').get() : null,
-      loadUsefulContacts()
+      loadUsefulContacts(),
+      loadMosque(),
+      loadEvents()
     ]).then(([usersSnap, billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap, decSnap, , , errSnap, recSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       healthErrors = errSnap ? errSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
@@ -8295,10 +8969,12 @@
       ${renderEmergencyBanner()}
       ${renderStaffNeedsYou(d, { pendingApprovals, inReview: inReviewBills.length, openTickets })}
       ${emergencyButtonHtml()}
-      ${currentUserProfile.role === 'admin' ? '<div id="backup-reminder"></div>' : ''}
-      ${renderEmergencyContactsCard()}
-      ${renderUsefulContactsCard()}
+      ${quickActionsHtml()}
+      ${renderThisWeekCard()}
+      ${renderMosqueCard()}
       ${renderHealthCard()}
+      ${moneyCardHtml({ billsBalance: billsAcct.balance, fundsBalance: fundsAcct.balance, months, label: 'Collections, last 6 months' })}
+      <div id="dash-full" ${dashFullOpen ? '' : 'hidden'}>
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Approved Residents', residents)}
@@ -8330,6 +9006,7 @@
         <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Spending by Category</div>
         ${svgDonut(spendSegs, 'Spent', 'PKR ' + Math.round(spentTotal / 1000) + 'k')}
       </div>
+      </div>
     `;
     checkBackupReminder();
   }
@@ -8350,31 +9027,40 @@
     return decisionsList.filter(x => (x.status || 'pending') === 'pending' && !(x.votes || []).some(v => v.uid === auth.currentUser.uid));
   }
 
-  // "Needs you" tiles above the existing staff dashboard.
+  // "To do" list above the staff dashboard: everything waiting on you, most urgent first.
   function renderStaffNeedsYou(d, n) {
     const role = currentUserProfile.role;
     const overdueHouses = overdueHouseCount(d.bills);
     const openVotes = decisionsList.filter(x => (x.status || 'pending') === 'pending').length;
-    const tile = (num, label, action, tone) => `<button class="need-tile ${num ? tone || 'hot' : ''}" onclick="${action}"><b>${num}</b><span>${label}</span></button>`;
-    let tiles;
-    if (role === 'superadmin') {
-      const suspended = d.users.filter(u => u.suspended === true).length;
-      tiles = tile(n.pendingApprovals, 'Approvals waiting', "goTab('approvals')")
-        + tile(suspended, 'Suspended members', "goTab('biodata')", 'bad')
-        + tile(openVotes, 'Open board votes', "goTab('board')");
-    } else if (role === 'board') {
-      tiles = tile(openDecisionsForMe().length, 'Votes waiting for you', "goTab('board')")
-        + tile(n.openTickets, 'Open complaints', "goTab('tickets')")
-        + tile(overdueHouses, 'Houses overdue', 'openDefaultersModal()', 'bad');
-    } else {
-      tiles = tile(n.pendingApprovals, 'Approvals waiting', "goTab('approvals')")
-        + tile(n.inReview, 'Proofs to check', 'openNextProof()')
-        + tile(overdueHouses, 'Houses overdue', 'openDefaultersModal()', 'bad');
-    }
     const mine = isBoard() ? openDecisionsForMe() : [];
+    const rows = [];
+    const add = (num, tone, label, sub, action) => { if (num) rows.push({ num, tone, label, sub, action }); };
+    if (role === 'superadmin') {
+      add(n.pendingApprovals, 'am', 'Registrations to approve', 'New residents waiting to join', "goTab('approvals')");
+      add(d.users.filter(u => u.suspended === true).length, 'bad', 'Suspended members', 'Review or restore access', "goTab('biodata')");
+      add(openVotes, 'in', 'Open board votes', 'Waiting for the board', "goTab('board')");
+    } else {
+      if (role === 'admin') add(n.inReview, 'bad', 'Proofs to check', 'Tap to review the next one', 'openNextProof()');
+      if (role === 'admin') add(n.pendingApprovals, 'am', 'Registrations to approve', 'New residents waiting to join', "goTab('approvals')");
+      add(mine.length, 'in', mine.length === 1 ? 'Vote: ' + (mine[0].title || 'board decision') : 'Votes waiting for you', mine.length === 1 ? 'Your vote is needed' : 'Board decisions you have not voted on', "goTab('board')");
+      add(overdueHouses, 'bad', 'Houses overdue', 'Share the list or remind all', 'openDefaultersModal()');
+      add(n.openTickets, 'in', 'Open complaints', 'Pending or in progress', "goTab('tickets')");
+    }
     return `
-      <div class="dash-hello"><h2>${escapeHtml(greetingWord())}, ${escapeHtml(firstName())}</h2></div>
-      <div class="need-tiles">${tiles}</div>
+      <div class="dash-hello"><h2>${escapeHtml(greetingWord())}, ${escapeHtml(firstName())}</h2><span class="dash-date">${escapeHtml(new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}</span></div>
+      <div class="card todo-card" style="cursor:default; margin-bottom:14px;">
+        <div class="mc-head"><div style="font-weight:700; font-size:14px;">To do</div><span style="font-size:12.5px; color:var(--text-faint);">Most urgent first</span></div>
+        <div id="todo-list">
+          ${rows.map(r => `
+            <button type="button" class="todo-row" onclick="${r.action}">
+              <span class="todo-n ${r.tone}">${r.num}</span>
+              <span style="flex:1; min-width:0;"><span class="todo-t">${escapeHtml(r.label)}</span><span class="todo-s">${escapeHtml(r.sub)}</span></span>
+              <span style="color:var(--text-muted);">${icon('chevron-right', 'ico-svg-sm')}</span>
+            </button>`).join('')}
+          ${role === 'admin' ? '<div id="backup-reminder"></div>' : ''}
+        </div>
+        <div class="todo-empty" id="todo-empty" ${rows.length ? 'hidden' : ''}>✓ All caught up. Nothing is waiting on you.</div>
+      </div>
       ${mine.length ? `
         <div class="dash-h">Waiting for your vote</div>
         ${decisionCard(mine[0])}
@@ -8437,6 +9123,10 @@
     'Dashboard': 'ڈیش بورڈ', 'Announcements': 'اعلانات', 'Announce\u00adments': 'اعلانات', 'Polls': 'رائے شماری', 'Bills': 'بل', 'My Bills': 'میرے بل',
     'Complaints': 'شکایات', 'Complaints & Suggestions': 'شکایات و تجاویز', 'More': 'مزید', 'Notifications': 'اطلاعات', 'Profile': 'پروفائل', 'My Profile': 'میرا پروفائل',
     'Documents & Minutes': 'دستاویزات و کارروائی', 'Lost & Found / Classifieds': 'گمشدہ و ملی اشیاء / اشتہارات', 'Community Funds': 'کمیونٹی فنڈز', 'Funds': 'فنڈز', 'Expenses': 'اخراجات', 'Documents': 'دستاویزات', 'Classifieds': 'اشتہارات', '{x} new': '{x} نئی', 'Light mode': 'روشن موڈ', 'Dark mode': 'گہرا موڈ', 'Install app': 'ایپ انسٹال کریں', 'Help': 'مدد', 'Community Expenses': 'کمیونٹی اخراجات',
+    'Pay': 'ادائیگی', 'Complaint': 'شکایت', 'Contacts': 'رابطے', 'Emergency': 'ایمرجنسی', 'Useful': 'کارآمد', 'This week': 'اس ہفتے', 'Calendar': 'کیلنڈر', 'Calendar ›': 'کیلنڈر ›',
+    'Society money': 'سوسائٹی کا حساب', 'See full report': 'مکمل رپورٹ دیکھیں', 'Hide full report': 'رپورٹ بند کریں', 'Bills account': 'بلز اکاؤنٹ', 'Important': 'اہم', 'Sehri ends': 'سحری ختم', 'Iftar': 'افطار',
+    'Nothing on the calendar this week.': 'اس ہفتے کیلنڈر پر کچھ نہیں۔', 'Coming up this month': 'اس مہینے آنے والے', 'Every week': 'ہر ہفتے', 'Every month': 'ہر مہینے', 'Today': 'آج', 'To do': 'کرنے کے کام',
+    'You confirmed you read this': 'آپ نے پڑھنے کی تصدیق کر دی',
     'Reports': 'رپورٹس', 'Volunteer Programs': 'رضاکار پروگرام', 'Volunteers': 'رضاکار', 'Board Decisions': 'بورڈ کے فیصلے', 'Board Votes': 'بورڈ ووٹنگ', 'Residents': 'رہائشی', 'Approvals': 'منظوریاں', 'Audit & Archive': 'آڈٹ و آرکائیو',
     'Back': 'واپس', 'Close': 'بند کریں', 'Close app': 'ایپ بند کریں', 'Log out': 'لاگ آؤٹ', 'Main screens': 'مرکزی اسکرینیں', 'Cancel': 'منسوخ', 'OK': 'ٹھیک ہے', 'Save': 'محفوظ کریں', 'Done': 'ہو گیا', 'Loading...': 'لوڈ ہو رہا ہے…',
     'Are you sure?': 'کیا آپ کو یقین ہے؟', 'Yes': 'جی ہاں', 'No': 'نہیں', 'Share': 'شیئر کریں', 'Copy': 'کاپی', 'Copied': 'کاپی ہو گیا', 'Call': 'کال', 'WhatsApp': 'واٹس ایپ', 'View': 'دیکھیں', 'Edit': 'ترمیم', 'Delete': 'حذف کریں', 'Remove': 'ہٹائیں', 'Search': 'تلاش',
@@ -8598,7 +9288,6 @@
           <button class="btn secondary block" onclick="openBankDetailsSheet()">${icon('bank')} ${t('bank')}</button>
         </div>
       </div>
-      <div class="dash-h">Society finances</div>
     `;
   }
 
@@ -8637,8 +9326,10 @@
       db.collection('transfers').get(),
       db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get(),
       loadEmergencyContacts(),
-      loadActiveEmergencies(),
-      loadUsefulContacts()
+      loadActiveEmergencies().then(() => syncImportantReads()),
+      loadUsefulContacts(),
+      loadMosque(),
+      loadEvents()
     ]).then(([billsSnap, society, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const bills = billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted);
@@ -8722,8 +9413,11 @@
       ${renderEmergencyBanner()}
       ${emergencyButtonHtml()}
       ${renderMyHouseCard(d.bills)}
-      ${renderEmergencyContactsCard()}
-      ${renderUsefulContactsCard()}
+      ${quickActionsHtml()}
+      ${renderThisWeekCard()}
+      ${renderMosqueCard()}
+      ${moneyCardHtml({ billsBalance: billsAcct.balance, fundsBalance: fundsAcct.balance, months, label: 'Spending, last 6 months' })}
+      <div id="dash-full" ${dashFullOpen ? '' : 'hidden'}>
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Open Complaints', openTickets, openTickets ? 'var(--info)' : 'var(--text)')}
@@ -8764,6 +9458,7 @@
       <div class="card" style="cursor:default;">
         <div style="font-weight:700; font-size:14px; margin-bottom:10px;">Maintenance Bills</div>
         ${svgDonut(billStatusSegments(soc.paidCount || 0, soc.unpaidCount || 0, soc.submittedCount || 0), 'Billed', 'PKR ' + Math.round(billed / 1000) + 'k')}
+      </div>
       </div>
     `;
   }
