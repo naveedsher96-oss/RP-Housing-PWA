@@ -504,6 +504,58 @@ test('resident: a fresh alarm from someone else takes over the screen with Call 
   noErrors(page);
 }, 'resident');
 
+test('resident: Useful Contacts card opens the sewer-cleaning numbers with Call, WhatsApp, Copy and an Urdu view', async page => {
+  let text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
+  assert(/Useful Contacts/.test(text) && /3 numbers/.test(text), `dashboard should show the Useful Contacts card: ${text.slice(0, 400)}`);
+  await page.click('#useful-card');
+  await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
+  text = await page.$eval('#uc-body', el => el.innerText);
+  assert(/Sewer & Drain Cleaning/.test(text) && /24-hour service/i.test(text) && /Basharat/.test(text) && /0347-2465242/.test(text) && /0317-5297544/.test(text) && /0343-0837204/.test(text),
+    `list should show the three sewer-cleaning numbers: ${text}`);
+  assert(await page.$eval('#uc-body .uc-person .uc-act.call', a => a.getAttribute('href')) === 'tel:03472465242', 'Call should dial the number');
+  assert(/wa\.me\/923472465242/.test(await page.$eval('#uc-body .uc-person .uc-act.wa', a => a.getAttribute('href'))), 'WhatsApp should open a chat with the number');
+  await page.evaluate(() => { window.__copied = ''; navigator.clipboard.writeText = t => { window.__copied = t; return Promise.resolve(); }; });
+  await page.click('#uc-body .uc-person button.uc-act');
+  assert(await page.evaluate(() => window.__copied) === '0347-2465242', 'Copy should copy the number');
+  assert(await page.locator('#uc-body [aria-label="Edit"]').count() === 0 && !/Add contact/.test(text), 'residents must not edit useful contacts');
+  await page.click('.uc-lang button[lang="ur"]');
+  text = await page.$eval('#uc-body', el => el.innerText);
+  assert(/بشارت/.test(text) && /گٹروں اور نالیوں کی صفائی/.test(text) && /24 گھنٹے سروس/.test(text) && /0347-2465242/.test(text), `Urdu view should show Urdu names and notes: ${text}`);
+  noErrors(page);
+}, 'resident');
+
+test('admin: adds a plumber under a new service to Useful Contacts', async page => {
+  await page.click('#useful-card');
+  await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
+  assert(await page.locator('#uc-body [aria-label="Edit"]').count() === 3, 'admin should get an edit button per contact');
+  await page.click('#uc-body button:has-text("Add contact")');
+  await page.waitForSelector('#uc-form', { timeout: 5000 });
+  await page.selectOption('#uc-service', '__new');
+  await page.fill('#uc-sname', 'Plumber');
+  await page.fill('#uc-name', 'Akram');
+  await page.fill('#uc-phone', '0300-1234567');
+  await page.fill('#uc-note', 'Leaks and tank fittings.');
+  await page.click('#uc-form button[type=submit]');
+  await page.waitForFunction(() => { const d = window.__mockStore.settings.get('usefulContacts'); return d && d.contacts.length === 4; }, null, { timeout: 8000 })
+    .catch(() => { throw new Error('useful contacts were not saved'); });
+  const d = await page.evaluate(() => window.__mockStore.settings.get('usefulContacts'));
+  const akram = d.contacts.find(c => c.name === 'Akram');
+  const svc = d.services.find(s => s.id === akram.serviceId);
+  assert(svc && svc.name === 'Plumber' && akram.phone === '0300-1234567' && akram.note === 'Leaks and tank fittings.' && d.contacts.filter(c => c.serviceId === 'sewer').length === 3,
+    `saved wrongly: ${JSON.stringify(d)}`);
+  await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
+  const text = await page.$eval('#uc-body', el => el.innerText);
+  assert(/Plumber/.test(text) && /Akram/.test(text) && /Basharat/.test(text), 'list should show the new plumber alongside the sewer cleaners');
+  noErrors(page);
+}, 'admin');
+
+test('board: sees Useful Contacts but cannot edit them', async page => {
+  await page.click('#useful-card');
+  await page.waitForSelector('#uc-body .uc-person', { timeout: 5000 });
+  assert(await page.locator('#uc-body [aria-label="Edit"]').count() === 0 && await page.locator('#uc-body button:has-text("Add contact")').count() === 0, 'board must not edit useful contacts');
+  noErrors(page);
+}, 'board');
+
 test('superadmin: edits the emergency contacts list', async page => {
   await page.evaluate(() => openEditEmergencyContactsModal());
   await page.waitForSelector('#emg-contacts-form', { timeout: 5000 });
