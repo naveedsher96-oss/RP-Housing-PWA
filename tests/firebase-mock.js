@@ -243,6 +243,17 @@
     { icon: '🔧', label: 'Society electrician – Rafiq', phone: '0333-9988776' }
   ], updatedBy: 'Tariq Mehmood', updatedAt: daysAgo(40) });
 
+  // mosque jamaat times, calendar items, an important notice with read receipts
+  coll('settings').set('mosque', { fajr: '05:15', zuhr: '13:30', asr: '16:45', maghrib: '17:42', isha: '20:15', jummah: '13:45', jummahKhutbah: '13:15', ramadan: false, sehri: '', iftar: '', note: '', updatedAt: daysAgo(4), updatedBy: 'Tariq Mehmood' });
+  const dayKey = (n) => { const d = new Date(NOW.getTime() + n * 86400000); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const evs = coll('events');
+  evs.set('e1', { kind: 'garbage', title: 'Garbage pickup', date: dayKey(-12), time: '09:00', place: 'Blocks A–C', repeat: 'weekly', note: 'Keep bags outside the gate by 9 am.', createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdAt: daysAgo(12) });
+  evs.set('e2', { kind: 'power', title: 'LESCO shutdown', date: dayKey(2), time: '09:00', place: 'Whole society', repeat: 'none', note: 'Tube well off. Store water the night before.', createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdAt: daysAgo(1) });
+  evs.set('e3', { kind: 'event', title: 'Old picnic', date: dayKey(-40), repeat: 'none', createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdAt: daysAgo(41), isDeleted: true });
+  ann.set('a6', { title: 'Water supply off Tuesday 9 am – 2 pm', content: 'LESCO maintenance on the tube well feeder. Please fill your tanks on Monday night.', confirm: true, allowComments: false, createdAt: daysAgo(1, 9), createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdByRole: 'management' });
+  coll('announcements/a6/reads').set('u_r2', { uid: 'u_r2', name: 'Muhammad Usman Khan', house: 'House 3, Block A', role: 'resident', at: daysAgo(1, 11) });
+  coll('announcements/a6/reads').set('u_r3', { uid: 'u_r3', name: 'Fatima Zahra', house: 'House 7, Block A', role: 'resident', at: daysAgo(1, 12) });
+
   // documents vault (file kept in proofs/{fileId} with kind 'document')
   const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
   coll('proofs').set('doc_f1', { uid: 'u_admin', kind: 'document', type: 'pdf', name: 'bylaws-2026.pdf', data: 'data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKCg==', createdAt: daysAgo(60, 10) });

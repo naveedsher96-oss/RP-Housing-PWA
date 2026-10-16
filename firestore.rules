@@ -129,6 +129,17 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // "Got it" on an important notice (confirm: true). Members write their
+      // own receipt once; staff count them, a member can check their own.
+      match /reads/{readUid} {
+        allow read: if isStaff() || isOwner(readUid);
+        allow create: if isOwner(readUid) && isMember()
+          && request.resource.data.get('uid', '') == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'house', 'role', 'at'])
+          && get(/databases/$(database)/documents/announcements/$(id)).data.get('confirm', false) == true;
+        allow update, delete: if false;
+      }
+
       // Resident comments on an announcement. Approved residents, staff and
       // board members may comment (as themselves); a comment can be removed by
       // its author, admin/superadmin, or the board member who posted the notice.
@@ -297,6 +308,31 @@ service cloud.firestore {
     // Useful contacts (sewer cleaning, plumbers…) shown on every dashboard.
     match /settings/usefulContacts {
       allow write: if isAdmin() || isSuperAdmin();
+    }
+    // Mosque jamaat times shown on every dashboard.
+    match /settings/mosque {
+      allow write: if isAdmin() || isSuperAdmin();
+    }
+
+    // ---------- society calendar ----------
+    // Publishers add items; admin/super admin or whoever added one edit or
+    // remove it (soft delete). Every member reads them.
+    match /events/{id} {
+      allow read: if isMember();
+      allow create: if canPublish()
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('title', '') is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.get('date', '') is string
+        && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.get('repeat', 'none') in ['none', 'weekly', 'monthly'];
+      allow update: if (isAdmin() || isSuperAdmin() || (canPublish() && ownsPost()))
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+        && request.resource.data.get('date', '') is string
+        && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.get('repeat', 'none') in ['none', 'weekly', 'monthly'];
+      allow delete: if false;
     }
 
     // ---------- payment proof files ----------
