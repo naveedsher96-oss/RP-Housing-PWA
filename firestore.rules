@@ -294,6 +294,10 @@ service cloud.firestore {
     match /settings/emergencyContacts {
       allow write: if isAdmin() || isSuperAdmin();
     }
+    // Useful contacts (sewer cleaning, plumbers…) shown on every dashboard.
+    match /settings/usefulContacts {
+      allow write: if isAdmin() || isSuperAdmin();
+    }
 
     // ---------- payment proof files ----------
     // Bills and contributions keep only proofId; the photo or PDF lives here.

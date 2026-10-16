@@ -462,6 +462,30 @@
   .emg-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
   .emg-btn{ width:100%; display:flex; align-items:center; justify-content:center; gap:8px; background:var(--danger); color:#fff; border:none; border-radius:14px; padding:13px 16px; font-size:15px; font-weight:800; font-family:inherit; cursor:pointer; margin-bottom:14px; box-shadow:0 6px 18px rgba(229,97,90,0.35); }
   .emg-btn .ico-svg{ width:20px; height:20px; }
+  /* useful contacts */
+  .uc-lang{ display:inline-flex; background:var(--bg-elevated-2); border-radius:20px; padding:3px; margin-bottom:12px; }
+  .uc-lang button{ border:0; background:none; color:var(--text-muted); font:inherit; font-size:13px; font-weight:700; padding:5px 14px; border-radius:16px; cursor:pointer; }
+  .uc-lang button.on{ background:var(--accent); color:#1a1300; }
+  .uc-group{ background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; margin-bottom:12px; }
+  .uc-group.ur{ font-family:'Noto Nastaliq Urdu', var(--font-body); line-height:2; }
+  .uc-gh{ display:flex; align-items:center; gap:10px; }
+  .uc-gi{ width:40px; height:40px; border-radius:12px; background:var(--bg-elevated-2); display:flex; align-items:center; justify-content:center; font-size:20px; flex:none; }
+  .uc-gt{ font-weight:800; font-size:15px; }
+  .uc-tag{ display:inline-block; font-size:11px; font-weight:800; color:var(--success); background:var(--success-soft); border-radius:12px; padding:2px 8px; margin-top:3px; }
+  .uc-gnote{ font-size:13px; color:var(--text-muted); line-height:1.5; margin:10px 0 4px; background:var(--info-soft); border-radius:10px; padding:8px 10px; white-space:pre-wrap; }
+  .uc-group.ur .uc-gnote{ line-height:2; }
+  .uc-person{ border-top:1px solid var(--border); padding:10px 0; }
+  .uc-person:last-child{ padding-bottom:2px; }
+  .uc-name{ font-weight:700; font-size:14.5px; }
+  .uc-num{ display:block; font-family:var(--font-body); font-size:19px; font-weight:800; letter-spacing:.02em; margin:2px 0; direction:ltr; unicode-bidi:isolate; user-select:all; -webkit-user-select:all; }
+  .uc-group.ur .uc-num{ text-align:right; }
+  .uc-note{ font-size:12.5px; color:var(--text-faint); }
+  .uc-acts{ display:flex; gap:6px; margin-top:8px; font-family:var(--font-body); direction:ltr; }
+  .uc-act{ flex:1; display:flex; align-items:center; justify-content:center; gap:4px; text-align:center; font:inherit; font-size:12.5px; font-weight:800; border-radius:10px; padding:8px 0; background:var(--bg-elevated-2); color:var(--text); border:0; text-decoration:none; cursor:pointer; line-height:1.3; }
+  .uc-act svg{ width:15px; height:15px; flex:none; }
+  .uc-act.call{ background:var(--accent); color:#1a1300; }
+  .uc-act.wa{ background:var(--success-soft); color:var(--success); }
+  .uc-act[aria-label="Edit"]{ flex:0 0 40px; }
   /* full-screen emergency alarm */
   #emg-alarm{ position:fixed; inset:0; z-index:1000; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); text-align:center; color:#fff; background:#b3261e; animation:emgFlash 1s steps(1, end) infinite; overflow-y:auto; }
   #emg-alarm.show{ display:flex; }
@@ -2093,6 +2117,7 @@
   // --- ICONS (Lucide-style strokes) ---
   const ICON_PATHS = {
     'chevron-down': '<polyline points="6 9 12 15 18 9"/>',
+    'chevron-right': '<polyline points="9 6 15 12 9 18"/>',
     home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
     bell:'<path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
     grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -3605,6 +3630,246 @@
     } catch (err) {
       toast('Could not update: ' + err.message, 'bad');
     }
+  };
+
+  // --- USEFUL CONTACTS ---
+  // Trusted local services (sewer cleaning, plumbers, electricians…) shown to
+  // every member, grouped by service, in English or Urdu. Kept in
+  // settings/usefulContacts = { services: [{ id, name, nameUr, icon, note, noteUr, h24 }],
+  // contacts: [{ id, serviceId, name, nameUr, phone, note, noteUr }] }; until
+  // management saves a list, the society's sewer-cleaning poster is shown.
+  const DEFAULT_USEFUL = {
+    services: [{ id: 'sewer', name: 'Sewer & Drain Cleaning', nameUr: 'گٹروں اور نالیوں کی صفائی', icon: '🚛', h24: true,
+      note: 'Call for blocked sewers (gutters) and drains. They come with a suction tanker and water pump. Any of the three numbers below.',
+      noteUr: 'گٹر یا نالی بند ہونے پر رابطہ کریں۔ سکشن ٹینکر اور پانی کا پمپ ساتھ لاتے ہیں۔ نیچے دیے گئے کسی بھی نمبر پر کال کریں۔' }],
+    contacts: [
+      ['basharat', 'Basharat', 'بشارت', '0347-2465242'],
+      ['rafaqat', 'Rafaqat', 'رفاقت', '0317-5297544'],
+      ['shahzad', 'Shahzad', 'شہزاد', '0343-0837204']
+    ].map(([id, name, nameUr, phone]) => ({ id, serviceId: 'sewer', name, nameUr, phone,
+      note: 'Sewer and drain cleaning, day or night.', noteUr: 'گٹر اور نالیوں کی صفائی، دن رات۔' }))
+  };
+  let usefulData = null;               // settings/usefulContacts, null = not saved yet
+  let usefulLang = uiLang;             // language of the Useful Contacts list
+  let usefulFilter = 'all';
+  function usefulList() {
+    const d = usefulData && Array.isArray(usefulData.services) ? usefulData : DEFAULT_USEFUL;
+    return { services: d.services || [], contacts: Array.isArray(d.contacts) ? d.contacts : [] };
+  }
+  function canEditUseful() { return canBroadcastEmergency(); }
+  async function loadUsefulContacts() {
+    if (!db) return;
+    try {
+      const doc = await db.collection('settings').doc('usefulContacts').get();
+      usefulData = doc.exists ? doc.data() : null;
+    } catch (e) { console.error('Useful contacts load failed:', e); }
+  }
+  const pickLang = (en, ur) => (usefulLang === 'ur' && ur ? ur : en) || '';
+
+  function renderUsefulContactsCard() {
+    const { services, contacts } = usefulList();
+    const names = services.filter(s => contacts.some(c => c.serviceId === s.id)).map(s => s.name.replace(/ &.*| \(.*/, '').toLowerCase());
+    return `
+      <div class="card" style="cursor:pointer; margin-bottom:14px; padding-top:6px; padding-bottom:6px;" id="useful-card" onclick="openUsefulContacts()">
+        <div style="display:flex; align-items:center; gap:10px; padding:10px 0;">
+          <span style="font-size:18px;">🧰</span>
+          <span style="flex:1; min-width:0;">
+            <span style="display:block; font-weight:700; font-size:14px;">Useful Contacts</span>
+            <span style="display:block; font-size:12.5px; color:var(--text-faint);">${escapeHtml(names.length ? names.join(', ').replace(/^./, c => c.toUpperCase()) + ' · ' : '')}${contacts.length} number${contacts.length === 1 ? '' : 's'}</span>
+          </span>
+          <span style="color:var(--text-muted);">${icon('chevron-right')}</span>
+        </div>
+      </div>`;
+  }
+
+  function usefulPersonHtml(c) {
+    const ur = usefulLang === 'ur';
+    return `
+      <div class="uc-person" data-uc="${escapeHtml(c.id)}">
+        <div class="uc-name">${escapeHtml(pickLang(c.name, c.nameUr))}</div>
+        <bdi class="uc-num">${escapeHtml(c.phone || '')}</bdi>
+        ${pickLang(c.note, c.noteUr) ? `<div class="uc-note">${escapeHtml(pickLang(c.note, c.noteUr))}</div>` : ''}
+        <div class="uc-acts" data-no-ur>
+          <a class="uc-act call" href="${escapeHtml(telHref(c.phone))}">📞 Call</a>
+          <a class="uc-act wa" href="${escapeHtml(whatsappLink(c.phone, ''))}" target="_blank" rel="noopener">WhatsApp</a>
+          <button type="button" class="uc-act" onclick="copyUsefulNumber('${escapeHtml(c.id)}')">${icon('copy', 'ico-svg-sm')} Copy</button>
+          ${canEditUseful() ? `<button type="button" class="uc-act" onclick="openUsefulContactForm('${escapeHtml(c.id)}')" aria-label="Edit">${icon('edit', 'ico-svg-sm')}</button>` : ''}
+        </div>
+      </div>`;
+  }
+
+  function renderUsefulBody() {
+    const el = document.getElementById('uc-body');
+    if (!el) return;
+    const ur = usefulLang === 'ur';
+    if (ur) loadUrduFont();
+    const { services, contacts } = usefulList();
+    const used = services.filter(s => contacts.some(c => c.serviceId === s.id));
+    if (usefulFilter !== 'all' && !used.some(s => s.id === usefulFilter)) usefulFilter = 'all';
+    const shown = used.filter(s => usefulFilter === 'all' || s.id === usefulFilter);
+    el.innerHTML = `
+      <div class="uc-lang" data-no-ur>
+        <button type="button" class="${ur ? '' : 'on'}" onclick="setUsefulLang('en')">English</button>
+        <button type="button" class="${ur ? 'on' : ''}" lang="ur" onclick="setUsefulLang('ur')">اردو</button>
+      </div>
+      ${used.length > 1 ? `<div class="chip-row" style="margin:0 0 12px;" ${ur ? 'lang="ur" dir="rtl"' : 'data-no-ur'}>
+        <button type="button" class="chip ${usefulFilter === 'all' ? 'active' : ''}" onclick="setUsefulFilter('all')">${ur ? 'سب' : 'All'}</button>
+        ${used.map(s => `<button type="button" class="chip ${usefulFilter === s.id ? 'active' : ''}" onclick="setUsefulFilter('${escapeHtml(s.id)}')">${escapeHtml(s.icon || '')} ${escapeHtml(pickLang(s.name, s.nameUr))}</button>`).join('')}
+      </div>` : ''}
+      ${shown.length ? shown.map(s => `
+        <div class="uc-group ${ur ? 'ur' : ''}" ${ur ? 'lang="ur" dir="rtl"' : 'data-no-ur'}>
+          <div class="uc-gh">
+            <div class="uc-gi">${escapeHtml(s.icon || '📞')}</div>
+            <div style="flex:1; min-width:0;">
+              <div class="uc-gt">${escapeHtml(pickLang(s.name, s.nameUr))}</div>
+              ${s.h24 ? `<span class="uc-tag">${ur ? '24 گھنٹے سروس' : '24-hour service'}</span>` : ''}
+            </div>
+            ${canEditUseful() ? `<button type="button" class="dots-btn" onclick="openUsefulServiceForm('${escapeHtml(s.id)}')" aria-label="Edit service">${icon('edit')}</button>` : ''}
+          </div>
+          ${pickLang(s.note, s.noteUr) ? `<div class="uc-gnote">${escapeHtml(pickLang(s.note, s.noteUr))}</div>` : ''}
+          ${contacts.filter(c => c.serviceId === s.id).map(usefulPersonHtml).join('')}
+        </div>`).join('') : `<div class="card" style="cursor:default; color:var(--text-muted);">No useful contacts yet.</div>`}
+      ${canEditUseful() ? `<button type="button" class="btn primary block" style="margin-top:6px;" onclick="openUsefulContactForm()">+ Add contact</button>` : ''}`;
+  }
+
+  window.openUsefulContacts = async function() {
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Useful Contacts</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px; line-height:1.5;">Trusted local services for RPHS residents. Tap Copy to copy a number.</div>
+      <div id="uc-body"></div>`;
+    openModal();
+    renderUsefulBody();
+    await loadUsefulContacts();
+    renderUsefulBody();
+  };
+  window.setUsefulLang = function(l) { usefulLang = l === 'ur' ? 'ur' : 'en'; renderUsefulBody(); };
+  window.setUsefulFilter = function(f) { usefulFilter = f; renderUsefulBody(); };
+  window.copyUsefulNumber = function(id) {
+    const c = usefulList().contacts.find(x => x.id === id);
+    if (!c) return;
+    const done = () => toast(`${c.phone} copied`);
+    try {
+      navigator.clipboard.writeText(c.phone).then(done, () => toast('Could not copy. Press and hold the number to copy it.', 'bad'));
+    } catch (_) { toast('Could not copy. Press and hold the number to copy it.', 'bad'); }
+  };
+
+  async function saveUseful(next, auditText) {
+    await db.collection('settings').doc('usefulContacts').set({
+      services: next.services, contacts: next.contacts,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUserProfile.name || ''
+    });
+    usefulData = { services: next.services, contacts: next.contacts };
+    logAudit('settings', 'usefulContacts', 'update', auditText);
+    if (activeTab === 'dashboard') { const card = document.getElementById('useful-card'); if (card) card.outerHTML = renderUsefulContactsCard(); }
+  }
+  const usefulId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const ucInput = (id, label, value, opts = '') => `<label>${label}</label><input type="text" id="${id}" value="${escapeHtml(value || '')}" ${opts} />`;
+
+  // Add / edit one person. A new service can be started from the same form.
+  window.openUsefulContactForm = function(id) {
+    if (!canEditUseful()) return;
+    const { services, contacts } = usefulList();
+    const c = contacts.find(x => x.id === id) || { serviceId: usefulFilter !== 'all' ? usefulFilter : (services[0] && services[0].id) || '' };
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">${id ? 'Edit' : 'Add'} Useful Contact</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:6px;">Shown to every member with Call, WhatsApp and Copy buttons.</div>
+      <form id="uc-form">
+        <label>Service</label>
+        <select id="uc-service">
+          ${services.map(s => `<option value="${escapeHtml(s.id)}" ${s.id === c.serviceId ? 'selected' : ''}>${escapeHtml((s.icon ? s.icon + ' ' : '') + s.name)}</option>`).join('')}
+          <option value="__new" ${services.length ? '' : 'selected'}>+ New service…</option>
+        </select>
+        <div id="uc-new-service" style="display:${services.length ? 'none' : 'block'};">
+          ${ucInput('uc-sname', 'New service name (English)', '', 'maxlength="60" placeholder="e.g. Plumber"')}
+          ${ucInput('uc-snameur', 'Service name in Urdu (optional)', '', 'maxlength="60" dir="rtl" lang="ur" placeholder="مثلاً پلمبر"')}
+          ${ucInput('uc-sicon', 'Icon', '🔧', 'maxlength="3" style="width:80px;"')}
+        </div>
+        ${ucInput('uc-name', 'Name', c.name, 'maxlength="60" required placeholder="e.g. Basharat"')}
+        ${ucInput('uc-nameur', 'Name in Urdu (optional)', c.nameUr, 'maxlength="60" dir="rtl" lang="ur"')}
+        <label>Mobile number</label>
+        <input type="tel" id="uc-phone" value="${escapeHtml(c.phone || '')}" maxlength="20" required placeholder="03xx-xxxxxxx" />
+        ${ucInput('uc-note', 'What this number is for (English)', c.note, 'maxlength="160" placeholder="e.g. Sewer and drain cleaning, day or night."')}
+        ${ucInput('uc-noteur', 'Same note in Urdu (optional)', c.noteUr, 'maxlength="160" dir="rtl" lang="ur"')}
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save contact</button>
+        ${id ? `<button type="button" class="btn danger block" style="margin-top:8px;" onclick="removeUsefulContact('${escapeHtml(id)}')">Remove contact</button>` : ''}
+        <button type="button" class="btn secondary block" style="margin-top:8px;" onclick="openUsefulContacts()">Back to list</button>
+      </form>`;
+    openModal();
+    const sel = document.getElementById('uc-service');
+    sel.addEventListener('change', () => { document.getElementById('uc-new-service').style.display = sel.value === '__new' ? 'block' : 'none'; });
+    document.getElementById('uc-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const v = k => document.getElementById(k).value.trim();
+      const phone = v('uc-phone');
+      if (!v('uc-name') || phone.replace(/\D/g, '').length < 7) { toast('Add a name and a valid number', 'bad'); return; }
+      const next = { services: services.slice(), contacts: contacts.slice() };
+      let serviceId = sel.value;
+      if (serviceId === '__new') {
+        if (!v('uc-sname')) { toast('Name the new service', 'bad'); return; }
+        serviceId = usefulId();
+        next.services.push({ id: serviceId, name: v('uc-sname'), nameUr: v('uc-snameur'), icon: v('uc-sicon') || '📞', note: '', noteUr: '', h24: false });
+      }
+      const rec = { id: id || usefulId(), serviceId, name: v('uc-name'), nameUr: v('uc-nameur'), phone, note: v('uc-note'), noteUr: v('uc-noteur') };
+      const i = next.contacts.findIndex(x => x.id === rec.id);
+      if (i >= 0) next.contacts[i] = rec; else next.contacts.push(rec);
+      try {
+        await saveUseful(next, `${id ? 'Edited' : 'Added'} useful contact ${rec.name} (${rec.phone})`);
+        toast('Contact saved');
+        usefulFilter = 'all';
+        openUsefulContacts();
+      } catch (err) { toast('Could not save: ' + err.message, 'bad'); }
+    });
+  };
+
+  window.removeUsefulContact = async function(id) {
+    if (!canEditUseful()) return;
+    const { services, contacts } = usefulList();
+    const c = contacts.find(x => x.id === id);
+    if (!c) return;
+    if (!(await confirmSheet({ title: 'Remove contact?', body: `${c.name} (${c.phone}) will be removed for everyone.`, okLabel: 'Remove', danger: true }))) return;
+    const rest = contacts.filter(x => x.id !== id);
+    try {
+      await saveUseful({ services: services.filter(s => rest.some(x => x.serviceId === s.id)), contacts: rest }, `Removed useful contact ${c.name} (${c.phone})`);
+      toast('Contact removed');
+      openUsefulContacts();
+    } catch (err) { toast('Could not remove: ' + err.message, 'bad'); }
+  };
+
+  // Service heading, its note for everyone in the group, and the 24-hour tag.
+  window.openUsefulServiceForm = function(sid) {
+    if (!canEditUseful()) return;
+    const { services, contacts } = usefulList();
+    const s = services.find(x => x.id === sid);
+    if (!s) return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">Edit Service</div>
+      <form id="ucs-form">
+        ${ucInput('ucs-name', 'Service name (English)', s.name, 'maxlength="60" required')}
+        ${ucInput('ucs-nameur', 'Service name in Urdu (optional)', s.nameUr, 'maxlength="60" dir="rtl" lang="ur"')}
+        ${ucInput('ucs-icon', 'Icon', s.icon, 'maxlength="3" style="width:80px;"')}
+        <label>Note for this service (English)</label>
+        <textarea id="ucs-note" maxlength="300">${escapeHtml(s.note || '')}</textarea>
+        <label>Same note in Urdu (optional)</label>
+        <textarea id="ucs-noteur" maxlength="300" dir="rtl" lang="ur">${escapeHtml(s.noteUr || '')}</textarea>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+          <input type="checkbox" id="ucs-h24" ${s.h24 ? 'checked' : ''} style="width:auto; margin:0;" /> <span>24-hour service</span>
+        </label>
+        <button type="submit" class="btn primary block" style="margin-top:16px;">Save service</button>
+        <button type="button" class="btn secondary block" style="margin-top:8px;" onclick="openUsefulContacts()">Back to list</button>
+      </form>`;
+    openModal();
+    document.getElementById('ucs-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const v = k => document.getElementById(k).value.trim();
+      if (!v('ucs-name')) return;
+      const rec = { ...s, name: v('ucs-name'), nameUr: v('ucs-nameur'), icon: v('ucs-icon') || '📞', note: v('ucs-note'), noteUr: v('ucs-noteur'), h24: document.getElementById('ucs-h24').checked };
+      try {
+        await saveUseful({ services: services.map(x => x.id === sid ? rec : x), contacts }, `Edited useful contacts service ${rec.name}`);
+        toast('Service saved');
+        openUsefulContacts();
+      } catch (err) { toast('Could not save: ' + err.message, 'bad'); }
+    });
   };
 
   // --- EMERGENCY ALARM (full screen + siren) ---
@@ -7906,7 +8171,8 @@
       loadEmergencyContacts(),
       loadActiveEmergencies(),
       canSeeHealth() ? db.collection('client_errors').orderBy('createdAt', 'desc').limit(100).get() : null,
-      canSeeHealth() ? db.collection('settings').doc('recurringBill').get() : null
+      canSeeHealth() ? db.collection('settings').doc('recurringBill').get() : null,
+      loadUsefulContacts()
     ]).then(([usersSnap, billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap, decSnap, , , errSnap, recSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       healthErrors = errSnap ? errSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
@@ -7993,6 +8259,7 @@
       ${emergencyButtonHtml()}
       ${currentUserProfile.role === 'admin' ? '<div id="backup-reminder"></div>' : ''}
       ${renderEmergencyContactsCard()}
+      ${renderUsefulContactsCard()}
       ${renderHealthCard()}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
@@ -8332,7 +8599,8 @@
       db.collection('transfers').get(),
       db.collection('monthly_summaries').orderBy('month', 'desc').limit(12).get(),
       loadEmergencyContacts(),
-      loadActiveEmergencies()
+      loadActiveEmergencies(),
+      loadUsefulContacts()
     ]).then(([billsSnap, society, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const bills = billsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => !b.isDeleted);
@@ -8417,6 +8685,7 @@
       ${emergencyButtonHtml()}
       ${renderMyHouseCard(d.bills)}
       ${renderEmergencyContactsCard()}
+      ${renderUsefulContactsCard()}
       ${renderSummariesCard()}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         ${stat('Open Complaints', openTickets, openTickets ? 'var(--info)' : 'var(--text)')}
