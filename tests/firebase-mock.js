@@ -244,7 +244,7 @@
   ], updatedBy: 'Tariq Mehmood', updatedAt: daysAgo(40) });
 
   // mosque jamaat times, calendar items, an important notice with read receipts
-  coll('settings').set('mosque', { fajr: '05:15', zuhr: '13:30', asr: '16:45', maghrib: '17:42', isha: '20:15', jummah: '13:45', jummahKhutbah: '13:15', ramadan: false, sehri: '', iftar: '', note: '', updatedAt: daysAgo(4), updatedBy: 'Tariq Mehmood' });
+  coll('settings').set('mosque', { fajr: '05:15', zuhr: '13:30', asr: '04:45', maghrib: '17:42', isha: '20:15', jummah: '13:45', jummahKhutbah: '13:15', ramadan: false, sehri: '', iftar: '', note: '', updatedAt: daysAgo(4), updatedBy: 'Tariq Mehmood' });
   const dayKey = (n) => { const d = new Date(NOW.getTime() + n * 86400000); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   const evs = coll('events');
   evs.set('e1', { kind: 'garbage', title: 'Garbage pickup', date: dayKey(-12), time: '09:00', place: 'Blocks A–C', repeat: 'weekly', note: 'Keep bags outside the gate by 9 am.', createdBy: 'u_admin', createdByName: 'Tariq Mehmood', createdAt: daysAgo(12) });

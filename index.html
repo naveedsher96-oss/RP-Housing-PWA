@@ -4132,14 +4132,37 @@
     const m = /^(\d{1,2}):(\d{2})/.exec(String(hm || ''));
     return m ? Number(m[1]) * 60 + Number(m[2]) : null;
   }
+  // Minutes after midnight for a jamaat. A time typed without pm (e.g. Asr "04:45")
+  // is read as afternoon, since only Fajr falls in the morning.
+  function prayerMinutes(k, hm) {
+    const m = minutesOf(hm);
+    if (m == null || k === 'fajr') return m;
+    if (k === 'zuhr' && m < 11 * 60) return m + 720;
+    if (k !== 'zuhr' && m < 720) return m + 720;
+    return m;
+  }
   // The next jamaat from now (after Isha it is tomorrow's Fajr). Friday's Zuhr is Jummah.
+  // A jamaat stays highlighted until 10 minutes after it starts.
   function nextPrayerKey(d, now) {
     const mins = now.getHours() * 60 + now.getMinutes();
     const friday = now.getDay() === 5;
-    const list = PRAYERS.map(([k]) => [k, minutesOf(k === 'zuhr' && friday && d.jummah ? d.jummah : d[k])]).filter(x => x[1] != null);
-    const next = list.find(x => x[1] >= mins);
+    const list = PRAYERS.map(([k]) => [k, prayerMinutes(k, k === 'zuhr' && friday && d.jummah ? d.jummah : d[k])])
+      .filter(x => x[1] != null).sort((a, b) => a[1] - b[1]);
+    const next = list.find(x => x[1] + 10 >= mins);
     return next ? next[0] : (list[0] && list[0][0]);
   }
+  // Keeps the highlight moving while the app stays open: checks every 30 seconds
+  // and when the phone wakes the app, and redraws the card when the next prayer changes.
+  let mosqueNextShown = null;
+  function refreshMosqueHighlight() {
+    const card = document.getElementById('mosque-card');
+    if (!card || !mosqueData) return;
+    const nk = nextPrayerKey(mosqueData, new Date()) + '|' + new Date().getDay();
+    if (nk === mosqueNextShown) return;
+    card.outerHTML = renderMosqueCard();
+  }
+  setInterval(refreshMosqueHighlight, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshMosqueHighlight(); });
   function renderMosqueCard() {
     const d = mosqueData;
     const has = d && PRAYERS.some(([k]) => d[k]);
@@ -4153,6 +4176,7 @@
     const now = new Date();
     const friday = now.getDay() === 5;
     const nk = nextPrayerKey(d, now);
+    mosqueNextShown = nk + '|' + now.getDay();
     const ur = uiLang === 'ur';
     const label = (k, en, urName) => (k === 'zuhr' && friday && d.jummah) ? (ur ? 'جمعہ' : 'Jummah') : (ur ? urName : en);
     const time = k => to12h(k === 'zuhr' && friday && d.jummah ? d.jummah : d[k]);
