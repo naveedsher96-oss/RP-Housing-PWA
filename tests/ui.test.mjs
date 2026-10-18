@@ -1069,6 +1069,27 @@ test('board: To do shows votes waiting; quick buttons offer Notice and Add event
   noErrors(page);
 }, 'board');
 
+test('resident: the mosque highlight moves to the next prayer on its own as the day goes on', async () => {
+  const context = await browser.newContext({ viewport: VIEWPORT });
+  // Saturday 17 Oct 2026, 4:30 pm: Asr (typed as 04:45, read as pm) is next.
+  await context.clock.install({ time: new Date(2026, 9, 17, 16, 30) });
+  const page = await context.newPage();
+  page.errors = [];
+  page.on('pageerror', e => page.errors.push('pageerror: ' + e.message));
+  await page.goto(`${PAGE}?role=resident`);
+  await page.waitForSelector('#mosque-card .pray-row .now', { timeout: 15000 });
+  const now = async () => page.$eval('#mosque-card .pray-row .now small', el => el.innerText);
+  assert(await now() === 'Asr' && /Next: Asr 4:45/.test(await page.$eval('#mosque-card', el => el.innerText)), `4:30 pm should highlight Asr, got ${await now()}`);
+  await page.clock.fastForward('26:00'); // 4:56 pm
+  await page.waitForFunction(() => document.querySelector('#mosque-card .pray-row .now small').innerText === 'Maghrib', null, { timeout: 5000 })
+    .catch(async () => { throw new Error(`after Asr the highlight should move to Maghrib, got ${await now()}`); });
+  await page.clock.fastForward('03:30:00'); // 8:26 pm, Isha (8:15) has started
+  await page.waitForFunction(() => document.querySelector('#mosque-card .pray-row .now small').innerText === 'Fajr', null, { timeout: 5000 })
+    .catch(async () => { throw new Error(`after Isha the highlight should move to Fajr, got ${await now()}`); });
+  noErrors(page);
+  await context.close();
+}, 'resident');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
