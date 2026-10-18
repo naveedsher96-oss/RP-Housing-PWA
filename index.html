@@ -3072,7 +3072,7 @@
     const groups = {};
     billsList.forEach(b => {
       if (b.isDeleted || b.status === 'cancelled' || !b.uid) return;
-      const p = norm(b.period);
+      const p = periodKey(b.period) || norm(b.period);
       if (!p || p === 'one-time') return;
       const k = [b.uid, p, norm(b.category)].join('|');
       (groups[k] = groups[k] || []).push(b);
@@ -4904,6 +4904,24 @@
     const [y, m] = key.split('-');
     const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     return names[Number(m) - 1] + ' ' + y;
+  }
+
+  // The month a bill's period names, as "2026-09", however it was typed:
+  // "September 2026", "september 2026", "Sep 2026", "Sept-26", "09/2026", "2026-09".
+  // '' when the period is not a month (e.g. "One-time").
+  function periodKey(period) {
+    const t = String(period || '').trim().toLowerCase();
+    const names = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+    const out = (y, m) => (m >= 1 && m <= 12 && y >= 2000 && y <= 2100) ? `${y}-${String(m).padStart(2, '0')}` : '';
+    let x = t.match(/^(\d{4})\s*[-\/.]\s*(\d{1,2})$/);
+    if (x) return out(Number(x[1]), Number(x[2]));
+    x = t.match(/^(\d{1,2})\s*[-\/.]\s*(\d{4})$/);
+    if (x) return out(Number(x[2]), Number(x[1]));
+    x = t.match(/^([a-z]{3,})\.?[\s,\-\/']*(\d{4}|\d{2})$/);
+    if (!x) return '';
+    const i = names.findIndex(n => n.startsWith(x[1]));
+    const y = Number(x[2].length === 2 ? '20' + x[2] : x[2]);
+    return i < 0 ? '' : out(y, i + 1);
   }
 
   function toDate(value) {
@@ -6836,6 +6854,8 @@
   function renderBillFilterBar() {
     const m = currentBillMonth();
     const months = lastTwelveMonths();
+    const ahead = [...new Set(billsList.map(b => periodKey(b.period)).filter(k => k && k > months[0] && k <= lastBillMonth()))].sort().reverse();
+    months.unshift(...ahead);
     if (m !== 'all' && !months.includes(m)) months.push(m);
     return `
       <div class="filter-bar">
@@ -6845,7 +6865,7 @@
             ${months.map(k => `<option value="${k}" ${m===k?'selected':''}>${monthLabel(k)}</option>`).join('')}
             <option value="all" ${m==='all'?'selected':''}>All months</option>
           </select>
-          <button class="dots-btn" style="border-color:var(--border);" onclick="stepBillMonth(1)" aria-label="Next month" ${m === monthKey(new Date()) ? 'disabled' : ''}>›</button>
+          <button class="dots-btn" style="border-color:var(--border);" onclick="stepBillMonth(1)" aria-label="Next month" ${m !== 'all' && m >= lastBillMonth() ? 'disabled' : ''}>›</button>
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
           <select onchange="setBillFilterField('category', this.value)" aria-label="Category" style="min-width:0;">
@@ -6919,15 +6939,21 @@
     const m = currentBillMonth();
     const base = m === 'all' ? new Date() : new Date(Number(m.slice(0, 4)), Number(m.slice(5)) - 1, 1);
     const next = monthKey(new Date(base.getFullYear(), base.getMonth() + (m === 'all' ? 0 : dir), 1));
-    if (next > monthKey(new Date())) return;
+    if (next > lastBillMonth()) return;
     setBillMonth(next);
   };
+  // Bills can be issued up to two months ahead (paid in advance).
+  function lastBillMonth() {
+    const now = new Date();
+    return monthKey(new Date(now.getFullYear(), now.getMonth() + 2, 1));
+  }
 
   function billInMonth(b, key) {
     if (key === 'all') return true;
     // A bill's month is its billing period ("September 2026"), even when it falls
     // due the next month; the due date only places bills without a month period.
-    if (/^[a-z]+ \d{4}$/i.test(String(b.period || '').trim())) return b.period.trim() === monthLabel(key);
+    const pk = periodKey(b.period);
+    if (pk) return pk === key;
     const due = toDate(b.dueDate);
     return !!due && monthKey(due) === key;
   }
@@ -8052,6 +8078,14 @@
     const dueMonthOffset = today.getDate() > BILL_DUE_DAY ? 1 : 0;
     const dueD = new Date(today.getFullYear(), today.getMonth() + dueMonthOffset, BILL_DUE_DAY);
     const defaultDue = `${dueD.getFullYear()}-${String(dueD.getMonth() + 1).padStart(2, '0')}-${String(dueD.getDate()).padStart(2, '0')}`;
+    // Two months ahead, this month, then the last 12 months; the label is saved
+    // exactly as shown so every bill for a month carries the same period.
+    const periodOptions = [];
+    for (let i = 2; i >= -12; i--) {
+      const label = monthLabel(monthKey(new Date(today.getFullYear(), today.getMonth() + i, 1)));
+      periodOptions.push({ value: label, label: label + (i > 0 ? ' (in advance)' : i === 0 ? ' (this month)' : '') });
+    }
+    periodOptions.push({ value: 'One-time', label: 'One-time charge' }, { value: '__other__', label: 'Something else (type it)' });
 
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:12px;">Issue Maintenance Bill</div>
@@ -8066,8 +8100,12 @@
         <label>Bill Category</label>
         ${pickerHtml('bill-category', BILL_CATEGORY_OPTIONS, { searchable: false })}
 
-        <label>Billing Period</label>
-        <input type="text" id="bill-period" value="${escapeHtml(defaultPeriod)}" required />
+        <label>Billing Month</label>
+        <select id="bill-period">
+          ${periodOptions.map(o => `<option value="${escapeHtml(o.value)}" ${o.value === defaultPeriod ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+        </select>
+        <input type="text" id="bill-period-other" placeholder="e.g. Water tank repair" style="display:none; margin-top:8px;" />
+        <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">The month this payment is for. A new member paying for September picks September.</div>
 
         <label>Amount (PKR)</label>
         <input type="number" id="bill-amount" placeholder="e.g. 4500" required min="1" />
@@ -8082,12 +8120,26 @@
       </form>
     `;
     openModal();
+    document.getElementById('bill-period').addEventListener('change', (e) => {
+      document.getElementById('bill-period-other').style.display = e.target.value === '__other__' ? '' : 'none';
+      // A bill for a later month falls due on that month's 20th.
+      const k = periodKey(e.target.value);
+      document.getElementById('bill-due').value = k && `${k}-${BILL_DUE_DAY}` > defaultDue ? `${k}-${BILL_DUE_DAY}` : defaultDue;
+    });
 
+    let issuing = false;
     document.getElementById('bill-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      // One tap issues once: a second tap while the first is still saving
+      // (slow network) used to issue the same bill twice.
+      if (issuing) return;
       const target = document.getElementById('bill-resident').value;
       const category = document.getElementById('bill-category').value;
-      const period = document.getElementById('bill-period').value.trim();
+      const periodSel = document.getElementById('bill-period').value;
+      const typed = periodSel === '__other__' ? document.getElementById('bill-period-other').value.trim() : periodSel;
+      // A typed month ("sep 2026") is saved the standard way ("September 2026").
+      const period = periodKey(typed) ? monthLabel(periodKey(typed)) : typed;
+      if (!period) { toast("Please type what this bill is for."); return; }
       const amount = Number(document.getElementById('bill-amount').value.trim());
       const dueDate = document.getElementById('bill-due').value.trim();
       const notes = document.getElementById('bill-notes').value.trim();
@@ -8108,20 +8160,35 @@
       // Never bill someone twice for the same charge and month (e.g. a manual
       // October bill on top of the automatic one): bulk issue skips them, and a
       // single bill asks first and points at the bill they already have.
+      // The month is matched however it was typed on older bills.
       const norm = s => String(s || '').trim().toLowerCase();
+      const samePeriod = p => periodKey(p) ? periodKey(p) === periodKey(period) : norm(p) === norm(period);
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      const btnText = submitBtn.textContent;
+      const unlock = () => { issuing = false; submitBtn.disabled = false; submitBtn.textContent = btnText; };
+      issuing = true;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Checking…';
       let existing = [];
       try {
-        const snap = await db.collection('bills').where('period', '==', period).get();
+        const q = target === '__all__' ? db.collection('bills') : db.collection('bills').where('uid', '==', target);
+        const snap = await q.get();
         existing = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-          .filter(x => !x.isDeleted && x.status !== 'cancelled' && norm(x.category) === norm(category));
-      } catch (err) { console.warn('Duplicate check failed:', err && err.message); }
+          .filter(x => !x.isDeleted && x.status !== 'cancelled' && norm(x.category) === norm(category) && samePeriod(x.period));
+      } catch (err) {
+        // Without the check a second bill could slip through, so stop instead.
+        console.warn('Duplicate check failed:', err && err.message);
+        unlock();
+        toast("Couldn't check existing bills. Check your internet and try again.", 'bad');
+        return;
+      }
       const already = uid => existing.find(x => x.uid === uid);
       let skipped = 0;
       if (target === '__all__') {
         const before = targets.length;
         targets = targets.filter(r => !already(r.uid));
         skipped = before - targets.length;
-        if (!targets.length) { toast(`Everyone already has a ${category} bill for ${period}. Nothing issued.`); return; }
+        if (!targets.length) { unlock(); toast(`Everyone already has a ${category} bill for ${period}. Nothing issued.`); return; }
       } else if (already(target)) {
         const x = already(target);
         const ok = await confirmSheet({
@@ -8129,9 +8196,11 @@
           body: `${x.name || 'This resident'} already has a ${category} bill for ${period}: ${x.billNo} (${statusLabel(billStatus(x))}, ${formatMoney(x.amount)}). To record their payment, open that bill and mark it paid instead. Issue a second bill anyway?`,
           okLabel: 'Issue a second bill', cancelLabel: "Don't issue", danger: true
         });
-        if (!ok) return;
+        if (!ok) { unlock(); return; }
       }
 
+      submitBtn.textContent = 'Issuing…';
+      let issued = 0;
       try {
         for (const r of targets) {
           const billNo = 'BILL-' + Math.floor(100000 + Math.random() * 900000);
@@ -8150,13 +8219,20 @@
             issuedBy: currentUserProfile.name,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
+          issued++;
           await sendNotification(r.uid, `New Maintenance Bill (${billNo})`, `${category} for ${period}: ${formatMoney(amount)}. Due by ${dueDate}.`, 'info');
         }
         closeModal();
+        // Show the month just billed, so a September bill issued in October is
+        // on screen instead of looking like it was never added.
+        if (periodKey(period)) { billFilterMonth = periodKey(period); delete pageShown['bills']; refreshBillFilterBar(); }
         afterBillWrite();
-        toast(`Issued ${targets.length} bill${targets.length === 1 ? '' : 's'}` + (skipped ? `; skipped ${skipped} already billed for ${period}` : '') + '.');
+        toast(`Issued ${targets.length} bill${targets.length === 1 ? '' : 's'} for ${period}` + (skipped ? `; skipped ${skipped} already billed` : '') + '.');
       } catch(err) {
-        toast("Error issuing bill: " + err.message);
+        // Some bills may already be saved; reopening the form skips those people.
+        closeModal();
+        afterBillWrite();
+        toast(issued ? `Issued ${issued} of ${targets.length}, then: ${err.message}. Issue again to finish; those already billed are skipped.` : "Error issuing bill: " + err.message, 'bad');
       }
     });
   };

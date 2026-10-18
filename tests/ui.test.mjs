@@ -692,6 +692,54 @@ test('admin: a September bill due in October stays under September', async page 
   noErrors(page);
 }, 'admin');
 
+test('admin: a month typed another way still counts, one tap issues one bill, and the billed month is shown', async page => {
+  // An older bill whose month was typed by hand ("sep 2026").
+  await page.evaluate(() => {
+    const s = window.__mockStore.bills;
+    const [, b] = [...s.entries()].find(([, v]) => v.status === 'paid' && v.period === 'September 2026');
+    s.set('typedSep', Object.assign({}, b, { billNo: 'BILL-TYPED', uid: 'u_typed', name: 'Tia Typed', period: 'sep 2026', dueDate: '2026-10-20' }));
+    window.__mockStore.users.set('u_typed', { name: 'Tia Typed', house: 'House 99', role: 'resident', approved: true });
+    selectTab('bills');
+  });
+  await settle(page);
+  await page.evaluate(() => { setBillFilter('all'); setBillMonth('2026-09'); });
+  await page.waitForTimeout(500);
+  assert((await page.locator('#bills-list').innerText()).includes('Tia Typed'), 'a bill typed "sep 2026" is missing under September');
+
+  const open = async who => {
+    await page.evaluate(() => openIssueBillModal());
+    await page.waitForSelector('#bill-form');
+    await page.evaluate(who => {
+      document.getElementById('bill-resident').value = who;
+      document.getElementById('bill-category').value = 'Monthly Maintenance';
+      document.getElementById('bill-period').value = 'September 2026';
+    }, who);
+    await page.fill('#bill-amount', '2500');
+  };
+  await open('u_typed');
+  await page.click('#bill-form button[type=submit]');
+  await page.waitForSelector('text=Already billed for this month', { timeout: 8000 })
+    .catch(() => { throw new Error('a September bill was allowed on top of one typed "sep 2026"'); });
+  await page.click("text=Don't issue");
+  await page.evaluate(() => closeModal());
+
+  // A new member who never had a bill: tap Issue three times quickly.
+  await page.evaluate(() => window.__mockStore.users.set('u_new', { name: 'Nina New', house: 'House 100', role: 'resident', approved: true }));
+  await page.evaluate(() => setBillMonth('2026-10'));
+  await open('u_new');
+  await page.evaluate(() => { const f = document.getElementById('bill-form'); for (let i = 0; i < 3; i++) f.requestSubmit(); });
+  await page.waitForSelector('text=/Issued 1 bill/', { timeout: 8000 });
+  await page.waitForTimeout(800);
+  const n = await page.evaluate(() => [...window.__mockStore.bills.values()].filter(b => b.uid === 'u_new').length);
+  assert(n === 1, `${n} bills were issued for one tap-tap-tap`);
+  await settle(page);
+  await page.waitForFunction(() => (document.getElementById('bills-list') || {}).innerText?.includes('Nina New'), null, { timeout: 8000 })
+    .catch(() => { throw new Error('the new September bill is not on screen after issuing it from October'); });
+  const shown = await page.evaluate(() => document.querySelector('select[aria-label="Month"]').value);
+  assert(shown === '2026-09', `month picker shows ${shown} instead of September`);
+  noErrors(page);
+}, 'admin');
+
 test('admin: bulk issue leaves out members exempt from the monthly bill', async page => {
   await page.evaluate(() => {
     window.__mockStore.users.get('u_res1').billExempt = true;
@@ -703,16 +751,19 @@ test('admin: bulk issue leaves out members exempt from the monthly bill', async 
   await page.evaluate(() => {
     document.getElementById('bill-resident').value = '__all__';
     document.getElementById('bill-category').value = 'Monthly Maintenance';
-    document.getElementById('bill-period').value = 'December 2026';
+    // Two months ahead, i.e. paid in advance.
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + 2);
+    window.__aheadLabel = d.toLocaleString('en-US', { month: 'long' }) + ' ' + d.getFullYear();
+    document.getElementById('bill-period').value = window.__aheadLabel;
   });
   await page.fill('#bill-amount', '500');
   await page.click('#bill-form button[type=submit]');
   await page.waitForSelector('text=/Issued \\d+ bill/', { timeout: 8000 });
   const r = await page.evaluate(() => {
-    const dec = [...window.__mockStore.bills.values()].filter(b => b.period === 'December 2026');
+    const dec = [...window.__mockStore.bills.values()].filter(b => b.period === window.__aheadLabel);
     return { n: dec.length, exempt: dec.some(b => b.uid === 'u_res1') };
   });
-  assert(r.n > 0, 'no December bills were issued');
+  assert(r.n > 0, 'no bills were issued for two months ahead');
   assert(!r.exempt, 'an exempt member was billed by the bulk issue');
   noErrors(page);
 }, 'admin');
