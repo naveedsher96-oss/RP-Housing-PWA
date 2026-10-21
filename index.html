@@ -3314,19 +3314,67 @@
     `).join('');
   }
 
-  // WhatsApp sharing uses a plain wa.me link (no number, no paid API):
-  // WhatsApp opens and the admin picks the residents' group.
+  // WhatsApp sharing uses plain links (no paid API): WhatsApp opens and the
+  // admin picks the residents' group, or lands in one resident's chat.
+  // Phones can have both WhatsApp and WhatsApp Business, so on a phone the
+  // admin is asked which one to send from every time.
   function noticeWhatsAppText(title, content) {
     return `*${title}*\n\n${content}\n\n- RPHS Management`;
   }
-  function openWhatsAppShare(text) {
-    const url = 'https://wa.me/?text=' + encodeURIComponent(text);
-    const w = window.open(url, '_blank');
+  function waDigits(phone) {
+    let digits = String(phone || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) digits = '92' + digits.slice(1);
+    return digits;
+  }
+  function waMeUrl(phone, text) {
+    return 'https://wa.me/' + waDigits(phone) + '?text=' + encodeURIComponent(text);
+  }
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // Android: an intent link names the exact app, so the chosen WhatsApp opens
+  // even if the other one was set as the default for wa.me links.
+  function waIntentUrl(pkg, phone, text) {
+    const q = (phone ? 'phone=' + waDigits(phone) + '&' : '') + 'text=' + encodeURIComponent(text);
+    return `intent://send/?${q}#Intent;scheme=whatsapp;package=${pkg};S.browser_fallback_url=${encodeURIComponent(waMeUrl(phone, text))};end`;
+  }
+  function openWaMe(phone, text) {
+    const url = waMeUrl(phone, text);
+    const w = window.open(url, '_blank', 'noopener');
     if (w) return;
     // Pop-up blocked (e.g. after a slow save): ask for one more tap.
-    confirmSheet({ title: 'Share on WhatsApp', body: 'Open WhatsApp and pick your residents\u2019 group.', okLabel: 'Open WhatsApp' })
+    confirmSheet({ title: 'Share on WhatsApp', body: phone ? 'Open WhatsApp to send the message.' : 'Open WhatsApp and pick your residents\u2019 group.', okLabel: 'Open WhatsApp' })
       .then(ok => { if (ok) window.location.href = url; });
   }
+  // iPhone gives no way to open WhatsApp Business directly, so its share
+  // sheet is used: both WhatsApp apps show up there as separate icons.
+  async function shareTextSheet(text) {
+    if (navigator.share) {
+      try { await navigator.share({ text }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(text); toast('Message copied. Paste it in WhatsApp Business.'); }
+    catch (e) { toast('Could not open sharing on this device.'); }
+  }
+  // Menu rows for each WhatsApp app; a computer just gets one "WhatsApp" row.
+  function waMenuItems(phone, getText) {
+    if (!isAndroid && !isIOS) return [{ icon: 'share', label: 'WhatsApp', run: () => openWaMe(phone, getText()) }];
+    const business = isAndroid
+      ? () => { window.location.href = waIntentUrl('com.whatsapp.w4b', phone, getText()); }
+      : () => { if (phone) toast('Pick WhatsApp Business, then the resident\u2019s chat.'); shareTextSheet(getText()); };
+    const regular = isAndroid
+      ? () => { window.location.href = waIntentUrl('com.whatsapp', phone, getText()); }
+      : () => openWaMe(phone, getText());
+    return [
+      { icon: 'share', label: 'WhatsApp', run: regular },
+      { icon: 'share', label: 'WhatsApp Business', run: business },
+    ];
+  }
+  function sendViaWhatsApp(phone, text) {
+    if (!isAndroid && !isIOS) return openWaMe(phone, text);
+    menuSheet('Send with which WhatsApp?', waMenuItems(phone, () => text));
+  }
+  function openWhatsAppShare(text) { sendViaWhatsApp('', text); }
+  function openWhatsAppChat(phone, text) { sendViaWhatsApp(phone, text); }
   window.shareNoticeOnWhatsApp = function(id) {
     const n = noticesList.find(x => x.id === id);
     if (n) openWhatsAppShare(noticeWhatsAppText(n.title || '', n.content || ''));
@@ -3837,7 +3885,7 @@
         ${pickLang(c.note, c.noteUr) ? `<div class="uc-note">${escapeHtml(pickLang(c.note, c.noteUr))}</div>` : ''}
         <div class="uc-acts" data-no-ur>
           <a class="uc-act call" href="${escapeHtml(telHref(c.phone))}">📞 Call</a>
-          <a class="uc-act wa" href="${escapeHtml(whatsappLink(c.phone, ''))}" target="_blank" rel="noopener">WhatsApp</a>
+          <a class="uc-act wa" href="${escapeHtml(waMeUrl(c.phone, ''))}" target="_blank" rel="noopener">WhatsApp</a>
           <button type="button" class="uc-act" onclick="copyUsefulNumber('${escapeHtml(c.id)}')">${icon('copy', 'ico-svg-sm')} Copy</button>
           ${canEditUseful() ? `<button type="button" class="uc-act" onclick="openUsefulContactForm('${escapeHtml(c.id)}')" aria-label="Edit">${icon('edit', 'ico-svg-sm')}</button>` : ''}
         </div>
@@ -5851,7 +5899,7 @@
         ${!mine && !closed ? `
           <div style="display:flex; gap:8px; margin-top:14px;">
             ${phone ? `<a class="btn primary" style="flex:1; text-align:center; text-decoration:none;" href="tel:${escapeHtml(phone)}">📞 Call</a>
-            <a class="btn secondary" style="flex:1; text-align:center; text-decoration:none;" href="${whatsappLink(phone, waText)}" target="_blank" rel="noopener">WhatsApp</a>` : '<div style="font-size:13px; color:var(--text-muted);">No contact number was shared — ask at the office.</div>'}
+            <a class="btn secondary" style="flex:1; text-align:center; text-decoration:none;" href="${waMeUrl(phone, waText)}" target="_blank" rel="noopener">WhatsApp</a>` : '<div style="font-size:13px; color:var(--text-muted);">No contact number was shared — ask at the office.</div>'}
           </div>` : ''}
         ${mine && !closed ? `
           <div style="display:flex; gap:8px; margin-top:14px;">
@@ -7145,12 +7193,6 @@
     return `Dear ${d.name}, your RPHS maintenance of ${formatMoney(d.total)} for ${d.periods.join(', ')} (${houseLabel(d.house)}) is outstanding. Please pay to the society account and upload your payment proof in the RPHS app. Thank you - Management`;
   }
 
-  function whatsappLink(phone, text) {
-    let digits = String(phone || '').replace(/\D/g, '');
-    if (digits.startsWith('0')) digits = '92' + digits.slice(1);
-    return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
-  }
-
   window.openDefaultersModal = async function() {
     if (!isStaff()) return;
     document.getElementById('modal-body').innerHTML = '<div style="color:var(--text-muted); padding:10px 0;">Loading defaulters…</div>';
@@ -7238,7 +7280,7 @@
   window.whatsappDefaulter = function(key) {
     const d = defaultersList().find(x => x.key === key);
     if (!d || !d.phone) return;
-    window.open(whatsappLink(d.phone, defaulterMessage(d)), '_blank', 'noopener');
+    openWhatsAppChat(d.phone, defaulterMessage(d));
   };
 
   // Group message: names and houses only, overdue houses only, sorted by house.
@@ -7266,8 +7308,9 @@
   };
 
   window.openDefaultersShareMenu = function() {
+    if (!defaultersList().length) { toast('No unpaid bills to share'); return; }
     menuSheet('Share defaulters list', [
-      { icon: 'share', label: 'WhatsApp', run: shareDefaultersText },
+      ...waMenuItems('', defaultersText),
       { icon: 'share', label: 'Other apps (SMS, email, ...)', run: shareDefaultersOther },
       { icon: 'copy', label: 'Copy the list', run: () => navigator.clipboard.writeText(defaultersText()).then(() => toast('List copied'), () => toast('Could not copy')) },
       { icon: 'file', label: 'Export CSV', run: exportDefaultersCSV },
@@ -7526,7 +7569,7 @@
     try { await ensureResidents(); } catch (_) {}
     const r = allResidents.find(x => x.uid === b.uid);
     const text = `Dear ${b.name || 'Resident'}, your RPHS maintenance of ${formatMoney(b.amount)} for ${b.period || formatDate(b.dueDate)} (${houseLabel(b.house)}) is ${billStatus(b) === 'overdue' ? 'overdue' : 'due on ' + formatDate(b.dueDate)}. Please pay to the society account and upload your payment proof in the RPHS app. Thank you - Management`;
-    if (r && r.phone) window.open(whatsappLink(r.phone, text), '_blank', 'noopener');
+    if (r && r.phone) openWhatsAppChat(r.phone, text);
     else openWhatsAppShare(text);
   };
 
@@ -11222,7 +11265,7 @@
     const manage = canSuspend() && r.role === 'resident';
     menuSheet(r.name, [
       { label: 'View profile', icon: 'user', run: () => openResidentProfile(uid) },
-      isAdmin && r.phone && { label: 'WhatsApp', icon: 'share', run: () => window.open(whatsappLink(r.phone, `Assalam-o-Alaikum ${r.name}, `), '_blank', 'noopener') },
+      isAdmin && r.phone && { label: 'WhatsApp', icon: 'share', run: () => openWhatsAppChat(r.phone, `Assalam-o-Alaikum ${r.name}, `) },
       { label: 'Account statement (PDF)', icon: 'file', run: () => downloadResidentStatement(uid) },
       { label: 'Biodata card (PDF)', icon: 'file', run: () => downloadResidentPDF(uid) },
       isAdmin && { label: 'Edit details', icon: 'edit', run: () => openEditResidentModal(uid) },
