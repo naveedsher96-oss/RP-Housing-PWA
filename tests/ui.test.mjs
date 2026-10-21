@@ -1141,6 +1141,38 @@ test('resident: the mosque highlight moves to the next prayer on its own as the 
   await context.close();
 }, 'resident');
 
+test('admin: on an Android phone, sharing the defaulters list asks WhatsApp or WhatsApp Business', async () => {
+  const context = await browser.newContext({ viewport: VIEWPORT, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36' });
+  const page = await context.newPage();
+  page.errors = [];
+  page.on('pageerror', e => page.errors.push('pageerror: ' + e.message));
+  await page.goto(`${PAGE}?role=admin`);
+  await page.waitForSelector('main', { timeout: 15000 });
+  await page.evaluate(() => openDefaultersModal());
+  await page.waitForFunction(() => /Defaulters/.test(document.getElementById('modal-body').innerText), null, { timeout: 8000 });
+  await page.evaluate(() => openDefaultersShareMenu());
+  await page.waitForSelector('#ui-sheet.active .menu-list button', { timeout: 5000 });
+  const rows = await page.$$eval('#ui-sheet .menu-list button', bs => bs.map(b => b.innerText.trim()));
+  assert(rows[0] === 'WhatsApp' && rows[1] === 'WhatsApp Business', `share menu should start with both WhatsApp apps, got ${rows}`);
+  // A one-to-one reminder asks too.
+  await page.click('#ui-sheet-close');
+  await page.click('#modal-body [onclick^="whatsappDefaulter"] >> nth=0');
+  await page.waitForSelector('#ui-sheet.active .ui-sheet-title', { timeout: 5000 });
+  assert(/which WhatsApp/.test(await page.$eval('#ui-sheet .ui-sheet-title', el => el.innerText)), 'resident reminder should ask which WhatsApp');
+  noErrors(page);
+  await context.close();
+}, 'admin');
+
+test('admin: on a computer, the defaulters share menu has a single WhatsApp row', async page => {
+  await page.evaluate(() => openDefaultersModal());
+  await page.waitForFunction(() => /Defaulters/.test(document.getElementById('modal-body').innerText), null, { timeout: 8000 });
+  await page.evaluate(() => openDefaultersShareMenu());
+  await page.waitForSelector('#ui-sheet.active .menu-list button', { timeout: 5000 });
+  const rows = await page.$$eval('#ui-sheet .menu-list button', bs => bs.map(b => b.innerText.trim()));
+  assert(rows.filter(r => /WhatsApp/.test(r)).length === 1, `expected one WhatsApp row, got ${rows}`);
+  noErrors(page);
+}, 'admin');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
