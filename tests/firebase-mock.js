@@ -154,6 +154,19 @@
   bills.set('bx1', { billNo: 'BILL-309001', uid: 'u_res1', name: 'Ayesha Siddiqui', house: 'House 14, Block B', category: 'Gate Pass Card', period: 'One-time', amount: 750, dueDate: '2026-09-28', status: 'unpaid', issuedBy: 'Tariq Mehmood', createdAt: daysAgo(12, 9) });
   bills.set('bx2', { billNo: 'BILL-300555', uid: 'u_r6', name: 'Hassan Raza', house: 'House 16, Block B', category: 'Monthly Maintenance', period: 'July 2026', amount: 2500, dueDate: '2026-07-20', status: 'cancelled', createdAt: daysAgo(90), isDeleted: true, deletedAt: daysAgo(80), deletedBy: 'Tariq Mehmood' });
 
+  // ?demo=arrears: residents months behind with a final notice / restriction
+  // (Defaulters screenshots); with role=resident, &acct=notice|restricted.
+  if (params.get('demo') === 'arrears') {
+    const iso = (n) => new Date(NOW.getTime() + n * 86400000).toISOString().slice(0, 10);
+    [['u_r12', 'June 2026', '2026-06-20'], ['u_r12', 'July 2026', '2026-07-20'], ['u_r11', 'July 2026', '2026-07-20'], ['u_r6', 'July 2026', '2026-07-20']]
+      .forEach(([uid, period, due], i) => bills.set('bar' + i, { billNo: 'BILL-29' + (5000 + i), uid, name: byUid[uid].name, house: byUid[uid].house, category: 'Monthly Maintenance', period, amount: 2500, dueDate: due, status: 'unpaid', issuedBy: 'Tariq Mehmood', createdAt: daysAgo(120, 9) }));
+    users.get('u_r12').finalNotice = { date: iso(-2), deadline: iso(3), months: 3, total: 7500 };
+    users.get('u_r11').finalNotice = { date: iso(-7), deadline: iso(-2), months: 3, total: 7500 };
+    users.get('u_r3').restricted = true; users.get('u_r3').restrictedReason = 'unpaid';
+    if (params.get('acct') === 'notice') users.get('u_res1').finalNotice = { date: iso(-1), deadline: iso(4), months: 3, total: 8250 };
+    if (params.get('acct') === 'restricted') Object.assign(users.get('u_res1'), { restricted: true, restrictedReason: 'unpaid' });
+  }
+
   // funds & contributions
   const funds = coll('funds');
   funds.set('f1', { title: 'Mosque Roof Repair', purpose: 'Waterproofing and repair of the Jamia Masjid roof before winter rains. Includes labour and material (bitumen sheets, cement).', category: 'Mosque', targetAmount: 250000, status: 'active', deadline: '2026-11-15', createdAt: daysAgo(40), createdBy: 'Tariq Mehmood' });
@@ -229,6 +242,7 @@
   // settings
   coll('settings').set('society', { bankName: 'Meezan Bank – Model Town Branch', accountTitle: 'Roshan Pakistan Housing Society', accountNumber: '0201-0104567890', iban: 'PK36MEZN0002010104567890', instructions: 'Write your house number in the transfer remarks.' });
   coll('settings').set('recurringBill', { enabled: true, amount: 2500, category: 'Monthly Maintenance', dueDay: 20, notes: '', lastRun: { at: daysAgo(0, 0), issued: 12, period: 'October 2026', skippedBilled: 0, skippedExempt: 1 } });
+  if (params.get('demo') === 'arrears') Object.assign(coll('settings').get('recurringBill'), { finalNoticeEnabled: true, finalNoticeMonths: 3, finalNoticeDays: 5 });
   coll('settings').set('monthlySummary', { enabled: true });
   coll('client_errors').set('ce1', { uid: 'u_res1', role: 'resident', kind: 'console', message: 'FirebaseError: Missing or insufficient permissions.', screen: 'bills', version: '2026.10.04', createdAt: daysAgo(1, 10) });
   coll('client_errors').set('ce2', { uid: 'u_r3', role: 'resident', kind: 'console', message: 'FirebaseError: Missing or insufficient permissions.', screen: 'bills', version: '2026.10.04', createdAt: daysAgo(2, 9) });
