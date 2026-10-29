@@ -13,16 +13,35 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// Pushes sent by our Cloud Functions carry a `notification` block, which the
+// Firebase SDK already shows by itself when the app is closed (with the emergency
+// options from webpush.notification). Showing it again here made two alerts, so
+// this only covers data-only pushes.
 messaging.onBackgroundMessage((payload) => {
-  const notificationTitle = payload.notification.title;
-  const emergency = payload.data && payload.data.category === 'emergency';
-  const notificationOptions = {
-    body: payload.notification.body,
+  if (payload.notification) return;
+  const d = payload.data || {};
+  if (!d.title) return;
+  const emergency = d.category === 'emergency';
+  return self.registration.showNotification(d.title, {
+    body: d.body || '',
     icon: 'icon-192.png',
     ...(emergency ? { requireInteraction: true, vibrate: [700, 250, 700, 250, 700, 250, 700], tag: 'rphs-emergency', renotify: true } : {})
-  };
+  });
+});
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+// Tapping an alert the app showed itself (foreground pushes, data-only pushes)
+// opens the app, or brings it to the front if it is already open. The Firebase
+// SDK handles taps on the alerts it shows before this listener runs.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const appUrl = new URL('./', self.registration.scope).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const open = list.find(c => c.url.startsWith(appUrl));
+      if (open) return open.focus();
+      return self.clients.openWindow(appUrl);
+    })
+  );
 });
 
 // --- OFFLINE APP SHELL ---
