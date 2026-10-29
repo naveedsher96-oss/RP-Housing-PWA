@@ -152,11 +152,38 @@
     border-radius:12px; padding:12px 14px; margin-bottom:16px; display:flex;
     align-items:center; justify-content:space-between; gap:10px;
   }
+  /* Final notice / suspended-for-dues banners (resident) and the Bills-tab defaulters card (admin). */
   .restrict-banner{
-    background:var(--danger-soft); border:1px solid rgba(220,80,80,0.35);
-    border-radius:12px; padding:12px 14px; margin-bottom:14px; font-size:14px; line-height:1.45;
+    background:var(--danger-soft); border:1px solid var(--danger); color:var(--text);
+    border-radius:14px; padding:14px 16px; margin-bottom:14px; font-size:14px; line-height:1.5;
   }
-  .restrict-banner b.t{display:block; color:var(--danger); font-size:15px; margin-bottom:2px;}
+  .restrict-banner .t{display:flex; align-items:center; gap:6px; color:var(--danger); font-size:16px; font-weight:800; margin-bottom:6px;}
+  .restrict-banner b{color:var(--text);}
+  .restrict-banner .days{font-size:13px; color:var(--danger); font-weight:700; margin-top:10px;}
+  .restrict-banner .bar{height:6px; border-radius:6px; background:rgba(229,97,90,0.2); margin-top:6px; overflow:hidden;}
+  .restrict-banner .bar span{display:block; height:100%; background:var(--danger); border-radius:6px;}
+  .restrict-banner.solid{background:var(--danger); border-color:var(--danger); color:#fff;}
+  .restrict-banner.solid .t, .restrict-banner.solid b{color:#fff;}
+  .arrears-card{
+    background:var(--danger-soft); border:1px solid var(--danger); border-radius:16px;
+    padding:14px; margin-bottom:12px; color:var(--text);
+  }
+  .arrears-card .hd{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .arrears-card .hd b{color:var(--danger); font-size:16px; font-weight:800;}
+  .arrears-card .count{background:var(--danger); color:#fff; font-size:12px; font-weight:800; border-radius:10px; padding:2px 8px; flex:none;}
+  .arrears-card .sub{font-size:13px; color:var(--text-muted); margin-top:4px;}
+  .arrears-row{border-top:1px solid var(--border); padding-top:12px; margin-top:12px;}
+  .arrears-row .top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .arrears-row .nm{font-weight:800; font-size:15px; color:var(--text);}
+  .arrears-row .meta{font-size:13px; color:var(--text-muted); margin-top:2px;}
+  .arrears-row .meta .amt{color:var(--danger); font-weight:700;}
+  .arrears-row .acts{display:flex; gap:8px; margin-top:10px;}
+  .arrears-row .acts .btn{flex:1;}
+  .npill{font-size:11px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; border-radius:8px; padding:3px 8px; white-space:nowrap; flex:none; border:1px solid currentColor;}
+  .npill.grey{color:var(--text-muted);}
+  .npill.amber{color:var(--accent-2);}
+  .npill.red{background:var(--danger); border-color:var(--danger); color:#fff;}
+  .btn.wa{background:#25D366; border-color:#25D366; color:#fff;}
   .offline-banner{
     background:var(--warning-soft); border:1px solid rgba(242,169,59,0.35); color:var(--accent-2);
     border-radius:12px; padding:9px 14px; margin-bottom:14px; font-size:13px; font-weight:600; text-align:center;
@@ -1163,7 +1190,7 @@
           </div>
         ` : ''}
 
-        ${restrictBannerHtml()}
+        ${activeTab === 'dashboard' ? restrictBannerHtml(true) : ''}
         ${renderContent()}
       </main>
 
@@ -1852,6 +1879,7 @@
           </div>` : ''}
         </div>
         <div class="section-sub">${isAdmin ? 'Bills by month. Pick "All months" to see every bill; Needs action always covers every month.' : staffView ? 'View only. Admins issue and approve bills.' : 'Maintenance charges issued to your house by management.'}</div>
+        ${!staffView ? restrictBannerHtml(false) : ''}
         <div id="bills-summary"></div>
         ${staffView ? `
           <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -3185,23 +3213,29 @@
     const d = toDate(key);
     return d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : String(key || '');
   }
-  function restrictBannerHtml() {
+  function restrictBannerHtml(withPay) {
     if (!currentUserProfile || currentUserProfile.role !== 'resident') return '';
-    const f = currentUserProfile.finalNotice;
+    const f = currentUserProfile.finalNotice || null;
+    const months = f && Number(f.months) ? Number(f.months) : 0;
+    const total = f && Number(f.total) ? formatMoney(f.total) : '';
+    const pay = withPay ? `<button class="btn sm primary" style="margin-top:12px;" onclick="goTab('bills')">${icon('receipt')} Pay now</button>` : '';
     if (isRestricted()) return `
-      <div class="restrict-banner">
-        <b class="t">Account restricted: overdue bills</b>
-        Voting, complaints, posts and comments are paused until your overdue maintenance is paid. Bills, payments and the Emergency Alarm still work.
-        <div style="margin-top:8px;"><button class="btn sm primary" onclick="goTab('bills')">${icon('receipt')} Pay now</button></div>
+      <div class="restrict-banner solid">
+        <div class="t">🔒 Account Suspended</div>
+        Suspended due to unpaid dues${total ? ` of <b>${total}</b>` : ''}${months ? ` (${months} months)` : ''}. Clear your dues to restore access: it comes back by itself once your payment is approved.
+        <div style="margin-top:6px; font-size:13px; opacity:.9;">Bills, payments and the Emergency Alarm still work.</div>
+        ${pay}
       </div>`;
     if (f && f.deadline) {
-      const left = Math.round((toDate(f.deadline) - toDate(isoDate(new Date()))) / 86400000);
+      const left = Math.max(0, Math.round((toDate(f.deadline) - toDate(isoDate(new Date()))) / 86400000));
+      const span = Math.max(1, Math.round((toDate(f.deadline) - toDate(f.date || f.deadline)) / 86400000) || 5);
       return `
       <div class="restrict-banner">
-        <b class="t">Final notice: ${Number(f.months) || 3} months unpaid</b>
-        Please pay ${f.total ? formatMoney(f.total) + ' ' : ''}by <b>${escapeHtml(longDateLabel(f.deadline))}</b>, or your app account will be restricted (no voting, complaints, posts or comments).
-        <div style="display:flex; align-items:center; gap:10px; margin-top:8px;"><button class="btn sm primary" onclick="goTab('bills')">${icon('receipt')} Pay now</button>
-        <span style="font-size:13px; font-weight:700; color:var(--danger);">${left > 1 ? left + ' days left' : left === 1 ? '1 day left' : left === 0 ? 'Last day today' : 'Deadline passed'}</span></div>
+        <div class="t">⚠️ Final Notice — Suspension Warning</div>
+        You have unpaid dues for <b>${months || 3} months</b>${total ? ` totalling <b>${total}</b>` : ''}. Please clear your dues by <b>${escapeHtml(formatDate(f.deadline))}</b> or your account will be suspended.
+        <div class="days">${left ? `Days remaining: ${left}` : 'Last day today'}</div>
+        <div class="bar"><span style="width:${Math.min(100, Math.round(left / span * 100))}%;"></span></div>
+        ${pay}
       </div>`;
     }
     return '';
@@ -3209,7 +3243,7 @@
   // Called before voting, lodging a complaint, posting or commenting.
   function blockedByRestriction() {
     if (!isRestricted()) return false;
-    confirmSheet({ title: 'Account restricted', body: 'This is paused until your overdue maintenance is paid. Pay and upload your proof in Bills; the restriction lifts by itself once it is approved.', okLabel: 'Go to Bills', cancelLabel: 'Close' })
+    confirmSheet({ title: 'Account suspended', body: 'This is paused until your overdue maintenance is paid. Pay and upload your proof in Bills; access comes back by itself once it is approved.', okLabel: 'Go to Bills', cancelLabel: 'Close' })
       .then(ok => { if (ok) goTab('bills'); });
     return true;
   }
@@ -3254,7 +3288,7 @@
             <textarea id="comment-input-${n.id}" placeholder="Write a comment..." required maxlength="500" style="min-height:56px; margin-top:0;"></textarea>
             <div style="display:flex; justify-content:flex-end; margin-top:6px;"><button type="submit" class="btn sm primary">Post Comment</button></div>
           </form>`
-        : isRestricted() ? '<div style="font-size:13px; color:var(--text-faint); margin-top:6px;">Commenting is paused until your overdue bills are paid.</div>' : '';
+        : isRestricted() ? '<div style="font-size:13px; color:var(--text-faint); margin-top:6px;">Commenting is paused until your overdue dues are paid.</div>' : '';
     return `
       <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -6727,9 +6761,9 @@
         <div style="border-top:1px solid var(--border); margin-top:16px; padding-top:12px;">
           <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:0;">
             <input type="checkbox" id="rec-final-on" ${s.finalNoticeEnabled ? 'checked' : ''} style="width:18px; height:18px; margin:0;" />
-            <span>Send a final notice to long-unpaid residents</span>
+            <span>Warn long-unpaid residents before suspension</span>
           </label>
-          <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Sent once, automatically each morning, to residents this many months behind: pay within the given days or their app account is restricted. You restrict them yourself from Defaulters once the deadline passes.</div>
+          <div style="font-size:13px; color:var(--text-faint); margin-top:4px;">Sent once, automatically each morning, to residents this many months behind: pay within the given days or their account is suspended. You suspend them yourself from Bills; they can still pay and use the Emergency Alarm.</div>
           <div style="display:flex; gap:8px;">
             <div style="flex:1;"><label>Months unpaid</label><input type="number" id="rec-final-months" value="${Number(s.finalNoticeMonths) || 3}" min="1" max="24" /></div>
             <div style="flex:1;"><label>Days to pay</label><input type="number" id="rec-final-days" value="${Number(s.finalNoticeDays) || 5}" min="1" max="60" /></div>
@@ -7260,8 +7294,8 @@
   }
 
   function defaulterMessage(d) {
-    if (d.restricted) return `Dear ${d.name}, your RPHS app account (${houseLabel(d.house)}) is restricted because maintenance of ${formatMoney(d.total)} for ${d.periods.join(', ')} is unpaid. Please pay to the society account and upload your payment proof in the RPHS app; the restriction lifts once it is approved. Thank you - Management`;
-    if (d.finalNotice) return `*FINAL NOTICE*\nDear ${d.name}, your RPHS maintenance for ${d.months || d.periods.length} months (${d.periods.join(', ')}) is unpaid: ${formatMoney(d.total)} (${houseLabel(d.house)}). Please pay by ${longDateLabel(d.finalNotice.deadline)}, otherwise your RPHS app account will be restricted (no voting, complaints, posts or comments). Pay to the society account and upload your payment proof in the RPHS app. Thank you - Management`;
+    if (d.restricted) return `*RPHS - Account Suspended*\nDear ${d.name}, your RPHS app account (${houseLabel(d.house)}) is suspended because maintenance of ${formatMoney(d.total)} for ${d.periods.join(', ')} is unpaid. Please pay to the society account and upload your payment proof in the RPHS app; access comes back once it is approved.\n\n- RPHS Management`;
+    if (d.finalNotice) return `*RPHS - Final Notice*\nDear ${d.name}, our records show unpaid maintenance dues for ${d.months || d.periods.length} months (${d.periods.join(', ')}) totalling ${formatMoney(d.total)} (${houseLabel(d.house)}). Please clear your dues by ${longDateLabel(d.finalNotice.deadline)} or your RPHS app account will be suspended.\n\nPay to the society account and upload your payment proof in the RPHS app. For queries, contact the society office.\n- RPHS Management`;
     return `Dear ${d.name}, your RPHS maintenance of ${formatMoney(d.total)} for ${d.periods.join(', ')} (${houseLabel(d.house)}) is outstanding. Please pay to the society account and upload your payment proof in the RPHS app. Thank you - Management`;
   }
 
@@ -7283,10 +7317,10 @@
     const isAdmin = currentUserProfile.role === 'admin';
 
     const today = isoDate(new Date());
-    const noticeBadge = d => d.restricted ? '<span class="badge overdue">Restricted</span>'
+    const noticeBadge = d => d.restricted ? '<span class="badge overdue">Suspended</span>'
       : d.finalNotice ? (d.finalNotice.deadline < today
         ? '<span class="badge overdue">Deadline passed</span>'
-        : `<span class="badge pending">Final notice · pay by ${escapeHtml(formatDate(d.finalNotice.deadline))}</span>`)
+        : `<span class="badge pending">Warned · pay by ${escapeHtml(formatDate(d.finalNotice.deadline))}</span>`)
       : '';
     const row = d => `
       <div class="card" style="cursor:default; padding:12px 14px;">
@@ -7303,11 +7337,11 @@
         <div style="font-size:13px; color:var(--text-faint); margin-top:6px;">${escapeHtml(d.periods.join(', '))}${d.oldestDue ? ' · ' + (d.overdue ? 'overdue since ' : 'due ') + escapeHtml(formatDate(d.oldestDue)) : ''}</div>
         ${noticeBadge(d) ? `<div style="margin-top:6px;">${noticeBadge(d)}</div>` : ''}
         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
-          ${isAdmin && d.uid && d.isResident && !d.restricted && !d.finalNotice && d.months >= finalNoticeCfg.months ? `<button class="btn sm danger" onclick="sendFinalNotice('${d.key}')">${icon('bell')} Final notice</button>` : ''}
-          ${isAdmin && d.uid && !d.restricted && d.finalNotice && d.finalNotice.deadline < today ? `<button class="btn sm danger" onclick="restrictDefaulter('${d.uid}')">Restrict account</button>` : ''}
-          ${isAdmin && d.uid && d.restricted ? `<button class="btn sm secondary" onclick="liftRestriction('${d.uid}')">Lift restriction</button>` : ''}
+          ${isAdmin && d.uid && d.isResident && !d.restricted && !d.finalNotice && d.months >= finalNoticeCfg.months ? `<button class="btn sm danger" onclick="sendFinalNotice('${d.key}')">${icon('bell')} Send Warning</button>` : ''}
+          ${isAdmin && d.uid && !d.restricted && d.finalNotice ? `<button class="btn sm danger" onclick="restrictDefaulter('${d.uid}')">Suspend Now</button>` : ''}
+          ${isAdmin && d.uid && d.restricted ? `<button class="btn sm secondary" onclick="liftRestriction('${d.uid}')">✓ Reinstate Access</button>` : ''}
           ${isAdmin && d.uid ? `<button class="btn sm secondary" onclick="remindDefaulter('${d.key}')">${icon('bell')} Remind in app</button>` : ''}
-          ${d.phone ? `<button class="btn sm secondary" onclick="whatsappDefaulter('${d.key}')">WhatsApp</button>` : ''}
+          ${d.phone ? `<button class="btn sm wa" onclick="whatsappDefaulter('${d.key}')">WhatsApp</button>` : ''}
           ${d.uid ? `<button class="btn sm secondary" onclick="downloadResidentStatement('${d.uid}')">Statement</button>` : ''}
         </div>
       </div>`;
@@ -7320,7 +7354,7 @@
           ${isAdmin ? `<button class="btn secondary" style="flex:1;" onclick="remindAllDefaulters()">${icon('bell')} Remind all</button>` : ''}
         </div>` : ''}
       </div>
-      <div style="font-size:14px; color:var(--text-muted); line-height:1.5; margin-bottom:6px;">Houses with a bill past its due date. Houses whose only unpaid bill is not due yet are under "Not due yet" at the bottom.${isAdmin ? ` Residents ${finalNoticeCfg.months}+ months behind get a final notice to pay within ${finalNoticeCfg.days} days${finalNoticeCfg.enabled ? ' (sent automatically each morning)' : ''}; after that you can restrict their account.` : ''}</div>
+      <div style="font-size:14px; color:var(--text-muted); line-height:1.5; margin-bottom:6px;">Houses with a bill past its due date. Houses whose only unpaid bill is not due yet are under "Not due yet" at the bottom.${isAdmin ? ` Residents ${finalNoticeCfg.months}+ months behind get a warning to pay within ${finalNoticeCfg.days} days${finalNoticeCfg.enabled ? ' (sent automatically each morning)' : ''}; then you can suspend them. Suspended residents can still pay and use the Emergency Alarm.` : ''}</div>
       ${list.length ? `
         <details style="margin:4px 0 4px;">
           <summary style="font-size:14px; color:var(--accent-2); cursor:pointer;">Preview the message</summary>
@@ -7377,16 +7411,17 @@
     const d = defaultersList().find(x => x.key === key);
     if (!d || !d.uid || currentUserProfile.role !== 'admin') return;
     const deadline = isoDate(new Date(Date.now() + finalNoticeCfg.days * 86400000));
-    if (!(await confirmSheet({ title: `Send ${d.name} a final notice?`, body: `${d.months} months unpaid (${formatMoney(d.total)}). They are asked to pay by ${longDateLabel(deadline)}, or their app account will be restricted. You can also send it on WhatsApp afterwards.`, okLabel: 'Send final notice', danger: true }))) return;
+    if (!(await confirmSheet({ title: `Send ${d.name} a final warning?`, body: `${d.months} months unpaid (${formatMoney(d.total)}). They get an in-app notice and a push asking them to pay by ${longDateLabel(deadline)}, or their account will be suspended. You can also send it on WhatsApp afterwards.`, okLabel: 'Send Warning' }))) return;
     const notice = { date: isoDate(new Date()), deadline, months: d.months, total: d.total, by: currentUserProfile.name || 'Admin' };
     try {
       await db.collection('users').doc(d.uid).update({ finalNotice: { ...notice, sentAt: firebase.firestore.FieldValue.serverTimestamp() } });
-      await sendNotification(d.uid, `Final notice: ${d.months} months unpaid (${formatMoney(d.total)})`,
-        `Your maintenance for ${d.months} months is unpaid (${formatMoney(d.total)}). Please pay by ${longDateLabel(deadline)}, or your RPHS app account will be restricted: you will not be able to vote in polls, lodge complaints, post or comment until it is paid. Bills, payments and the Emergency Alarm keep working.`, 'warning', 'bills');
+      await sendNotification(d.uid, 'Final Notice — Suspension Warning',
+        `Your account has unpaid dues of ${formatMoney(d.total)} (${d.months} months). Pay by ${longDateLabel(deadline)} or your account will be suspended: no voting, complaints, posts or comments until it is paid. Bills, payments and the Emergency Alarm keep working.`, 'warning', 'bills');
       logAudit('member', d.uid, 'notify', `Final notice sent to ${d.name} (${d.house}): ${d.months} months, ${formatMoney(d.total)}, pay by ${deadline}`);
       patchResident(d.uid, { finalNotice: notice });
-      toast(`Final notice sent to ${d.name}.`);
-      renderDefaultersModal();
+      toast(`Warning sent to ${d.name}.`);
+      if (document.querySelector('.def-top')) renderDefaultersModal();
+      renderArrearsBanner();
     } catch (e) { toast('Could not send the final notice: ' + e.message); }
   };
 
@@ -7394,14 +7429,15 @@
     if (currentUserProfile.role !== 'admin') return;
     const r = allResidents.find(x => x.uid === uid);
     if (!r) return;
-    if (!(await confirmSheet({ title: `Restrict ${r.name}'s account?`, body: 'They can still see and pay bills, upload proof and use the Emergency Alarm. Voting, complaints, posts and comments are paused. It lifts by itself once their overdue bills are paid, or you can lift it any time.', okLabel: 'Restrict account', danger: true }))) return;
+    if (!(await confirmSheet({ title: `Suspend ${r.name}'s account?`, body: 'They can still see and pay bills, upload proof and use the Emergency Alarm. Voting, complaints, posts and comments are paused. Access comes back by itself once their overdue bills are paid, or you can reinstate it any time.', okLabel: 'Suspend Now', danger: true }))) return;
     try {
       await db.collection('users').doc(uid).update({ restricted: true, restrictedReason: 'unpaid', restrictedAt: firebase.firestore.FieldValue.serverTimestamp(), restrictedBy: currentUserProfile.name || 'Admin' });
-      await sendNotification(uid, 'Account restricted: overdue bills', 'Your maintenance is still unpaid after the final notice, so your RPHS app account is restricted: voting, complaints, posts and comments are paused. Bills, payments and the Emergency Alarm still work. Pay and upload your proof in Bills; the restriction lifts once it is approved.', 'error', 'membership');
-      logAudit('member', uid, 'update', `Account restricted for unpaid bills: ${r.name} (${r.house || 'N/A'})`);
+      await sendNotification(uid, 'Account Suspended — unpaid dues', 'Your dues are still unpaid after the final notice, so your RPHS app account is suspended: voting, complaints, posts and comments are paused. Bills, payments and the Emergency Alarm still work. Pay and upload your proof in Bills; access comes back once it is approved.', 'error', 'membership');
+      logAudit('member', uid, 'update', `Account suspended for unpaid dues (restricted): ${r.name} (${r.house || 'N/A'})`);
       patchResident(uid, { restricted: true, restrictedReason: 'unpaid' });
-      toast('Account restricted');
+      toast('Account suspended');
       if (document.querySelector('.def-top')) renderDefaultersModal();
+      renderArrearsBanner();
       if (typeof renderResidentsList === 'function' && document.getElementById('residents-list')) renderResidentsList();
     } catch (e) { toast('Could not restrict: ' + e.message); }
   };
@@ -7409,15 +7445,16 @@
   window.liftRestriction = async function(uid) {
     if (currentUserProfile.role !== 'admin' && !isSuperAdmin()) return;
     const r = allResidents.find(x => x.uid === uid);
-    if (!r || !(await confirmSheet({ title: `Lift ${r.name}'s restriction?`, body: 'They can vote, lodge complaints, post and comment again.', okLabel: 'Lift restriction' }))) return;
+    if (!r || !(await confirmSheet({ title: `Reinstate ${r.name}'s access?`, body: 'They can vote, lodge complaints, post and comment again.', okLabel: 'Reinstate Access' }))) return;
     const del = firebase.firestore.FieldValue.delete();
     try {
       await db.collection('users').doc(uid).update({ restricted: false, restrictedReason: del, restrictedAt: del, restrictedBy: del, finalNotice: del });
-      await sendNotification(uid, 'Account restriction lifted', 'Your RPHS app account is fully active again.', 'success', 'membership');
-      logAudit('member', uid, 'update', `Restriction lifted: ${r.name}`);
+      await sendNotification(uid, 'Account access restored', 'Your RPHS app account is fully active again.', 'success', 'membership');
+      logAudit('member', uid, 'update', `Access reinstated after unpaid-dues suspension: ${r.name}`);
       patchResident(uid, { restricted: false, restrictedReason: undefined, finalNotice: undefined });
-      toast('Restriction lifted');
+      toast('Access reinstated');
       if (document.querySelector('.def-top')) renderDefaultersModal();
+      renderArrearsBanner();
       if (typeof renderResidentsList === 'function' && document.getElementById('residents-list')) renderResidentsList();
     } catch (e) { toast('Error: ' + e.message); }
   };
@@ -7435,24 +7472,37 @@
     const today = isoDate(new Date());
     const list = defaultersList().filter(d => d.uid && d.isResident && (d.restricted || d.finalNotice || d.months >= finalNoticeCfg.months)).sort(byHouse);
     if (!list.length) { el.innerHTML = ''; return; }
-    const state = d => d.restricted ? ['Restricted', 'overdue']
-      : !d.finalNotice ? ['Not warned yet', 'pending']
-      : d.finalNotice.deadline < today ? ['Deadline passed', 'overdue']
-      : ['Warned · pay by ' + formatDate(d.finalNotice.deadline), 'pending'];
+    const daysLeft = d => Math.max(0, Math.round((toDate(d.finalNotice.deadline) - toDate(today)) / 86400000));
+    const row = d => {
+      const pill = d.restricted ? '<span class="npill red">Suspended</span>'
+        : !d.finalNotice ? '<span class="npill grey">Not warned</span>'
+        : d.finalNotice.deadline < today ? '<span class="npill red">Deadline passed</span>'
+        : `<span class="npill amber">Warned · suspends in ${daysLeft(d)}d</span>`;
+      const wa = d.phone ? `<button class="btn sm wa" onclick="whatsappDefaulter('${d.key}')">${icon('share')} WhatsApp</button>` : '';
+      const acts = d.restricted
+        ? `<button class="btn sm secondary block" onclick="liftRestriction('${d.uid}')">✓ Reinstate Access</button>`
+        : !d.finalNotice
+          ? `<button class="btn sm primary" onclick="sendFinalNotice('${d.key}')">${icon('bell')} Send Warning</button>${wa}`
+          : `${wa}<button class="btn sm danger" onclick="restrictDefaulter('${d.uid}')">Suspend Now</button>`;
+      return `
+        <div class="arrears-row">
+          <div class="top">
+            <div style="min-width:0;">
+              <div class="nm">${escapeHtml(d.name)}</div>
+              <div class="meta">${houseHtml(d.house)} · ${d.months} month${d.months === 1 ? '' : 's'} · <span class="amt money">${formatMoney(d.total)}</span></div>
+            </div>
+            ${pill}
+          </div>
+          <div class="acts">${acts}</div>
+        </div>`;
+    };
     el.innerHTML = `
-      <button class="card" style="width:100%; text-align:left; border-color:var(--danger); margin-bottom:12px;" onclick="openDefaultersModal()">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <b style="color:var(--danger);">Long-unpaid residents (${list.length})</b>
-          <span style="color:var(--danger); font-weight:700; flex:none;">Open</span>
-        </div>
-        ${list.slice(0, 4).map(d => { const [lbl, cls] = state(d); return `
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; font-size:13px;">
-            <span style="min-width:0;"><b>${escapeHtml(d.name)}</b><br><span style="color:var(--text-muted);">${houseHtml(d.house)} · ${d.months} month${d.months === 1 ? '' : 's'} · <span class="money">${formatMoney(d.total)}</span></span></span>
-            <span class="badge ${cls}" style="flex:none;">${escapeHtml(lbl)}</span>
-          </div>`; }).join('')}
-        ${list.length > 4 ? `<div style="font-size:13px; color:var(--text-muted); margin-top:8px;">+${list.length - 4} more in Defaulters</div>` : ''}
-        <div style="font-size:13px; color:var(--text-faint); margin-top:8px;">Send the final notice, WhatsApp it, and restrict after the deadline from Defaulters.</div>
-      </button>`;
+      <div class="arrears-card">
+        <div class="hd"><b>⚠️ Defaulters — ${finalNoticeCfg.months}+ Months Unpaid</b><span class="count">${list.length}</span></div>
+        <div class="sub">${finalNoticeCfg.enabled ? 'Auto-flagged by the daily check. ' : ''}Warned residents have ${finalNoticeCfg.days} days to pay before you suspend them.</div>
+        ${list.map(row).join('')}
+        <button class="btn sm secondary block" style="margin-top:12px;" onclick="openDefaultersModal()">Open full defaulters list</button>
+      </div>`;
   }
 
   window.whatsappDefaulter = function(key) {
@@ -11427,7 +11477,7 @@
             <div style="font-weight:700; font-size:15px;">${escapeHtml(r.name)}</div>
             <div style="font-size:13px; color:var(--text-muted);">${houseHtml(r.house)}${r.phone ? ' · <span class="nowrap">' + escapeHtml(r.phone) + '</span>' : ''}</div>
           </div>
-          ${r.suspended ? '<span class="badge overdue">Suspended</span>' : r.restricted ? '<span class="badge overdue">Restricted</span>' : ''}
+          ${r.suspended ? '<span class="badge overdue">Suspended</span>' : r.restricted ? '<span class="badge overdue">Suspended (dues)</span>' : ''}
           <button class="dots-btn" onclick="openResidentMenu('${r.uid}')" aria-label="More actions">${icon('dots')}</button>
         </div>
         <div style="font-size:13px; color:var(--text-muted); margin-top:8px;">CNIC <span class="nowrap">${escapeHtml(r.cnic || 'N/A')}</span> · Blood group ${escapeHtml(r.bloodGroup || 'N/A')} · ${escapeHtml(r.occupancyType || 'N/A')}</div>
@@ -11449,7 +11499,7 @@
       { label: 'Biodata card (PDF)', icon: 'file', run: () => downloadResidentPDF(uid) },
       isAdmin && { label: 'Edit details', icon: 'edit', run: () => openEditResidentModal(uid) },
       manage && { label: r.billExempt ? 'Include in recurring bill' : 'Exempt from recurring bill', icon: 'receipt', run: () => setBillExempt(uid, !r.billExempt) },
-      manage && r.restricted && { label: 'Lift restriction (unpaid bills)', icon: 'usercheck', run: () => liftRestriction(uid) },
+      manage && r.restricted && { label: 'Reinstate access (unpaid dues)', icon: 'usercheck', run: () => liftRestriction(uid) },
       manage && (r.suspended
         ? { label: 'Lift suspension', icon: 'usercheck', run: () => unsuspendResident(uid) }
         : { label: 'Suspend membership', icon: 'x', danger: true, run: () => suspendResident(uid) })

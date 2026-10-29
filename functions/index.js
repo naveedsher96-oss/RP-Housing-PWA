@@ -433,13 +433,13 @@ function liftRestriction(batch, ref, now) {
     finalNotice: admin.firestore.FieldValue.delete(),
   });
   batch.set(ref.collection("notifications").doc(), {
-    ...notificationDoc("Account restriction lifted",
-      "Thank you for clearing your overdue bills. Your RPHS app account is fully active again.", "success"),
+    ...notificationDoc("Account access restored",
+      "Thank you for clearing your dues. Your RPHS app account is fully active again.", "success"),
     category: "membership",
   });
   batch.set(admin.firestore().collection("audit_log").doc(), {
     entityType: "member", entityId: ref.id, action: "update",
-    details: "Restriction lifted automatically: overdue bills cleared",
+    details: "Unpaid-dues suspension lifted automatically: overdue bills cleared",
     performedBy: RECURRING_ISSUER, performedByUid: "", role: "system", timestamp: now,
   });
 }
@@ -479,10 +479,10 @@ async function sendFinalNotices(db, today) {
       const deadline = addDays(today, days);
       batch.update(d.ref, { finalNotice: { date: today, deadline, months: a.months, total: a.total, sentAt: now } });
       batch.set(d.ref.collection("notifications").doc(), {
-        ...notificationDoc(`Final notice: ${a.months} months unpaid (${formatMoney(a.total)})`,
-          `Your maintenance for ${a.months} months is unpaid (${formatMoney(a.total)}). ` +
-          `Please pay by ${longDate(deadline)}, or your RPHS app account will be restricted: ` +
-          "you will not be able to vote in polls, lodge complaints, post or comment until it is paid. " +
+        ...notificationDoc("Final Notice — Suspension Warning",
+          `Your account has unpaid dues of ${formatMoney(a.total)} (${a.months} months). ` +
+          `Pay by ${longDate(deadline)} or your account will be suspended: ` +
+          "no voting, complaints, posts or comments until it is paid. " +
           "Bills, payments and the Emergency Alarm keep working." + PAY_FOOTER, "warning"),
         category: "bills",
       });
@@ -504,12 +504,12 @@ async function sendFinalNotices(db, today) {
     }
   });
   if (sent.length) {
-    tell(`Final notice sent to ${sent.length} resident(s)`,
-      `${minMonths}+ months unpaid, asked to pay by ${longDate(addDays(today, days))}: ${sent.join(", ")}. See Bills > Defaulters.`);
+    tell(`Suspension warning sent to ${sent.length} resident(s)`,
+      `${minMonths}+ months unpaid, asked to pay by ${longDate(addDays(today, days))}: ${sent.join(", ")}. See the Bills tab.`);
   }
   if (passed.length) {
     tell(`Payment deadline passed for ${passed.length} resident(s)`,
-      `${passed.join(", ")} did not pay after the final notice. You can restrict their account from Bills > Defaulters.`);
+      `${passed.join(", ")} did not pay after the final notice. You can suspend them from the Bills tab.`);
   }
   if (sent.length || lifted) {
     batch.set(db.collection("audit_log").doc(), {
