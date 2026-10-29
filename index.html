@@ -9256,7 +9256,8 @@
       canSeeHealth() ? db.collection('settings').doc('recurringBill').get() : null,
       loadUsefulContacts(),
       loadMosque(),
-      loadEvents()
+      loadEvents(),
+      canSeeHealth() || isSuperAdmin() ? loadFinalNoticeCfg() : null
     ]).then(([usersSnap, billsSnap, contribsSnap, expSnap, ticketsSnap, transfersSnap, sumSnap, decSnap, , , errSnap, recSnap]) => {
       monthlySummaries = sumSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       healthErrors = errSnap ? errSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
@@ -9340,6 +9341,7 @@
     el.innerHTML = `
       ${renderEmergencyBanner()}
       ${renderStaffNeedsYou(d, { pendingApprovals, inReview: inReviewBills.length, openTickets })}
+      ${renderSuspensionWatch(d)}
       ${emergencyButtonHtml()}
       ${quickActionsHtml()}
       ${renderThisWeekCard()}
@@ -9381,6 +9383,55 @@
       </div>
     `;
     checkBackupReminder();
+  }
+
+  // Dashboard (admin + super admin): residents N+ months behind, grouped by
+  // where they are in warning -> deadline -> suspension, so nobody is warned
+  // or suspended without management seeing it coming.
+  function renderSuspensionWatch(d) {
+    if (!(currentUserProfile.role === 'admin' || isSuperAdmin())) return '';
+    const today = isoDate(new Date());
+    const cfg = finalNoticeCfg;
+    const rows = d.users.filter(u => u.role === 'resident' && u.approved === true && u.suspended !== true).map(u => {
+      const overdue = d.bills.filter(b => b.uid === u.uid && billStatus(b) === 'overdue');
+      const months = new Set(overdue.filter(b => String(b.category || '').trim().toLowerCase() === cfg.category)
+        .map(b => String(b.period || String(b.dueDate || '').slice(0, 7)).trim().toLowerCase())).size;
+      const f = u.finalNotice && u.finalNotice.deadline ? u.finalNotice : null;
+      const stage = u.restricted === true ? 'suspended' : f ? (f.deadline < today ? 'passed' : 'warned') : months >= cfg.months ? 'due' : '';
+      return { u, months, total: overdue.reduce((t, b) => t + Number(b.amount || 0), 0), f, stage };
+    }).filter(r => r.stage);
+    if (!rows.length) return '';
+    const order = { due: 0, passed: 1, warned: 2, suspended: 3 };
+    rows.sort((a, b) => order[a.stage] - order[b.stage] || b.months - a.months);
+    const count = st => rows.filter(r => r.stage === st).length;
+    const runAt = new Date().getHours() < 9 || (new Date().getHours() === 9 && new Date().getMinutes() < 30) ? 'today' : 'tomorrow';
+    const left = r => Math.max(0, Math.round((toDate(r.f.deadline) - toDate(today)) / 86400000));
+    const pill = r => r.stage === 'suspended' ? '<span class="npill red">Suspended</span>'
+      : r.stage === 'passed' ? '<span class="npill red">Ready to suspend</span>'
+      : r.stage === 'warned' ? `<span class="npill amber">Suspends in ${left(r)}d</span>`
+      : `<span class="npill grey">${cfg.enabled ? 'Warning ' + runAt : 'Not warned'}</span>`;
+    const chip = (n, label) => n ? `<span style="font-size:13px; color:var(--text-muted);"><b style="color:var(--text);">${n}</b> ${label}</span>` : '';
+    const isAdmin = currentUserProfile.role === 'admin';
+    return `
+      <div class="arrears-card" style="margin-bottom:16px;">
+        <div class="hd"><b>⚠️ Suspension watch</b><span class="count">${rows.length}</span></div>
+        <div class="sub">Residents ${cfg.months}+ months unpaid. ${cfg.enabled ? `Unwarned ones get the final notice automatically ${runAt} at 9:30 and have ${cfg.days} days to pay.` : `Automatic warnings are off: send them from the Bills tab, or switch them on in Recurring Bill settings.`}</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:8px;">
+          ${chip(count('due'), cfg.enabled ? 'about to be warned' : 'not warned yet')}${chip(count('warned'), 'warned')}${chip(count('passed'), 'past deadline')}${chip(count('suspended'), 'suspended')}
+        </div>
+        ${rows.slice(0, 5).map(r => `
+          <div class="arrears-row" style="padding-top:10px; margin-top:10px;">
+            <div class="top">
+              <div style="min-width:0;">
+                <div class="nm">${escapeHtml(r.u.name || 'Resident')}</div>
+                <div class="meta">${houseHtml(r.u.house)} · ${r.months} month${r.months === 1 ? '' : 's'} · <span class="amt money">${formatMoney(r.total)}</span></div>
+              </div>
+              ${pill(r)}
+            </div>
+          </div>`).join('')}
+        ${rows.length > 5 ? `<div style="font-size:13px; color:var(--text-muted); margin-top:10px;">+${rows.length - 5} more</div>` : ''}
+        <button class="btn sm ${isAdmin ? 'primary' : 'secondary'} block" style="margin-top:12px;" onclick="${isAdmin ? "goTab('bills')" : 'openDefaultersModal()'}">${isAdmin ? 'Warn, WhatsApp or suspend in Bills' : 'Open defaulters list'}</button>
+      </div>`;
   }
 
   function greetingWord() {
