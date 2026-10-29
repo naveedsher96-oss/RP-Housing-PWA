@@ -996,23 +996,81 @@
     });
   }
 
+  // Every phone or computer a member signs in on gets its own entry under
+  // fcm_tokens/{uid}.tokens, so alerts reach all of them, not just the last one
+  // used. `token` (the latest device) is kept for older code.
+  let deviceToken = '';
   function saveDeviceToken() {
-    if (!messaging || !currentUserProfile || !auth.currentUser) return;
-    if (!FCM_VAPID_KEY) { console.log('FCM VAPID key not configured; push disabled.'); return; }
-    navigator.serviceWorker.register('firebase-messaging-sw.js')
+    if (!messaging || !currentUserProfile || !auth.currentUser) return Promise.resolve('');
+    if (!FCM_VAPID_KEY) { console.log('FCM VAPID key not configured; push disabled.'); return Promise.resolve(''); }
+    if (!('Notification' in window) || Notification.permission !== 'granted') return Promise.resolve('');
+    const uid = auth.currentUser.uid;
+    return navigator.serviceWorker.register('firebase-messaging-sw.js')
       .then(reg => messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg }))
       .then((currentToken) => {
-      if (currentToken && db) {
-        db.collection('fcm_tokens').doc(auth.currentUser.uid).set({
+        if (!currentToken || !db) return '';
+        deviceToken = currentToken;
+        const now = firebase.firestore.FieldValue.serverTimestamp();
+        return db.collection('fcm_tokens').doc(uid).set({
           token: currentToken,
-          uid: auth.currentUser.uid,
+          tokens: { [currentToken]: { updatedAt: now, device: pushDeviceLabel() } },
+          uid,
           name: currentUserProfile.name,
           role: currentUserProfile.role,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch(err => console.error("FCM Token Save Error:", err));
-      }
-    }).catch((err) => console.log('Push token registration error:', err));
+          updatedAt: now
+        }, { merge: true }).then(() => currentToken);
+      })
+      .catch((err) => { console.error('Push token registration error:', err); return ''; });
   }
+  function pushDeviceLabel() {
+    const ua = navigator.userAgent;
+    const os = /iPhone|iPad|iPod/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : 'Other';
+    return `${os}${isStandaloneApp() ? ' (app)' : ' (browser)'}`;
+  }
+  // Signing out stops this device getting the previous member's alerts.
+  function forgetDeviceToken() {
+    if (!deviceToken || !db || !auth || !auth.currentUser) return Promise.resolve();
+    const token = deviceToken;
+    deviceToken = '';
+    const ref = db.collection('fcm_tokens').doc(auth.currentUser.uid);
+    const drop = ref.get().then(snap => {
+      if (!snap.exists) return;
+      return ref.update(new firebase.firestore.FieldPath('tokens', token), firebase.firestore.FieldValue.delete(),
+        ...(snap.data().token === token ? ['token', firebase.firestore.FieldValue.delete()] : []));
+    }).catch(() => {});
+    return Promise.race([drop, new Promise(r => setTimeout(r, 2500))]);
+  }
+
+  // iPhones only allow alerts for apps added to the Home Screen (iOS 16.4+);
+  // in a Safari tab there is no Notification API at all.
+  function isIOSDevice() {
+    return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+  function isStandaloneApp() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  }
+  function iosNeedsHomeScreen() {
+    return isIOSDevice() && !isStandaloneApp();
+  }
+  window.showIosPushHelp = function() {
+    confirmSheet({
+      title: 'Alerts on iPhone',
+      body: 'iPhone only sends alerts to apps on your Home Screen (iOS 16.4 or newer).\n\n1. In Safari, tap the Share button (square with an arrow).\n2. Tap "Add to Home Screen", then "Add".\n3. Open RPHS from the new Home Screen icon and sign in.\n4. Tap "Turn on" when the app asks about alerts.',
+      okLabel: 'OK', cancelLabel: 'Close'
+    });
+  };
+  window.sendTestPush = async function() {
+    if (!auth.currentUser) return;
+    const token = await saveDeviceToken();
+    if (!token) { toast('This device could not register for alerts. Check that notifications are allowed for RPHS in your phone settings.', 'bad'); return; }
+    try {
+      await db.collection('users').doc(auth.currentUser.uid).collection('notifications').add({
+        title: 'Test alert', body: 'Alerts are working on this device.', type: 'info', category: 'general',
+        testPush: true, read: false, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      toast('Now close the app. The test alert should arrive in about 15 seconds.');
+    } catch (err) { toast('Could not send the test: ' + err.message, 'bad'); }
+  };
 
   // --- BIOMETRIC (FINGERPRINT) SIGN-IN ---
   // The saved login is encrypted with a non-extractable AES key kept in IndexedDB and is
@@ -1150,9 +1208,9 @@
         <div id="offline-banner" class="offline-banner" style="display:${navigator.onLine === false ? 'block' : 'none'};">You're offline — showing saved data. Changes need a connection.</div>
         ${showPushBanner() ? `
           <div class="push-banner">
-            <span style="font-size:14px; font-weight:600; color:var(--accent-2);">Get alerts for bills and notices on this phone.</span>
+            <span style="font-size:14px; font-weight:600; color:var(--accent-2);">${iosNeedsHomeScreen() ? 'iPhone: add RPHS to your Home Screen to get alerts.' : 'Get alerts for bills and notices on this phone.'}</span>
             <span style="display:flex; gap:6px; flex:none;">
-              <button class="btn sm primary" onclick="requestPushPermission()">Turn on</button>
+              <button class="btn sm primary" onclick="${iosNeedsHomeScreen() ? 'showIosPushHelp()' : 'requestPushPermission()'}">${iosNeedsHomeScreen() ? 'How' : 'Turn on'}</button>
               <button class="btn sm secondary" onclick="dismissPushBanner()">Not now</button>
             </span>
           </div>
@@ -1490,7 +1548,8 @@
   }
 
   window.requestPushPermission = function() {
-    Notification.requestPermission().then((permission) => {
+    if (iosNeedsHomeScreen() || !('Notification' in window)) { if (isIOSDevice()) showIosPushHelp(); else toast('This browser cannot show alerts. Please use Chrome.'); return; }
+    Promise.resolve(Notification.requestPermission()).then((permission) => {
       if (permission === 'granted') saveDeviceToken();
       render();
     });
@@ -1498,7 +1557,7 @@
 
   window.doSignOut = function() {
     manualSignOut = true;
-    auth.signOut();
+    forgetDeviceToken().then(() => auth.signOut());
   };
 
   function friendlyAuthError(err) {
@@ -2195,8 +2254,9 @@
 
   // Push banner: shown on the Dashboard only, and hidden for 7 days on "Not now".
   function showPushBanner() {
-    if (!('Notification' in window) || Notification.permission === 'granted' || Notification.permission === 'denied') return false;
     if (activeTab !== 'dashboard') return false;
+    if (iosNeedsHomeScreen()) return Date.now() > Number(lsGet('rphs.pushBannerHiddenUntil') || 0);
+    if (!('Notification' in window) || Notification.permission === 'granted' || Notification.permission === 'denied') return false;
     const until = Number(lsGet('rphs.pushBannerHiddenUntil') || 0);
     return Date.now() > until;
   }
@@ -2415,7 +2475,10 @@
           <div style="font-size:13px; color:var(--text-muted);">Dark is easier on the eyes at night; Light is clearer in sunlight. Auto follows your phone's setting.</div>
           <div class="seg" id="pref-theme">${[['dark', '🌙 Dark'], ['light', '☀️ Light'], ['auto', '📱 Auto']].map(([v, l]) => `<button class="chip ${themePref() === v ? 'active' : ''}" onclick="setTheme('${v}')">${l}</button>`).join('')}</div>
         </div>
-        ${row('Bill and notice alerts', pushState === 'denied' ? 'Blocked in your phone settings. Allow notifications for RPHS there.' : pushState === 'unsupported' ? 'This browser cannot show alerts.' : 'Notifications on this phone', pushState === 'granted', pushState === 'default' ? 'requestPushPermission()' : '', pushState !== 'default')}
+        ${iosNeedsHomeScreen()
+          ? row('Bill and notice alerts', 'iPhone sends alerts only to apps on the Home Screen. Tap to see how.', false, 'showIosPushHelp()', false)
+          : row('Bill and notice alerts', pushState === 'denied' ? 'Blocked in your phone settings. Allow notifications for RPHS there.' : pushState === 'unsupported' ? 'This browser cannot show alerts.' : 'Notifications on this phone', pushState === 'granted', pushState === 'default' ? 'requestPushPermission()' : '', pushState !== 'default')}
+        ${pushState === 'granted' && messaging ? `<button class="btn secondary block" style="margin:8px 0 10px;" onclick="sendTestPush()">${icon('bell')} Send a test alert to this device</button>` : ''}
         ${currentUserProfile.role === 'resident' ? `<button class="btn secondary block" style="margin:8px 0 10px;" onclick="downloadResidentStatement()">${icon('file')} Download my statement (PDF)</button>` : ''}
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0 6px; border-top:1px solid var(--border-soft); font-size:12px; color:var(--text-faint);">
           <span id="app-version">RPHS app v${APP_VERSION}</span>

@@ -1173,6 +1173,23 @@ test('admin: on a computer, the defaulters share menu has a single WhatsApp row'
   noErrors(page);
 }, 'admin');
 
+test('resident: on an iPhone in Safari, the alerts banner explains Add to Home Screen', async () => {
+  const context = await browser.newContext({ viewport: VIEWPORT, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1' });
+  await context.addInitScript(() => { delete window.Notification; }); // Safari tabs have no Notification API
+  const page = await context.newPage();
+  page.errors = [];
+  page.on('pageerror', e => page.errors.push('pageerror: ' + e.message));
+  await page.goto(`${PAGE}?role=resident`);
+  await page.waitForSelector('main', { timeout: 15000 });
+  const banner = await page.$eval('.push-banner', el => el.innerText).catch(() => '');
+  assert(/Home Screen/.test(banner), `iPhone banner should mention the Home Screen, got "${banner}"`);
+  await page.click('.push-banner button.primary');
+  await page.waitForSelector('#ui-sheet.active .ui-sheet-title', { timeout: 5000 });
+  assert(/Add to Home Screen/.test(await page.$eval('#ui-sheet .ui-sheet-body', el => el.innerText)), 'help sheet should give the Add to Home Screen steps');
+  noErrors(page);
+  await context.close();
+}, 'resident');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
