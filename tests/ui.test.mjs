@@ -1082,8 +1082,8 @@ test('admin: To do list, edits mosque times, adds a calendar item, and sees who 
   await page.waitForSelector('#event-form', { timeout: 5000 });
   await page.selectOption('#ev-kind', 'meeting');
   await page.fill('#ev-title', 'General body meeting');
-  // Today: stays in the month the calendar opens on (+3 days fails late in a month).
-  const d = new Date();
+  // Three days ahead, but stay in this month: the calendar opens on the current month.
+  const d = new Date(); const day = d.getDate(); d.setDate(day + 3); if (d.getDate() < day) d.setDate(0);
   const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   await page.fill('#ev-date', key);
   await page.fill('#ev-time', '17:00');

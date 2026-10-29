@@ -384,6 +384,171 @@ exports.applyLateFeesDaily = onSchedule(
   async () => applyLateFees(admin.firestore(), todayKey())
 );
 
+// ---------- final notice & restriction for long-unpaid accounts ----------
+// settings/recurringBill: finalNoticeEnabled, finalNoticeMonths (default 3),
+// finalNoticeDays (default 5). Every morning each approved resident with that
+// many months of overdue bills gets ONE final notice (in-app + push): pay
+// within the given days or the account is restricted. users/{uid}.finalNotice
+// records it; an admin restricts by hand from Defaulters once it has passed.
+// Restricted (users/{uid}.restricted) residents can still pay and use the
+// Emergency Alarm. The notice is cleared once they drop below the threshold,
+// and a non-payment restriction lifts itself once nothing is overdue or in review.
+const FINAL_NOTICE_MONTHS = 3;
+const FINAL_NOTICE_DAYS = 5;
+
+function longDate(key) {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "long" })
+    .format(new Date(Date.parse(key)));
+}
+
+// Months a resident is behind: distinct billing periods among overdue bills of
+// the recurring category (one-off charges don't count as a month). total covers
+// every overdue bill; open = overdue + bills whose proof is still in review.
+function arrearsOf(bills, today, category) {
+  const cat = String(category || "Monthly Maintenance").trim().toLowerCase();
+  const overdue = bills.filter((b) => b.status === "unpaid" && b.dueDate < today);
+  const months = new Set(overdue.filter((b) => String(b.category || "").trim().toLowerCase() === cat)
+    .map((b) => String(b.period || b.dueDate.slice(0, 7)).trim().toLowerCase()));
+  return {
+    months: months.size,
+    total: overdue.reduce((s, b) => s + Number(b.amount || 0), 0),
+    open: overdue.length + bills.filter((b) => b.status === "submitted").length,
+  };
+}
+
+async function openBillsByUser(db, uid) {
+  const q = db.collection("bills").where("status", "in", ["unpaid", "submitted"]);
+  const snap = await (uid ? q.where("uid", "==", uid) : q).get();
+  const byUser = {};
+  snap.docs.forEach((d) => {
+    const b = d.data();
+    if (!b.uid || b.isDeleted || typeof b.dueDate !== "string") return;
+    (byUser[b.uid] = byUser[b.uid] || []).push(b);
+  });
+  return byUser;
+}
+
+function liftRestriction(batch, ref, now) {
+  batch.update(ref, {
+    restricted: false, restrictedReason: admin.firestore.FieldValue.delete(),
+    restrictedAt: admin.firestore.FieldValue.delete(), restrictedBy: admin.firestore.FieldValue.delete(),
+    finalNotice: admin.firestore.FieldValue.delete(),
+  });
+  batch.set(ref.collection("notifications").doc(), {
+    ...notificationDoc("Account access restored",
+      "Thank you for clearing your dues. Your RPHS app account is fully active again.", "success"),
+    category: "membership",
+  });
+  batch.set(admin.firestore().collection("audit_log").doc(), {
+    entityType: "member", entityId: ref.id, action: "update",
+    details: "Unpaid-dues suspension lifted automatically: overdue bills cleared",
+    performedBy: RECURRING_ISSUER, performedByUid: "", role: "system", timestamp: now,
+  });
+}
+
+async function sendFinalNotices(db, today) {
+  const settingsSnap = await db.doc(RECURRING_SETTINGS_PATH).get();
+  const s = settingsSnap.exists ? settingsSnap.data() : {};
+  const enabled = s.finalNoticeEnabled === true;
+  const minMonths = Math.max(1, Number(s.finalNoticeMonths) || FINAL_NOTICE_MONTHS);
+  const days = Math.max(1, Number(s.finalNoticeDays) || FINAL_NOTICE_DAYS);
+  const [users, byUser] = await Promise.all([
+    db.collection("users").where("approved", "==", true).get(),
+    openBillsByUser(db),
+  ]);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  let batch = db.batch();
+  let ops = 0;
+  const flush = async () => { if (ops) { await batch.commit(); batch = db.batch(); ops = 0; } };
+  const sent = [];
+  const passed = [];
+  let cleared = 0;
+  let lifted = 0;
+
+  for (const d of users.docs) {
+    const u = d.data();
+    if (u.role !== "resident" || u.suspended === true) continue;
+    const a = arrearsOf(byUser[d.id] || [], today, s.category);
+    if (u.restricted === true && u.restrictedReason === "unpaid" && a.open === 0) {
+      liftRestriction(batch, d.ref, now);
+      ops += 3;
+      lifted++;
+    } else if (u.finalNotice && a.months < minMonths && u.restricted !== true) {
+      batch.update(d.ref, { finalNotice: admin.firestore.FieldValue.delete() });
+      ops++;
+      cleared++;
+    } else if (enabled && !u.finalNotice && u.restricted !== true && a.months >= minMonths) {
+      const deadline = addDays(today, days);
+      batch.update(d.ref, { finalNotice: { date: today, deadline, months: a.months, total: a.total, sentAt: now } });
+      batch.set(d.ref.collection("notifications").doc(), {
+        ...notificationDoc("Final Notice — Suspension Warning",
+          `Your account has unpaid dues of ${formatMoney(a.total)} (${a.months} months). ` +
+          `Pay by ${longDate(deadline)} or your account will be suspended: ` +
+          "no voting, complaints, posts or comments until it is paid. " +
+          "Bills, payments and the Emergency Alarm keep working." + PAY_FOOTER, "warning"),
+        category: "bills",
+      });
+      ops += 2;
+      sent.push(`${u.name || "Resident"} (${u.house || "N/A"})`);
+    } else if (u.finalNotice && u.restricted !== true && !u.finalNotice.adminTold &&
+        typeof u.finalNotice.deadline === "string" && u.finalNotice.deadline < today) {
+      batch.update(d.ref, { "finalNotice.adminTold": true });
+      ops++;
+      passed.push(`${u.name || "Resident"} (${u.house || "N/A"})`);
+    }
+    if (ops >= 400) await flush();
+  }
+
+  const tell = (title, body) => users.docs.forEach((d) => {
+    if (d.data().role === "admin" && d.data().suspended !== true) {
+      batch.set(d.ref.collection("notifications").doc(), { ...notificationDoc(title, body, "info"), category: "bills" });
+      ops++;
+    }
+  });
+  if (sent.length) {
+    tell(`Suspension warning sent to ${sent.length} resident(s)`,
+      `${minMonths}+ months unpaid, asked to pay by ${longDate(addDays(today, days))}: ${sent.join(", ")}. See the Bills tab.`);
+  }
+  if (passed.length) {
+    tell(`Payment deadline passed for ${passed.length} resident(s)`,
+      `${passed.join(", ")} did not pay after the final notice. You can suspend them from the Bills tab.`);
+  }
+  if (sent.length || lifted) {
+    batch.set(db.collection("audit_log").doc(), {
+      entityType: "bill", entityId: today, action: "notify",
+      details: `Final notices: ${sent.length} sent${sent.length ? " (" + sent.join(", ") + ")" : ""}; ${lifted} restriction(s) lifted`,
+      performedBy: RECURRING_ISSUER, performedByUid: "", role: "system", timestamp: now,
+    });
+    ops++;
+  }
+  await flush();
+  console.log(`${today}: final notices ${sent.length} sent, ${passed.length} past deadline, ${cleared} cleared, ${lifted} restriction(s) lifted`);
+  return { sent: sent.length, passed: passed.length, cleared, lifted };
+}
+
+exports.sendFinalNoticesDaily = onSchedule(
+  { schedule: "every day 09:30", timeZone: TIME_ZONE },
+  async () => sendFinalNotices(admin.firestore(), todayKey())
+);
+
+// Lift a non-payment restriction as soon as the last overdue bill is approved
+// as paid, instead of waiting for the next morning.
+exports.liftRestrictionOnPayment = onDocumentUpdated("bills/{billId}", async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  if (!after || !after.uid || before.status === after.status || after.status !== "paid") return;
+  const db = admin.firestore();
+  const ref = db.collection("users").doc(after.uid);
+  const snap = await ref.get();
+  const u = snap.exists ? snap.data() : null;
+  if (!u || u.restricted !== true || u.restrictedReason !== "unpaid") return;
+  const a = arrearsOf((await openBillsByUser(db, after.uid))[after.uid] || [], todayKey(), after.category);
+  if (a.open > 0) return;
+  const batch = db.batch();
+  liftRestriction(batch, ref, admin.firestore.FieldValue.serverTimestamp());
+  await batch.commit();
+});
+
 // Runs on the RECURRING_ISSUE_DAY of every month.
 exports.issueMonthlyRecurringBills = onSchedule(
   { schedule: `${RECURRING_ISSUE_DAY} of month 09:00`, timeZone: TIME_ZONE },
@@ -1010,3 +1175,4 @@ exports.familyEmergencyAlert = onDocumentCreated(
 );
 
 exports._applyLateFees = applyLateFees;
+exports._sendFinalNotices = sendFinalNotices;
