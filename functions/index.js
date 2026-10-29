@@ -843,8 +843,10 @@ exports.runMonthlySummaryOnRequest = onDocumentWritten(
   }
 );
 
-// One web push. Emergency pushes are delivered first, stay on screen until
-// dismissed, vibrate, and re-alert (sound again) when repeated with the same tag.
+// One web push. Every push is sent with high urgency: at normal urgency Android
+// holds it back while the phone is idle (Doze), so alerts arrived late or only
+// when the app was opened. Emergency pushes also stay on screen until dismissed,
+// vibrate, and re-alert (sound again) when repeated with the same tag.
 function pushMessage(token, title, body, category) {
   const emergency = category === "emergency";
   return {
@@ -852,7 +854,7 @@ function pushMessage(token, title, body, category) {
     notification: { title, body },
     data: { category },
     webpush: {
-      headers: emergency ? { Urgency: "high", TTL: "600" } : {},
+      headers: { Urgency: "high", TTL: emergency ? "600" : String(3 * 86400) },
       notification: {
         icon: "https://naveedsher96-oss.github.io/RP-Housing-PWA/icon-192.png",
         ...(emergency ? { requireInteraction: true, vibrate: [700, 250, 700, 250, 700, 250, 700], tag: "rphs-emergency", renotify: true } : {}),
@@ -862,8 +864,39 @@ function pushMessage(token, title, body, category) {
   };
 }
 
-// Sends a push notification to the target user's registered device whenever an
+// Every device a member is signed in on: fcm_tokens/{uid}.tokens holds one entry
+// per phone/computer (newest first, at most MAX_DEVICES); `token` is the older
+// single-device field, still read so nobody misses alerts before they reopen the app.
+const MAX_DEVICES = 10;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function deviceTokens(tokenDoc) {
+  if (!tokenDoc || !tokenDoc.exists) return [];
+  const d = tokenDoc.data() || {};
+  const map = d.tokens && typeof d.tokens === "object" ? d.tokens : {};
+  const at = (v) => (v && v.updatedAt && v.updatedAt.toMillis ? v.updatedAt.toMillis() : 0);
+  const list = Object.keys(map).sort((a, b) => at(map[b]) - at(map[a])).slice(0, MAX_DEVICES);
+  if (d.token && !list.includes(d.token)) list.push(d.token);
+  return list;
+}
+function isDeadToken(err) {
+  const code = err && err.code;
+  return code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token";
+}
+// Removes tokens FCM says are gone (app uninstalled, site data cleared).
+async function dropTokens(ref, dead) {
+  if (!dead.length) return;
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const args = [];
+  dead.forEach((t) => args.push(new admin.firestore.FieldPath("tokens", t), admin.firestore.FieldValue.delete()));
+  if (dead.includes(snap.data().token)) args.push("token", admin.firestore.FieldValue.delete());
+  await ref.update(...args);
+}
+
+// Sends a push notification to each of the target user's devices whenever an
 // in-app notification document is created under users/{uid}/notifications.
+// A "Send a test alert" from Profile (testPush) waits 15 seconds so the member
+// has time to close the app and see a real background alert.
 exports.sendPushOnNotification = onDocumentCreated(
   "users/{uid}/notifications/{notificationId}",
   async (event) => {
@@ -871,25 +904,21 @@ exports.sendPushOnNotification = onDocumentCreated(
     if (!data || !data.title) return;
 
     const uid = event.params.uid;
-    const tokenDoc = await admin.firestore().collection("fcm_tokens").doc(uid).get();
-    if (!tokenDoc.exists) return;
-    if (await isPushMuted(uid, data)) return;
+    const ref = admin.firestore().collection("fcm_tokens").doc(uid);
+    if (data.testPush !== true && (await isPushMuted(uid, data))) return;
+    if (data.testPush === true) await sleep(15000);
+    const tokens = deviceTokens(await ref.get());
+    if (!tokens.length) return;
 
-    const token = tokenDoc.data().token;
-    if (!token) return;
-
-    try {
-      await admin.messaging().send(pushMessage(token, data.title, data.body || data.text || "", notifCategory(data)));
-    } catch (err) {
-      if (
-        err.code === "messaging/registration-token-not-registered" ||
-        err.code === "messaging/invalid-registration-token"
-      ) {
-        await tokenDoc.ref.delete();
-      } else {
-        console.error("Push send failed for", uid, err);
-      }
-    }
+    const category = notifCategory(data);
+    const res = await admin.messaging().sendEach(tokens.map((t) => pushMessage(t, data.title, data.body || data.text || "", category)));
+    const dead = [];
+    res.responses.forEach((r, i) => {
+      if (r.success) return;
+      if (isDeadToken(r.error)) dead.push(tokens[i]);
+      else console.error("Push send failed for", uid, r.error);
+    });
+    await dropTokens(ref, dead);
   }
 );
 
@@ -998,7 +1027,6 @@ exports.emergencyAllClear = onDocumentUpdated(
 // alert is the normal emergency notification, so repeats start one interval later.
 const ALARM_REPEAT_SECONDS = 20;
 const ALARM_REPEAT_ROUNDS = 9; // about 3 minutes
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 exports.emergencyAlarmRepeat = onDocumentCreated(
   { document: "announcements/{id}", timeoutSeconds: 300 },
@@ -1011,10 +1039,10 @@ exports.emergencyAlarmRepeat = onDocumentCreated(
     const body = String(n.content || "Open the RPHS app now.").slice(0, 200) + "\n\nOpen the app and tap \"I've seen it\" to stop the alarm.";
     const members = await db.collection("users").where("approved", "==", true).get();
     const uids = members.docs.filter((d) => d.id !== n.createdBy && d.data().suspended !== true).map((d) => d.id);
-    const tokens = {};
+    const tokens = {}; // uid -> that member's device tokens
     await Promise.all(uids.map(async (uid) => {
-      const t = await db.collection("fcm_tokens").doc(uid).get();
-      if (t.exists && t.data().token) tokens[uid] = t.data().token;
+      const list = deviceTokens(await db.collection("fcm_tokens").doc(uid).get());
+      if (list.length) tokens[uid] = list;
     }));
 
     for (let round = 1; round <= ALARM_REPEAT_ROUNDS; round++) {
@@ -1024,12 +1052,16 @@ exports.emergencyAlarmRepeat = onDocumentCreated(
       const acked = new Set((await ref.collection("acks").get()).docs.map((d) => d.id));
       const left = Object.keys(tokens).filter((uid) => !acked.has(uid));
       if (!left.length) return;
-      for (let i = 0; i < left.length; i += 500) {
-        const chunk = left.slice(i, i + 500);
-        const res = await admin.messaging().sendEach(chunk.map((uid) => pushMessage(tokens[uid], title, body, "emergency")));
+      const sends = [];
+      left.forEach((uid) => tokens[uid].forEach((t) => sends.push({ uid, t })));
+      for (let i = 0; i < sends.length; i += 500) {
+        const chunk = sends.slice(i, i + 500);
+        const res = await admin.messaging().sendEach(chunk.map((s) => pushMessage(s.t, title, body, "emergency")));
         res.responses.forEach((r, j) => {
-          const code = r.error && r.error.code;
-          if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") delete tokens[chunk[j]];
+          if (!isDeadToken(r.error)) return;
+          const s = chunk[j];
+          tokens[s.uid] = tokens[s.uid].filter((t) => t !== s.t);
+          if (!tokens[s.uid].length) delete tokens[s.uid];
         });
       }
     }
