@@ -3,7 +3,7 @@
       "target": {
         "namespace": "android_app",
         "package_name": "pk.rphs.society",
-        "sha256_cert_fingerprints": ["34:2F:AE:2B:A8:19:4D:74:17:12:76:5F:80:D3:DE:54:E5:12:B6:17:C3:15:0F:9A:C0:5A:69:1B:15:83:65:37"]
+        "sha256_cert_fingerprints": ["34:2F:AE:2B:A8:19:4D:74:17:12:76:5F:80:D3:DE:54:E5:12:B6:17:C3:15:0F:9A:C0:5A:69:1B:15:83:65:37", "75:43:4D:ED:B3:72:8E:D1:8E:7D:C6:65:C1:1F:93:01:A1:11:A4:FD:BF:78:55:01:3E:52:E3:2F:95:CD:5C:E5"]
       }
     },
     {
