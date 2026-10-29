@@ -34,6 +34,12 @@ service cloud.firestore {
     function isMember() {
       return isStaff() || isApprovedResident();
     }
+    // Restricted for unpaid bills (users/{uid}.restricted, set by admin after a
+    // final notice): may still read, pay bills and raise the Emergency Alarm,
+    // but may not vote, lodge complaints, post listings or comment.
+    function activeResident() {
+      return isApprovedResident() && me().get('restricted', false) != true;
+    }
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
@@ -70,7 +76,8 @@ service cloud.firestore {
     // must never be able to write them on their own profile.
     function privilegedUserFields() {
       return ['role', 'approved', 'suspended', 'superAdmin', 'boardMember',
-              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason'];
+              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason',
+              'restricted', 'restrictedReason', 'restrictedAt', 'restrictedBy', 'finalNotice'];
     }
     match /users/{uid} {
       // Own profile, any staff member, or a board member (needed to broadcast notices)
@@ -82,7 +89,8 @@ service cloud.firestore {
         && request.resource.data.role == 'resident'
         && request.resource.data.approved == false
         && !request.resource.data.keys().hasAny(['suspended', 'superAdmin', 'boardMember',
-              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason']);
+              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason',
+              'restricted', 'restrictedReason', 'restrictedAt', 'restrictedBy', 'finalNotice']);
 
       // Self-update: cannot escalate role, make yourself super admin or board,
       // self-approve/unsuspend, or opt out of recurring bills.
@@ -145,7 +153,7 @@ service cloud.firestore {
       // its author, admin/superadmin, or the board member who posted the notice.
       match /comments/{commentId} {
         allow read: if isMember();
-        allow create: if (isApprovedResident() || isStaff() || isBoard())
+        allow create: if (activeResident() || isStaff() || isBoard())
           && request.resource.data.get('uid', '') == request.auth.uid
           && request.resource.data.get('text', '') is string
           && request.resource.data.text.size() > 0
@@ -166,7 +174,7 @@ service cloud.firestore {
       allow delete: if isAdmin() || isSuperAdmin() || ownsPost();
       // Publishers may edit; everyone else may only set or change their own vote while the poll is open.
       allow update: if isAdmin() || isSuperAdmin() || ownsPost()
-        || (isMember()
+        || ((isStaff() || activeResident())
             && onlyChanges(['votes'])
             && resource.data.get('closed', false) != true
             && request.resource.data.votes.diff(resource.data.get('votes', {})).affectedKeys().hasOnly([request.auth.uid]));
@@ -175,7 +183,7 @@ service cloud.firestore {
     // ---------- tickets (complaints) ----------
     match /tickets/{id} {
       allow read: if isStaff() || isApprovedResident() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if (isApprovedResident() || isStaff()) && request.resource.data.uid == request.auth.uid;
+      allow create: if (activeResident() || isStaff()) && request.resource.data.uid == request.auth.uid;
       // Admin manages (status, department, notes, archive); super admin restores;
       // the resident who lodged it may rate or reopen it once resolved/closed.
       allow update: if isAdmin() || superAdminRestore() || residentRates() || residentReopens();
@@ -367,7 +375,7 @@ service cloud.firestore {
     // approved member (lost & found only; residents cannot read the member list).
     match /listings/{id} {
       allow read: if isStaff() || isApprovedResident();
-      allow create: if (isStaff() || isApprovedResident())
+      allow create: if (isStaff() || activeResident())
         && request.resource.data.get('createdBy', '') == request.auth.uid
         && request.resource.data.get('status', 'open') == 'open'
         && request.resource.data.get('isDeleted', false) != true
