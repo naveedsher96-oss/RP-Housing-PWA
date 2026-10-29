@@ -1,7 +1,9 @@
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 
 admin.initializeApp();
 setGlobalOptions({ region: "asia-south1" });
@@ -1011,11 +1013,17 @@ exports.emergencyAllClear = onDocumentUpdated(
   async (event) => {
     const before = event.data && event.data.before.data();
     const after = event.data && event.data.after.data();
-    if (!before || !after || after.emergency !== true || after.alertAll !== true) return;
+    if (!before || !after || after.emergency !== true || (after.alertAll !== true && !after.familyOf)) return;
     if (before.resolvedAt || !after.resolvedAt) return;
     const by = after.resolvedBy ? ` by ${String(after.resolvedBy).slice(0, 60)}` : "";
-    await notifyAllMembers(admin.firestore(), null, "All clear: " + String(after.title || "").slice(0, 90),
-      `This emergency has been marked resolved${by}.`, "notice", "emergency");
+    const title = "All clear: " + String(after.title || "").slice(0, 90);
+    const body = `This emergency has been marked resolved${by}.`;
+    if (after.familyOf) {
+      const db = admin.firestore();
+      await notifyUids(db, await familyAlarmTargets(db, after), title, body, "notice", "emergency");
+      return;
+    }
+    await notifyAllMembers(admin.firestore(), null, title, body, "notice", "emergency");
   }
 );
 
@@ -1037,8 +1045,13 @@ exports.emergencyAlarmRepeat = onDocumentCreated(
     const ref = event.data.ref;
     const title = "🚨 EMERGENCY: " + String(n.title || "").slice(0, 90);
     const body = String(n.content || "Open the RPHS app now.").slice(0, 200) + "\n\nOpen the app and tap \"I've seen it\" to stop the alarm.";
-    const members = await db.collection("users").where("approved", "==", true).get();
-    const uids = members.docs.filter((d) => d.id !== n.createdBy && d.data().suspended !== true).map((d) => d.id);
+    let uids;
+    if (n.familyOf) {
+      uids = (await familyAlarmTargets(db, n)).filter((uid) => uid !== n.createdBy);
+    } else {
+      const members = await db.collection("users").where("approved", "==", true).get();
+      uids = members.docs.filter((d) => d.id !== n.createdBy && d.data().suspended !== true).map((d) => d.id);
+    }
     const tokens = {}; // uid -> that member's device tokens
     await Promise.all(uids.map(async (uid) => {
       const list = deviceTokens(await db.collection("fcm_tokens").doc(uid).get());
@@ -1065,6 +1078,131 @@ exports.emergencyAlarmRepeat = onDocumentCreated(
         });
       }
     }
+  }
+);
+
+// ---------- Family Emergency Access ----------
+// A resident shares one 6-digit code (Profile > Family Emergency Access) with
+// family members on other phones. They enter it on the sign-in screen, are
+// signed in anonymously and linked to the house in family/{uid}. Family phones
+// only see the SOS screen; their alarm (announcement with familyOf: residentUid)
+// goes to management, the resident and the house's other family phones. It
+// keeps working while the resident is suspended.
+const FAMILY_MAX_PHONES = 6;
+const FAMILY_MAX_FAILS = 20; // wrong codes per hour from one connection
+const STAFF_ROLES = ["admin", "board", "superadmin"];
+
+// The resident's code: created on first ask, replaced on renew (the old code
+// stops working; phones already linked stay linked).
+exports.familyCode = onCall(async (req) => {
+  const uid = req.auth && req.auth.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Please sign in again.");
+  const db = admin.firestore();
+  const userRef = db.collection("users").doc(uid);
+  const u = (await userRef.get()).data();
+  if (!u || (u.approved !== true && !STAFF_ROLES.includes(u.role))) {
+    throw new HttpsError("permission-denied", "Only approved members can add family phones.");
+  }
+  if (u.familyCode && !(req.data && req.data.renew)) return { code: u.familyCode };
+  for (let i = 0; i < 20; i++) {
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+    const ref = db.collection("familyCodes").doc(code);
+    const made = await db.runTransaction(async (tx) => {
+      if ((await tx.get(ref)).exists) return false;
+      tx.set(ref, { residentUid: uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+      if (u.familyCode) tx.delete(db.collection("familyCodes").doc(String(u.familyCode)));
+      tx.update(userRef, { familyCode: code });
+      return true;
+    });
+    if (made) return { code };
+  }
+  throw new HttpsError("unavailable", "Could not make a code. Please try again.");
+});
+
+// Links an anonymously signed-in phone to the house whose code it entered.
+exports.linkFamilyPhone = onCall(async (req) => {
+  const uid = req.auth && req.auth.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Please try again.");
+  if (req.auth.token.firebase.sign_in_provider !== "anonymous") {
+    throw new HttpsError("failed-precondition", "This phone is signed in as a member. Sign out first.");
+  }
+  const code = String((req.data && req.data.code) || "").replace(/\D/g, "");
+  const name = String((req.data && req.data.name) || "").replace(/\s+/g, " ").trim().slice(0, 40);
+  if (!/^\d{6}$/.test(code)) throw new HttpsError("invalid-argument", "The code has 6 digits.");
+  if (!name) throw new HttpsError("invalid-argument", "Please type your name.");
+
+  const db = admin.firestore();
+  const raw = req.rawRequest || {};
+  const ip = String((raw.headers && raw.headers["x-forwarded-for"]) || raw.ip || uid).split(",")[0].trim();
+  const limitRef = db.collection("familyLinkAttempts").doc(crypto.createHash("sha256").update(ip).digest("hex").slice(0, 40));
+  const lim = (await limitRef.get()).data();
+  const fails = lim && Date.now() - lim.since < 3600000 ? lim.fails : 0;
+  if (fails >= FAMILY_MAX_FAILS) {
+    throw new HttpsError("resource-exhausted", "Too many wrong codes. Please wait an hour and try again.");
+  }
+  const wrongCode = async () => {
+    await limitRef.set({ since: fails ? lim.since : Date.now(), fails: fails + 1 });
+    return new HttpsError("not-found", "That code is not right. Ask your family member for the code in their Profile.");
+  };
+
+  const codeDoc = await db.collection("familyCodes").doc(code).get();
+  if (!codeDoc.exists) throw await wrongCode();
+  const residentUid = codeDoc.data().residentUid;
+  const r = (await db.collection("users").doc(residentUid).get()).data();
+  if (!r || r.familyCode !== code) throw await wrongCode();
+
+  const linked = await db.collection("family").where("residentUid", "==", residentUid).get();
+  if (linked.size >= FAMILY_MAX_PHONES && !linked.docs.some((d) => d.id === uid)) {
+    throw new HttpsError("resource-exhausted", `This house already has ${FAMILY_MAX_PHONES} family phones. Ask ${r.name || "the resident"} to remove one in their Profile.`);
+  }
+  await db.collection("family").doc(uid).set({
+    residentUid,
+    residentName: r.name || "",
+    residentPhone: r.phone || "",
+    house: r.house || "",
+    name,
+    linkedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return { house: r.house || "", residentName: r.name || "" };
+});
+
+// Who a family alarm reaches: management (admin, board, super admin), the
+// resident, and every family phone of that house.
+async function familyAlarmTargets(db, n) {
+  const [roles, boardFlag, saFlag, fam] = await Promise.all([
+    db.collection("users").where("role", "in", STAFF_ROLES).get(),
+    db.collection("users").where("boardMember", "==", true).get(),
+    db.collection("users").where("superAdmin", "==", true).get(),
+    db.collection("family").where("residentUid", "==", n.familyOf).get(),
+  ]);
+  const uids = new Set([n.familyOf]);
+  roles.docs.concat(boardFlag.docs, saFlag.docs).forEach((d) => {
+    const u = d.data();
+    if (u.approved !== false && u.suspended !== true) uids.add(d.id);
+  });
+  fam.docs.forEach((d) => uids.add(d.id));
+  return [...uids];
+}
+
+async function notifyUids(db, uids, title, body, type, category) {
+  for (let i = 0; i < uids.length; i += 400) {
+    const batch = db.batch();
+    uids.slice(i, i + 400).forEach((uid) => {
+      batch.set(db.collection("users").doc(uid).collection("notifications").doc(), { ...notificationDoc(title, body, type), category });
+    });
+    await batch.commit();
+  }
+}
+
+exports.familyEmergencyAlert = onDocumentCreated(
+  "announcements/{id}",
+  async (event) => {
+    const n = event.data && event.data.data();
+    if (!n || n.emergency !== true || !n.familyOf || n.createdByRole !== "family") return;
+    const db = admin.firestore();
+    const uids = (await familyAlarmTargets(db, n)).filter((uid) => uid !== n.createdBy);
+    await notifyUids(db, uids, "🚨 EMERGENCY: " + String(n.title || "").slice(0, 90),
+      String(n.content || "Open the RPHS app now.").slice(0, 300), "error", "emergency");
   }
 );
 

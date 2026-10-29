@@ -18,6 +18,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
 <!-- jsPDF is loaded on demand by ensureJsPDF() -->
 
@@ -641,6 +642,29 @@
   .onboard-wrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; max-width:480px; margin:0 auto;}
   .onboard-title{font-family:var(--font-display); font-size:26px; font-weight:600; text-align:center; margin-bottom:6px;}
   .onboard-sub{text-align:center; color:var(--text-muted); font-size:13.5px; margin-bottom:24px;}
+  .fam-sos-pill{ display:inline-flex; align-items:center; justify-content:center; background:var(--danger); color:#fff; font-size:11px; font-weight:900; letter-spacing:.06em; border-radius:6px; padding:3px 6px; line-height:1; }
+  .fam-sos-pill.big{ font-size:18px; padding:10px 12px; border-radius:12px; }
+  .fam-or{ display:flex; align-items:center; gap:10px; margin:18px 0 12px; color:var(--text-muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+  .fam-or::before, .fam-or::after{ content:''; flex:1; height:1px; background:var(--border); }
+  .fam-entry-btn{ display:flex; align-items:center; justify-content:center; gap:8px; background:var(--danger-soft); color:var(--danger); border:1px solid rgba(229,97,90,0.6); font-weight:800; }
+  .fam-fine{ text-align:center; font-size:12px; color:var(--text-muted); margin-top:14px; line-height:1.5; }
+  .fam-code-input{ font-size:26px; letter-spacing:.4em; text-align:center; font-weight:800; }
+  .fam-wrap{ max-width:480px; margin:0 auto; padding:calc(14px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); min-height:100vh; display:flex; flex-direction:column; }
+  .fam-top{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .fam-top img{ width:40px; height:40px; border-radius:10px; }
+  .fam-title{ font-family:var(--font-display); font-size:18px; font-weight:700; }
+  .fam-sub{ font-size:13px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fam-tag{ flex:none; font-size:11px; font-weight:800; letter-spacing:.06em; color:var(--danger); border:1px solid rgba(229,97,90,0.6); border-radius:8px; padding:3px 7px; }
+  .fam-lead{ text-align:center; font-size:14px; color:var(--text-muted); line-height:1.5; margin:6px 0 18px; }
+  .fam-sos{ align-self:center; width:min(62vw, 220px); height:min(62vw, 220px); border-radius:50%; border:none; background:radial-gradient(circle at 35% 30%, #ff8a80, #e5483f 55%, #b3261e); color:#fff; font:inherit; font-size:44px; font-weight:900; letter-spacing:.08em; cursor:pointer; box-shadow:0 0 0 12px rgba(229,97,90,0.16), 0 0 0 26px rgba(229,97,90,0.08), 0 12px 30px rgba(179,38,30,0.45); animation:famPulse 2s ease-in-out infinite; margin-bottom:26px; }
+  .fam-sos:active{ transform:scale(.96); }
+  @keyframes famPulse{ 0%,100%{ box-shadow:0 0 0 12px rgba(229,97,90,0.16), 0 0 0 26px rgba(229,97,90,0.08), 0 12px 30px rgba(179,38,30,0.45);} 50%{ box-shadow:0 0 0 16px rgba(229,97,90,0.22), 0 0 0 34px rgba(229,97,90,0.06), 0 12px 30px rgba(179,38,30,0.45);} }
+  .fam-q{ text-align:center; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); margin-bottom:10px; }
+  .fam-types{ display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-bottom:12px; }
+  .fam-calls{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+  .fam-calls .btn{ text-decoration:none; text-align:center; }
+  .fam-code{ text-align:center; font-size:34px; font-weight:900; letter-spacing:.15em; color:var(--accent-2); border:2px dashed var(--border); border-radius:14px; padding:12px; }
+  .fam-row{ display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid var(--border-soft); }
   .toggle-auth-mode{text-align:center; margin-top:16px; font-size:13px; color:var(--accent-2); cursor:pointer; text-decoration:underline;}
   .auth-msg{border-radius:var(--radius-sm); padding:11px 13px; font-size:13px; font-weight:600; margin-bottom:14px; border:1px solid var(--border);}
   .auth-msg.error{background:var(--danger-soft); color:var(--danger);}
@@ -851,6 +875,10 @@
   // Application State Variables
   let currentUserProfile = null;
   let registrationInProgress = false;
+  // Family Emergency Access (see FAMILY EMERGENCY ACCESS below)
+  let familyProfile = null;   // family/{uid} of this phone, null when not a family phone
+  let familyEntry = false;    // showing the code screen from the sign-in screen
+  let familyLinking = false;  // signing in / linking: onAuthStateChanged waits
   let authMode = 'login'; // 'login' | 'register' | 'reset'
   let authMessage = null; // { type: 'error'|'success'|'info', text }
   let wasSignedIn = false;
@@ -955,6 +983,15 @@
     auth.onAuthStateChanged(async (user) => {
       if (registrationInProgress) return; 
 
+      if (user && user.isAnonymous) {
+        // A family phone (Family Emergency Access): never signed out by the app.
+        currentUserProfile = null;
+        if (familyLinking) return; // the code screen finishes linking and renders
+        await loadFamilyProfile(user);
+        render();
+        return;
+      }
+
       if (user) {
         try {
           const userDoc = await db.collection('users').doc(user.uid).get();
@@ -978,6 +1015,7 @@
         }
       } else {
         currentUserProfile = null;
+        familyProfile = null;
         stopEmergencyWatch();
         notifications = [];
         notifsLoadedAt = 0;
@@ -1033,7 +1071,8 @@
   // used. `token` (the latest device) is kept for older code.
   let deviceToken = '';
   function saveDeviceToken() {
-    if (!messaging || !currentUserProfile || !auth.currentUser) return Promise.resolve('');
+    const who = currentUserProfile || familyProfile;
+    if (!messaging || !who || !auth.currentUser) return Promise.resolve('');
     if (!FCM_VAPID_KEY) { console.log('FCM VAPID key not configured; push disabled.'); return Promise.resolve(''); }
     if (!('Notification' in window) || Notification.permission !== 'granted') return Promise.resolve('');
     const uid = auth.currentUser.uid;
@@ -1047,8 +1086,8 @@
           token: currentToken,
           tokens: { [currentToken]: { updatedAt: now, device: pushDeviceLabel() } },
           uid,
-          name: currentUserProfile.name,
-          role: currentUserProfile.role,
+          name: who.name || '',
+          role: who.role || 'family',
           updatedAt: now
         }, { merge: true }).then(() => currentToken);
       })
@@ -1188,6 +1227,14 @@
   function render() {
     initialRenderDone = true;
     appEl.classList.add('no-tabbar'); // the main shell below removes it
+    if (auth && auth.currentUser && auth.currentUser.isAnonymous && familyProfile) {
+      renderFamilyApp();
+      return;
+    }
+    if (familyEntry || (auth && auth.currentUser && auth.currentUser.isAnonymous)) {
+      renderFamilyEntry();
+      return;
+    }
     if (!auth || !auth.currentUser || !currentUserProfile) {
       renderOnboarding();
       return;
@@ -1681,6 +1728,12 @@
         <div class="toggle-auth-mode" id="toggle-auth-btn">
           ${isReset ? 'Back to Sign In' : isLogin ? "Don't have an account? Register here" : 'Already registered? Sign In'}
         </div>
+
+        ${isLogin ? `
+          <div class="fam-or"><span>or</span></div>
+          <button type="button" class="btn block fam-entry-btn" onclick="openFamilyEntry()"><span class="fam-sos-pill">SOS</span> Family Emergency Access</button>
+          <div class="fam-fine" style="margin-top:8px;">For family members with an access code. No account needed.</div>
+        ` : ''}
       </div>
     `;
 
@@ -2069,6 +2122,7 @@
           <button class="btn secondary block" onclick="openEditBiodataModal()" style="margin-top:16px;">Update Biodata</button>
           ${(bioSupported() && bioEnrolled()) ? `<button class="btn secondary block" onclick="disableBiometricSignIn()" style="margin-top:10px;">Disable Fingerprint Sign-In</button>` : ''}
         </div>
+        ${renderFamilyAccessCard()}
         ${renderPreferencesCard()}
       `;
     }
@@ -2794,6 +2848,7 @@
     if (activeTab === 'archive' && isStaff()) loadArchiveAndAudit();
     if (activeTab === 'biodata' && isStaff()) loadAllResidents();
     if (activeTab === 'approvals' && (isAdmin || isSuperAdmin())) loadPendingResidents();
+    if (activeTab === 'profile') loadFamilyPhones();
   }
 
   // --- SUBCOLLECTION NOTIFICATION SYSTEM ---
@@ -3242,7 +3297,7 @@
   function loadNotices() {
     if (!db) return;
     fetchFast(db.collection('announcements').orderBy('createdAt', 'desc'), async (snapshot, fromCache) => {
-      noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(n => !n.isDeleted);
+      noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(n => !n.isDeleted && emergencyForMe(n));
       if (fromCache) { renderNoticesList(); return; }
       const threads = await Promise.all(noticesList.map(n =>
         db.collection('announcements').doc(n.id).collection('comments').orderBy('createdAt', 'asc').get()
@@ -3669,7 +3724,11 @@
   // a resident's alarm is fanned out by the emergencyAlert Cloud Function (alertAll).
   function canNotifyEveryone() { return !!(isStaff() || isBoard()); }
   function raisedByMe(n) { return !!(auth.currentUser && n.createdBy === auth.currentUser.uid); }
-  function canResolveEmergency(n) { return canBroadcastEmergency() || raisedByMe(n); }
+  function canResolveEmergency(n) { return canBroadcastEmergency() || raisedByMe(n) || familyOfMe(n); }
+  // A family member's alarm (Family Emergency Access) is for management, the
+  // resident and that house's family phones only.
+  function familyOfMe(n) { return !!(n.familyOf && auth.currentUser && n.familyOf === auth.currentUser.uid); }
+  function emergencyForMe(n) { return !n.familyOf || !!familyProfile || !!isStaff() || !!isBoard() || familyOfMe(n); }
   function emergencyTypeMeta(t) {
     return EMERGENCY_TYPES.find(x => x[0] === t) || EMERGENCY_TYPES[EMERGENCY_TYPES.length - 1];
   }
@@ -3691,7 +3750,7 @@
     if (!db) return;
     try {
       const snap = await db.collection('announcements').orderBy('createdAt', 'desc').limit(15).get();
-      recentNotices = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(n => !n.isDeleted);
+      recentNotices = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(n => !n.isDeleted && emergencyForMe(n));
       activeEmergencies = recentNotices.filter(isActiveEmergency);
     } catch (e) { console.error('Emergency load failed:', e); }
   }
@@ -3718,6 +3777,7 @@
 
   function emergencyRaisedBy(n) {
     if (n.createdByRole === 'resident') return 'Raised by ' + (n.createdByName || 'a resident') + (n.createdByHouse ? ' (' + n.createdByHouse + ')' : '');
+    if (n.createdByRole === 'family') return 'Raised by ' + (n.createdByName || 'a family member') + ' (family of ' + [n.familyOfName, n.createdByHouse].filter(Boolean).join(', ') + ')';
     return postedByLabel(n);
   }
   function emergencyButtonHtml() {
@@ -3924,21 +3984,22 @@
     const n = activeEmergencies.find(x => x.id === id) || noticesList.find(x => x.id === id);
     if (!n || !canResolveEmergency(n)) return;
     const manager = canBroadcastEmergency();
+    const who = n.familyOf ? 'management and the family' : 'everyone';
     const ok = await confirmSheet(manager
-      ? { title: 'Mark as resolved?', body: `"${n.title}" will be unpinned from everyone's dashboard and members get an all-clear notice.`, okLabel: 'Mark resolved' }
-      : { title: 'Cancel your alarm?', body: `"${n.title}" will be unpinned and everyone gets an all-clear notice. Do this once you are safe or if it was raised by mistake.`, okLabel: 'Cancel alarm' });
+      ? { title: 'Mark as resolved?', body: `"${n.title}" will be unpinned from everyone's dashboard and ${n.familyOf ? 'management and the family get' : 'members get'} an all-clear notice.`, okLabel: 'Mark resolved' }
+      : { title: 'Cancel the alarm?', body: `"${n.title}" will be unpinned and ${who} get an all-clear notice. Do this once you are safe or if it was raised by mistake.`, okLabel: 'Cancel alarm' });
     if (!ok) return;
     try {
       await db.collection('announcements').doc(id).update({
         resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        resolvedBy: currentUserProfile.name || ''
+        resolvedBy: (currentUserProfile || familyProfile || {}).name || ''
       });
-      // Alarms raised with alertAll get their all-clear from the Cloud Function too.
-      if (!n.alertAll) await broadcastNotification('All clear: ' + n.title, 'Management has marked this emergency as resolved.', 'emergency', 'notice');
+      // Alarms raised with alertAll or by family get their all-clear from the Cloud Function.
+      if (!n.alertAll && !n.familyOf) await broadcastNotification('All clear: ' + n.title, 'Management has marked this emergency as resolved.', 'emergency', 'notice');
       logAudit('emergency', id, 'resolve', n.title);
       toast('Marked as resolved');
       activeEmergencies = activeEmergencies.filter(x => x.id !== id);
-      if (activeTab === 'dashboard') loadData(); else loadNotices();
+      if (familyProfile) render(); else if (activeTab === 'dashboard') loadData(); else loadNotices();
     } catch (err) {
       toast('Could not update: ' + err.message, 'bad');
     }
@@ -4891,7 +4952,7 @@
       ackAlarm(alarmShowingId);
       // Tells the server to stop repeating the alarm push to this phone.
       if (db && auth.currentUser) db.collection('announcements').doc(alarmShowingId).collection('acks').doc(auth.currentUser.uid)
-        .set({ at: firebase.firestore.FieldValue.serverTimestamp(), name: currentUserProfile ? currentUserProfile.name || '' : '' })
+        .set({ at: firebase.firestore.FieldValue.serverTimestamp(), name: (currentUserProfile || familyProfile || {}).name || '' })
         .catch(e => console.warn('Alarm ack not saved:', e && e.message));
     }
     alarmShowingId = null;
@@ -4905,7 +4966,7 @@
   };
 
   function onEmergencySnapshot(snap) {
-    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(emergencyForMe);
     const active = all.filter(isActiveEmergency);
     if (alarmShowingId && !String(alarmShowingId).startsWith('test') && !active.some(n => n.id === alarmShowingId)) {
       const gone = all.find(n => n.id === alarmShowingId);
@@ -4922,14 +4983,19 @@
     const before = activeEmergencies.map(n => n.id).join(',');
     activeEmergencies = active.sort((a, b) => (toDate(b.createdAt) || new Date()) - (toDate(a.createdAt) || new Date()));
     // The first snapshot only mirrors what the dashboard already loaded.
-    if (emergencyWatchPrimed && before !== activeEmergencies.map(n => n.id).join(',') && activeTab === 'dashboard') loadData();
+    const changed = before !== activeEmergencies.map(n => n.id).join(',');
+    if (familyProfile) { if (changed) render(); }
+    else if (emergencyWatchPrimed && changed && activeTab === 'dashboard') loadData();
     emergencyWatchPrimed = true;
   }
   function startEmergencyWatch() {
     stopEmergencyWatch();
-    if (!db || !canRaiseEmergency()) return;
+    if (!db || !(canRaiseEmergency() || familyProfile)) return;
     try {
-      emergencyUnsub = db.collection('announcements').where('emergency', '==', true)
+      const q = familyProfile
+        ? db.collection('announcements').where('familyOf', '==', familyProfile.residentUid)
+        : db.collection('announcements').where('emergency', '==', true);
+      emergencyUnsub = q
         .onSnapshot(onEmergencySnapshot, e => console.warn('Emergency watch stopped:', e && e.message));
     } catch (e) { console.warn('Emergency watch failed:', e && e.message); }
   }
@@ -4940,6 +5006,307 @@
     emergencyWatchPrimed = false;
     if (alarmShowingId) closeEmergencyAlarm();
   }
+
+  // --- FAMILY EMERGENCY ACCESS ---
+  // Family members on other phones get only the SOS button. The resident shares
+  // one 6-digit code from Profile; the family member taps "Family Emergency
+  // Access" on the sign-in screen, enters the code and their name, and the phone
+  // is signed in anonymously and linked to the house (family/{uid}, written by
+  // the linkFamilyPhone Cloud Function). There is no sign-out: the phone stays
+  // ready for an emergency. Their alarm (familyOf: residentUid) reaches
+  // management, the resident and the house's other family phones, and keeps
+  // working while the resident is suspended.
+  const FAMILY_TYPES = ['medical', 'fire', 'security', 'other'];
+  const FAMILY_CACHE_KEY = 'rphsFamily';
+  let familyTypePick = 'medical';
+  let familyMsg = null;
+
+  function familyFunctions() {
+    return firebase.app().functions('asia-south1');
+  }
+  function readFamilyCache(uid) {
+    try { const c = JSON.parse(localStorage.getItem(FAMILY_CACHE_KEY) || 'null'); return c && c.uid === uid ? c : null; } catch (_) { return null; }
+  }
+  function writeFamilyCache(p) {
+    try { if (p) localStorage.setItem(FAMILY_CACHE_KEY, JSON.stringify(p)); else localStorage.removeItem(FAMILY_CACHE_KEY); } catch (_) {}
+  }
+
+  // Loads this phone's link. Offline or slow, the saved copy keeps the SOS
+  // screen up; an alarm raised offline is sent when the signal returns.
+  async function loadFamilyProfile(user) {
+    try {
+      const doc = await db.collection('family').doc(user.uid).get();
+      familyProfile = doc.exists ? { uid: user.uid, ...doc.data(), linkedAt: null } : null;
+      writeFamilyCache(familyProfile);
+      if (!familyProfile) {
+        familyEntry = true;
+        familyMsg = { type: 'info', text: 'This phone is no longer linked to a house. Ask your family member for their code to link it again.' };
+      }
+    } catch (e) {
+      console.warn('Family link load failed:', e && e.message);
+      familyProfile = readFamilyCache(user.uid);
+      if (!familyProfile) familyEntry = true;
+    }
+    if (familyProfile) {
+      startEmergencyWatch();
+      saveDeviceToken();
+      if (!emergencyContacts) loadEmergencyContacts().then(() => { if (familyProfile) render(); });
+    }
+  }
+
+  window.openFamilyEntry = function() {
+    familyEntry = true;
+    familyMsg = null;
+    render();
+  };
+  window.closeFamilyEntry = function() {
+    familyEntry = false;
+    familyMsg = null;
+    authMessage = null;
+    // An unlinked family sign-in has nothing to keep.
+    if (auth.currentUser && auth.currentUser.isAnonymous) auth.signOut(); else render();
+  };
+
+  function familyErrorText(err) {
+    const code = String((err && err.code) || '');
+    if (code === 'auth/operation-not-allowed' || code === 'auth/admin-restricted-operation') return 'Family access is not switched on yet. Please tell the society admin.';
+    if (code === 'auth/network-request-failed' || code.endsWith('unavailable')) return 'No internet connection. Please connect and try again.';
+    const msg = String((err && err.message) || '');
+    // Server errors carry a readable message; bare codes (e.g. "internal") do not.
+    if (!msg || /^[a-z-]+$/.test(msg)) return 'Could not link this phone. Please try again.';
+    return msg;
+  }
+
+  function renderFamilyEntry() {
+    appEl.innerHTML = `
+      <div class="onboard-wrap fam-entry">
+        <div style="text-align:center; margin-bottom:12px;"><span class="fam-sos-pill big">SOS</span></div>
+        <div class="onboard-title">Family Emergency Access</div>
+        <div class="onboard-sub">Enter the 6-digit code your family member shared with you.</div>
+        <div id="auth-msg-box">${familyMsg ? `<div class="auth-msg ${familyMsg.type}">${escapeHtml(familyMsg.text)}</div>` : ''}</div>
+        <form id="fam-form" autocomplete="off">
+          <label for="fam-code">Access code</label>
+          <input type="text" id="fam-code" class="fam-code-input" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="000000" required />
+          <label for="fam-name">Your name</label>
+          <input type="text" id="fam-name" maxlength="40" placeholder="e.g. Ammi, Bilal (brother)" required />
+          <button type="submit" class="btn danger block" id="fam-link-btn" style="margin-top:20px;">Link &amp; Continue →</button>
+        </form>
+        <div class="fam-fine">This gives you the emergency button only. You will not see bills, notices or any private data.</div>
+        <div class="toggle-auth-mode" onclick="closeFamilyEntry()">← Back to sign in</div>
+      </div>`;
+    const codeEl = document.getElementById('fam-code');
+    codeEl.addEventListener('input', () => { codeEl.value = codeEl.value.replace(/\D/g, '').slice(0, 6); });
+    document.getElementById('fam-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = codeEl.value.replace(/\D/g, '');
+      const name = document.getElementById('fam-name').value.trim();
+      const btn = document.getElementById('fam-link-btn');
+      const box = document.getElementById('auth-msg-box');
+      const show = (type, text) => { familyMsg = { type, text }; box.innerHTML = `<div class="auth-msg ${type}">${escapeHtml(text)}</div>`; };
+      if (code.length !== 6) { show('error', 'The code has 6 digits.'); return; }
+      if (!name) { show('error', 'Please type your name.'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Linking…';
+      familyLinking = true;
+      try {
+        if (!auth.currentUser) await auth.signInAnonymously();
+        await familyFunctions().httpsCallable('linkFamilyPhone')({ code, name });
+        await loadFamilyProfile(auth.currentUser);
+        if (!familyProfile) throw new Error('Could not link this phone. Please try again.');
+        familyEntry = false;
+        familyMsg = null;
+        familyLinking = false;
+        render();
+        toast('This phone is linked to ' + (familyProfile.house || 'your house') + '.');
+        if (window.Notification && Notification.permission === 'default') setTimeout(() => window.familyTurnOnAlerts(), 600);
+      } catch (err) {
+        familyLinking = false;
+        btn.disabled = false;
+        btn.textContent = 'Link & Continue →';
+        show('error', familyErrorText(err));
+      }
+    });
+  }
+
+  window.familyTurnOnAlerts = function() {
+    if (iosNeedsHomeScreen() || !window.Notification) { if (isIOSDevice()) showIosPushHelp(); else toast('This browser cannot show alerts. Please use Chrome.', 'bad'); return; }
+    Promise.resolve(Notification.requestPermission()).then(p => {
+      if (p === 'granted') { saveDeviceToken(); toast('Alerts are on for this phone.'); }
+      render();
+    });
+  };
+
+  function familyAlarmCard(n) {
+    return `
+      <div class="emg-card">
+        ${emergencyTag(n)}
+        <h3>${escapeHtml(n.title || '')}</h3>
+        ${n.content ? `<p>${escapeHtml(n.content)}</p>` : ''}
+        <div class="emg-meta">${escapeHtml(emergencyRaisedBy(n))}${n.createdAt && timeAgo(n.createdAt) ? ' · ' + escapeHtml(timeAgo(n.createdAt)) : ''}</div>
+        ${raisedByMe(n) ? `<div class="emg-actions"><button class="btn sm secondary" onclick="resolveEmergency('${n.id}')">${icon('check')} Cancel alarm</button></div>` : ''}
+      </div>`;
+  }
+
+  function renderFamilyApp() {
+    const f = familyProfile;
+    const first = contactsToShow()[0];
+    const alertsOff = !(window.Notification && Notification.permission === 'granted');
+    appEl.innerHTML = `
+      <div class="fam-wrap">
+        <header class="fam-top">
+          <img src="icon-192.png" alt="" onerror="this.style.display='none'">
+          <div style="min-width:0; flex:1;">
+            <div class="fam-title">RPHS Emergency</div>
+            <div class="fam-sub">${escapeHtml([f.house, f.name].filter(Boolean).join(' · '))}</div>
+          </div>
+          <span class="fam-tag">FAMILY</span>
+        </header>
+        ${alertsOff ? `
+          <div class="push-banner">
+            <span style="font-size:14px; font-weight:600; color:var(--accent-2);">Turn on alerts so this phone rings when your family raises an alarm.</span>
+            <span style="display:flex; gap:6px; flex:none;"><button class="btn sm primary" onclick="familyTurnOnAlerts()">Turn on</button></span>
+          </div>` : ''}
+        ${activeEmergencies.map(familyAlarmCard).join('')}
+        <div class="fam-lead">Press the button in an emergency. Security, management and your family will be alerted instantly.</div>
+        <button type="button" class="fam-sos" onclick="familySOS()" aria-label="Send emergency alert">SOS</button>
+        <div class="fam-q">What's happening?</div>
+        <div class="fam-types" id="fam-types">
+          ${FAMILY_TYPES.map(t => { const m = emergencyTypeMeta(t); return `<button type="button" class="chip ${t === familyTypePick ? 'active' : ''}" data-type="${t}" onclick="pickFamilyType('${t}')">${m[2]} ${escapeHtml(t === 'other' ? 'Other' : m[1].split(' ')[0])}</button>`; }).join('')}
+        </div>
+        <input type="text" id="fam-note" maxlength="200" placeholder="Optional note, e.g. father fell, need ambulance" />
+        <div class="fam-calls">
+          ${first && first.phone ? `<a class="btn secondary" href="${escapeHtml(telHref(first.phone))}">📞 ${escapeHtml(first.label || first.phone)}</a>` : ''}
+          ${f.residentPhone ? `<a class="btn secondary" href="${escapeHtml(telHref(f.residentPhone))}">📞 Call ${escapeHtml(String(f.residentName || 'family').split(' ')[0])}</a>` : ''}
+        </div>
+        <button type="button" class="btn secondary block" style="margin-top:10px;" onclick="openEmergencyContactsModal()">All emergency contacts</button>
+        <div class="fam-fine">Emergency access only · linked to ${escapeHtml(f.house || 'your house')}${f.residentName ? ' (' + escapeHtml(f.residentName) + ')' : ''}</div>
+      </div>`;
+  }
+
+  window.pickFamilyType = function(t) {
+    familyTypePick = t;
+    document.querySelectorAll('#fam-types .chip').forEach(c => c.classList.toggle('active', c.getAttribute('data-type') === t));
+  };
+
+  window.familySOS = async function() {
+    const f = familyProfile;
+    if (!f || !auth.currentUser) return;
+    unlockAlarmAudio();
+    const typeLabel = emergencyTypeMeta(familyTypePick)[1];
+    const note = (document.getElementById('fam-note') || {}).value || '';
+    const ok = await confirmSheet({
+      title: `Send ${typeLabel.toLowerCase()} alert?`,
+      body: `This will instantly alert society management, ${f.residentName || 'the resident'} and your family's phones for ${f.house || 'your house'}.`,
+      okLabel: '🚨 Send alert now',
+      danger: true
+    });
+    if (!ok) return;
+    try {
+      // Offline, the alarm is queued and sent as soon as the phone has signal.
+      db.collection('announcements').add({
+        title: `${typeLabel} at ${f.house || 'a house in RPHS'}`,
+        content: note.trim() || 'Please help or call for help. Open the RPHS app for details.',
+        emergency: true,
+        emergencyType: familyTypePick,
+        allowComments: false,
+        createdBy: auth.currentUser.uid,
+        createdByName: f.name || '',
+        createdByRole: 'family',
+        createdByHouse: f.house || '',
+        familyOf: f.residentUid,
+        familyOfName: f.residentName || '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(err => toast('Could not send the alert: ' + err.message, 'bad'));
+      toast(navigator.onLine === false ? 'No signal: the alert will be sent as soon as the phone connects. Call for help too.' : 'Alert sent. Management and your family are being alerted.');
+    } catch (err) {
+      toast('Could not send the alert: ' + err.message, 'bad');
+    }
+  };
+
+  // Profile card: the resident's code and the family phones linked to it.
+  let familyPhones = null;
+  function renderFamilyAccessCard() {
+    if (!currentUserProfile || !currentUserProfile.house) return '';
+    const code = currentUserProfile.familyCode;
+    return `
+      <div class="card fam-card" id="family-card" style="cursor:default; padding:18px;">
+        <div style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:16px;"><span class="fam-sos-pill">SOS</span> Family Emergency Access</div>
+        <div style="font-size:13px; color:var(--text-muted); margin:6px 0 12px; line-height:1.5;">Share this code with family members on their own phones. They get an emergency-only version of the app: just the SOS button, nothing else.</div>
+        ${code ? `
+          <div class="fam-code" aria-label="Family code">${escapeHtml(String(code).split('').join(' '))}</div>
+          <div style="font-size:12px; color:var(--text-muted); text-align:center; margin:6px 0 12px;">One code for your house. Renew it if it reaches the wrong person.</div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn primary" style="flex:1;" onclick="shareFamilyCode()">Share code</button>
+            <button class="btn secondary" onclick="makeFamilyCode(true)">Renew</button>
+          </div>` : `
+          <button class="btn primary block" id="fam-get-code" onclick="makeFamilyCode(false)">Get my family code</button>`}
+        <div class="dash-h" style="margin-top:16px;">Linked family phones</div>
+        <div id="family-list">${renderFamilyPhones()}</div>
+      </div>`;
+  }
+  function renderFamilyPhones() {
+    if (familyPhones === null) return '<div style="font-size:13px; color:var(--text-muted);">Loading…</div>';
+    if (!familyPhones.length) return '<div style="font-size:13px; color:var(--text-muted);">No family phones yet.</div>';
+    return familyPhones.map(p => `
+      <div class="fam-row">
+        <div style="min-width:0; flex:1;">
+          <div style="font-weight:700;">${escapeHtml(p.name || 'Family member')}</div>
+          <div style="font-size:12px; color:var(--text-muted);">${p.linkedAt && toDate(p.linkedAt) ? 'Joined ' + escapeHtml(toDate(p.linkedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })) : 'Linked'}</div>
+        </div>
+        <button class="btn sm secondary" style="color:var(--danger);" onclick="removeFamilyPhone('${p.id}')">Remove</button>
+      </div>`).join('');
+  }
+  function redrawFamilyCard() {
+    const el = document.getElementById('family-card');
+    if (el) el.outerHTML = renderFamilyAccessCard();
+  }
+  async function loadFamilyPhones() {
+    if (!db || !auth.currentUser || !currentUserProfile || !currentUserProfile.house) return;
+    try {
+      const snap = await db.collection('family').where('residentUid', '==', auth.currentUser.uid).get();
+      familyPhones = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (toDate(a.linkedAt) || 0) - (toDate(b.linkedAt) || 0));
+    } catch (e) {
+      console.warn('Family phones load failed:', e && e.message);
+      familyPhones = [];
+    }
+    const list = document.getElementById('family-list');
+    if (list) list.innerHTML = renderFamilyPhones();
+  }
+  window.makeFamilyCode = async function(renew) {
+    if (renew && !(await confirmSheet({ title: 'Make a new code?', body: 'The old code stops working for new phones. Family phones already linked stay linked.', okLabel: 'New code' }))) return;
+    const btn = document.getElementById('fam-get-code');
+    if (btn) { btn.disabled = true; btn.textContent = 'Making your code…'; }
+    try {
+      const res = await familyFunctions().httpsCallable('familyCode')({ renew: !!renew });
+      currentUserProfile.familyCode = res.data.code;
+      redrawFamilyCard();
+      if (renew) toast('New code ready');
+    } catch (err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Get my family code'; }
+      toast('Could not make the code: ' + (err.message || 'please try again'), 'bad');
+    }
+  };
+  window.shareFamilyCode = function() {
+    const code = currentUserProfile && currentUserProfile.familyCode;
+    if (!code) return;
+    const link = location.origin + location.pathname;
+    openWhatsAppShare(`*RPHS Family Emergency Access*\n\n1. Open ${link} on your phone (add it to your home screen).\n2. Tap "Family Emergency Access".\n3. Enter code *${code}* and your name.\n\nYou will get the SOS button for ${currentUserProfile.house || 'our house'}. Please keep this code private.`);
+  };
+  window.removeFamilyPhone = async function(id) {
+    const p = (familyPhones || []).find(x => x.id === id);
+    if (!p) return;
+    if (!(await confirmSheet({ title: `Remove ${p.name || 'this phone'}?`, body: 'Their SOS button stops working. They can link again with your code.', okLabel: 'Remove', danger: true }))) return;
+    try {
+      await db.collection('family').doc(id).delete();
+      familyPhones = familyPhones.filter(x => x.id !== id);
+      const list = document.getElementById('family-list');
+      if (list) list.innerHTML = renderFamilyPhones();
+      toast('Removed');
+    } catch (err) {
+      toast('Could not remove: ' + err.message, 'bad');
+    }
+  };
 
   // --- POLLS ---
   function loadPolls() {

@@ -1,5 +1,6 @@
 /* In-memory Firebase compat stub for RPHS PWA screenshots.
- * ?role=admin | ?role=resident | ?role=none (login screen) */
+ * ?role=admin | ?role=resident | ?role=none (login screen)
+ * ?role=family (a linked family phone, Family Emergency Access) */
 (function () {
   'use strict';
   const params = new URLSearchParams(location.search);
@@ -82,6 +83,11 @@
     .forEach(([uid, name, house, phone, bio], i) => users.set(uid, { name, house, phone, role: 'resident', email: name.toLowerCase().replace(/ /g, '.') + '@yahoo.com', approved: false, membershipStatus: 'pending', biodataSubmitted: bio, createdAt: daysAgo(3 - i) }));
 
   const byUid = Object.fromEntries([...users.entries()]);
+
+  // Family Emergency Access: Ayesha's code and one linked family phone.
+  const FAMILY_CODE = '482913';
+  users.get('u_res1').familyCode = FAMILY_CODE;
+  coll('family').set('u_fam1', { residentUid: 'u_res1', residentName: 'Ayesha Siddiqui', residentPhone: '0321-7788123', house: 'House 14, Block B', name: 'Imran (husband)', linkedAt: daysAgo(3, 18) });
 
   // announcements
   const ann = coll('announcements');
@@ -444,7 +450,8 @@
 
   // ---------- Auth ----------
   const uidForRole = { admin: 'u_admin', resident: 'u_res1', board: 'u_r4', superadmin: 'u_sa' }[ROLE];
-  let currentUser = uidForRole ? {
+  const anonUser = (uid) => ({ uid, isAnonymous: true, email: null, emailVerified: false, reload: () => Promise.resolve(), getIdToken: () => Promise.resolve('tok') });
+  let currentUser = ROLE === 'family' ? anonUser('u_fam1') : uidForRole ? {
     uid: uidForRole, email: byUid[uidForRole].email, emailVerified: true, displayName: byUid[uidForRole].name,
     reload: () => Promise.resolve(), sendEmailVerification: () => Promise.resolve(), getIdToken: () => Promise.resolve('tok')
   } : null;
@@ -456,6 +463,7 @@
     signInWithEmailAndPassword: () => Promise.reject(Object.assign(new Error('Mock: sign-in disabled'), { code: 'auth/wrong-password' })),
     createUserWithEmailAndPassword: () => Promise.reject(Object.assign(new Error('Mock'), { code: 'auth/operation-not-allowed' })),
     sendPasswordResetEmail: () => Promise.resolve(),
+    signInAnonymously: () => { currentUser = anonUser('u_famnew'); listeners.forEach(cb => cb(currentUser)); return delay({ user: currentUser }); },
     setPersistence: () => Promise.resolve()
   }, 'auth');
 
@@ -468,10 +476,27 @@
   const messagingFn = () => tolerant({ getToken: () => Promise.resolve(''), onMessage: () => () => {} }, 'messaging');
   messagingFn.isSupported = () => Promise.resolve(false);
 
+  // Callable Cloud Functions used by Family Emergency Access.
+  const fnError = (code, message) => Promise.reject(Object.assign(new Error(message), { code: 'functions/' + code }));
+  const callables = {
+    familyCode: (data) => {
+      const u = users.get(currentUser.uid);
+      if (!u.familyCode || data.renew) u.familyCode = String(100000 + Math.floor(Math.random() * 900000));
+      return delay({ data: { code: u.familyCode } });
+    },
+    linkFamilyPhone: (data) => {
+      if (data.code !== users.get('u_res1').familyCode) return fnError('not-found', 'That code is not right. Ask your family member for the code in their Profile.');
+      const r = users.get('u_res1');
+      coll('family').set(currentUser.uid, { residentUid: 'u_res1', residentName: r.name, residentPhone: r.phone, house: r.house, name: data.name, linkedAt: Timestamp.now() });
+      return delay({ data: { house: r.house, residentName: r.name } });
+    }
+  };
+  const functionsInstance = { httpsCallable: (name) => (data) => callables[name](data || {}) };
+
   window.firebase = {
     apps: [],
     initializeApp: function (cfg) { const app = { name: '[DEFAULT]', options: cfg }; this.apps.push(app); return app; },
-    app: () => ({ name: '[DEFAULT]' }),
+    app: () => ({ name: '[DEFAULT]', functions: () => functionsInstance }),
     firestore: firestoreFn,
     auth: authFn,
     messaging: messagingFn
