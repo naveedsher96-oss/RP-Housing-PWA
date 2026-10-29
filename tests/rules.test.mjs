@@ -73,7 +73,15 @@ const SEED = {
   'proofs/docf': { uid: 'adm', kind: 'document', data: 'pdf' },
   'meetings/m1': { title: 'M', status: 'upcoming', suggestionsOpen: true, agenda: [{ text: 'a', byUid: 'adm', source: 'board' }], createdBy: 'adm' },
   'meetings/mc': { title: 'M', status: 'upcoming', suggestionsOpen: false, agenda: [], createdBy: 'adm' },
-  'meetings/mh': { title: 'M', status: 'held', agenda: [], minutes: 'x', createdBy: 'adm' }
+  'meetings/mh': { title: 'M', status: 'held', agenda: [], minutes: 'x', createdBy: 'adm' },
+  // Family Emergency Access: fam1 is r1's family phone (signed in anonymously), famx is r2's.
+  'users/rs': { role: 'resident', approved: true, suspended: true },
+  'family/fam1': { residentUid: 'r1', house: 'H1', name: 'Ammi' },
+  'family/famx': { residentUid: 'r2', house: 'H2', name: 'Bilal' },
+  'family/fams': { residentUid: 'rs', house: 'H9', name: 'Nani' },
+  'familyCodes/482913': { residentUid: 'r1' },
+  'announcements/fa1': { title: 'Medical at H1', createdBy: 'fam1', createdByRole: 'family', emergency: true, familyOf: 'r1' },
+  'announcements/fa2': { title: 'Fire at H2', createdBy: 'famx', createdByRole: 'family', emergency: true, familyOf: 'r2' }
 };
 
 // ---------- cases: [name, signed-in uid, action(db), should be allowed] ----------
@@ -353,6 +361,37 @@ const CASES = [
   ['resident cannot restore a removed listing', 'r1', db => updateDoc(doc(db, 'listings/lrd'), { isDeleted: false }), false],
   ['board cannot rewrite a resident listing', 'brd', db => updateDoc(doc(db, 'listings/lr2'), { title: 'Y' }), false],
   ['admin removes a listing with details', 'adm', db => updateDoc(doc(db, 'listings/lr2'), { isDeleted: true, deletedAt: serverTimestamp(), deletedBy: 'A', deletedByRole: 'admin' }), true],
+  // ---- Family Emergency Access ----
+  ['family phone raises an alarm for its own house', 'fam1', db => addDoc(collection(db, 'announcements'), { title: 'Medical at H', content: 'help', createdBy: 'fam1', createdByRole: 'family', emergency: true, familyOf: 'r1' }), true],
+  ['family phone of a suspended resident can still raise an alarm', 'fams', db => addDoc(collection(db, 'announcements'), { title: 'Medical at H', content: 'help', createdBy: 'fams', createdByRole: 'family', emergency: true, familyOf: 'rs' }), true],
+  ['family phone cannot raise an alarm for another house', 'fam1', db => addDoc(collection(db, 'announcements'), { title: 'Medical at H', content: 'help', createdBy: 'fam1', createdByRole: 'family', emergency: true, familyOf: 'r2' }), false],
+  ['family phone cannot alert the whole society', 'fam1', db => addDoc(collection(db, 'announcements'), { title: 'Medical at H', content: 'help', createdBy: 'fam1', createdByRole: 'family', emergency: true, familyOf: 'r1', alertAll: true }), false],
+  ['family phone cannot post a normal notice', 'fam1', db => addDoc(collection(db, 'announcements'), { title: 'Hi', createdBy: 'fam1', createdByRole: 'family', familyOf: 'r1' }), false],
+  ['unlinked anonymous phone cannot raise an alarm', 'anon9', db => addDoc(collection(db, 'announcements'), { title: 'Medical at H', content: 'help', createdBy: 'anon9', createdByRole: 'family', emergency: true, familyOf: 'r1' }), false],
+  ['resident cannot fake a family alarm', 'r1', db => addDoc(collection(db, 'announcements'), { title: 'Medical at H', content: 'help', createdBy: 'r1', createdByRole: 'family', emergency: true, familyOf: 'r1' }), false],
+  ['family phone lists its house alarms', 'fam1', db => getDocs(query(collection(db, 'announcements'), where('familyOf', '==', 'r1'))), true],
+  ['family phone cannot list other alarms', 'fam1', db => getDocs(query(collection(db, 'announcements'), where('emergency', '==', true))), false],
+  ['family phone cannot read notices', 'fam1', db => getDoc(doc(db, 'announcements/n1')), false],
+  ['family phone cannot read another house alarm', 'fam1', db => getDoc(doc(db, 'announcements/fa2')), false],
+  ['family phone cancels its own alarm', 'fam1', db => updateDoc(doc(db, 'announcements/fa1'), { resolvedAt: serverTimestamp(), resolvedBy: 'Ammi' }), true],
+  ['resident cancels an alarm raised by their family', 'r1', db => updateDoc(doc(db, 'announcements/fa1'), { resolvedAt: serverTimestamp(), resolvedBy: 'R1' }), true],
+  ['resident cannot cancel another house family alarm', 'r1', db => updateDoc(doc(db, 'announcements/fa2'), { resolvedAt: serverTimestamp(), resolvedBy: 'R1' }), false],
+  ['family phone says it has seen an alarm', 'fam1', db => setDoc(doc(db, 'announcements/fa1/acks/fam1'), { at: serverTimestamp() }), true],
+  ['family phone reads emergency contacts', 'fam1', db => getDoc(doc(db, 'settings/emergencyContacts')), true],
+  ['family phone cannot read bank details', 'fam1', db => getDoc(doc(db, 'settings/society')), false],
+  ['family phone cannot read bills', 'fam1', db => getDocs(query(collection(db, 'bills'), where('uid', '==', 'r1'))), false],
+  ['family phone cannot read the resident profile', 'fam1', db => getDoc(doc(db, 'users/r1')), false],
+  ['family phone saves its push token', 'fam1', db => setDoc(doc(db, 'fcm_tokens/fam1'), { token: 't', uid: 'fam1' }), true],
+  ['family phone reads its own link', 'fam1', db => getDoc(doc(db, 'family/fam1')), true],
+  ['family phone cannot link itself to a house', 'anon9', db => setDoc(doc(db, 'family/anon9'), { residentUid: 'r1', name: 'X' }), false],
+  ['family phone cannot move itself to another house', 'fam1', db => updateDoc(doc(db, 'family/fam1'), { residentUid: 'r2' }), false],
+  ['resident lists their family phones', 'r1', db => getDocs(query(collection(db, 'family'), where('residentUid', '==', 'r1'))), true],
+  ['resident cannot list other family phones', 'r1', db => getDocs(collection(db, 'family')), false],
+  ['resident removes their family phone', 'r1', db => deleteDoc(doc(db, 'family/fam1')), true],
+  ['resident cannot remove another house family phone', 'r1', db => deleteDoc(doc(db, 'family/famx')), false],
+  ['admin removes a family phone', 'adm', db => deleteDoc(doc(db, 'family/famx')), true],
+  ['nobody reads family codes from the app', 'r1', db => getDoc(doc(db, 'familyCodes/482913')), false],
+  ['resident cannot set their own family code', 'r1', db => updateDoc(doc(db, 'users/r1'), { familyCode: '111111' }), false],
 ];
 
 // ---------- runner ----------

@@ -1082,7 +1082,8 @@ test('admin: To do list, edits mosque times, adds a calendar item, and sees who 
   await page.waitForSelector('#event-form', { timeout: 5000 });
   await page.selectOption('#ev-kind', 'meeting');
   await page.fill('#ev-title', 'General body meeting');
-  const d = new Date(); d.setDate(d.getDate() + 3);
+  // Today: stays in the month the calendar opens on (+3 days fails late in a month).
+  const d = new Date();
   const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   await page.fill('#ev-date', key);
   await page.fill('#ev-time', '17:00');
@@ -1173,13 +1174,128 @@ test('admin: on a computer, the defaulters share menu has a single WhatsApp row'
   noErrors(page);
 }, 'admin');
 
+// ---------- Family Emergency Access ----------
+// A family phone has no <main>: it opens straight on the SOS screen.
+async function openBare(role) {
+  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
+  const page = await context.newPage();
+  page.errors = [];
+  page.on('pageerror', e => page.errors.push('pageerror: ' + e.message));
+  page.on('console', m => {
+    if (m.type() === 'error' && !IGNORABLE.test(m.text())) page.errors.push('console.error: ' + m.text().slice(0, 300));
+  });
+  await page.goto(`${PAGE}?role=${role}`);
+  return page;
+}
+const noSideScroll = page => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+
+test('family: a linked family phone opens on the SOS screen only, sends an alarm for its house and can cancel it', async () => {
+  const page = await openBare('family');
+  await page.waitForSelector('.fam-sos', { timeout: 15000 });
+  const text = await page.evaluate(() => document.body.innerText);
+  assert(/RPHS Emergency/.test(text) && /House 14, Block B/.test(text) && /Imran \(husband\)/.test(text) && /FAMILY/.test(text), `family header: ${text.slice(0, 200)}`);
+  assert(!(await page.locator('main, nav.tabbar').count()), 'family phones must not get the app tabs');
+  assert(!/Sign out|Logout|Log out|Bills|Notices/i.test(text), 'family screen must have no sign-out and no other sections');
+  assert(await page.$$eval('#fam-types .chip', cs => cs.map(c => c.innerText.replace(/^\S+\s/, '')).join(',')) === 'Medical,Fire,Security,Other', 'four emergency types');
+  assert(await page.locator('.fam-calls a[href="tel:03217788123"]').count() === 1, 'a Call button for the resident');
+  assert(await noSideScroll(page), 'no sideways scrolling');
+  await page.click('#fam-types .chip[data-type="fire"]');
+  await page.fill('#fam-note', 'Kitchen fire');
+  const before = await page.evaluate(() => window.__mockStore.announcements.size);
+  await page.click('.fam-sos');
+  await page.waitForSelector('#ui-sheet [data-ui="ok"]', { timeout: 5000 });
+  const sheet = await page.$eval('#ui-sheet', el => el.innerText);
+  assert(/Send fire alert\?/i.test(sheet) && /management, Ayesha Siddiqui and your family's phones for House 14, Block B/.test(sheet), `confirm text: ${sheet}`);
+  assert(await page.evaluate(n => window.__mockStore.announcements.size === n, before), 'the SOS button alone must not send');
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForFunction(n => window.__mockStore.announcements.size === n + 1, before, { timeout: 8000 })
+    .catch(() => { throw new Error('family alarm was not created'); });
+  const a = await page.evaluate(() => [...window.__mockStore.announcements.entries()].map(([id, x]) => ({ id, ...x })).find(x => x.createdBy === 'u_fam1'));
+  assert(a.emergency === true && a.familyOf === 'u_res1' && a.createdByRole === 'family' && !a.alertAll && a.emergencyType === 'fire'
+    && a.title === 'Fire at House 14, Block B' && a.content === 'Kitchen fire' && a.createdByName === 'Imran (husband)', `stored wrongly: ${JSON.stringify(a)}`);
+  await page.evaluate(() => startEmergencyWatch());
+  await page.waitForSelector('.emg-card', { timeout: 5000 });
+  const card = await page.$eval('.emg-card', el => el.innerText);
+  assert(/Raised by Imran \(husband\) \(family of Ayesha Siddiqui, House 14, Block B\)/.test(card) && /Cancel alarm/.test(card), `alarm card: ${card}`);
+  assert(!(await page.locator('#emg-alarm.show').count()), 'the phone that raised the alarm should not ring');
+  await page.click('.emg-card button');
+  await page.waitForSelector('#ui-sheet [data-ui="ok"]', { timeout: 5000 });
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForFunction(id => !!window.__mockStore.announcements.get(id).resolvedAt, a.id, { timeout: 8000 })
+    .catch(() => { throw new Error('family alarm was not cancelled'); });
+  noErrors(page);
+  await page.context().close();
+});
+
+test('family: "Family Emergency Access" on the sign-in screen links a new phone with the code and a name', async () => {
+  const page = await openBare('none');
+  await page.waitForSelector('.fam-entry-btn', { timeout: 15000 });
+  await page.click('.fam-entry-btn');
+  await page.waitForSelector('#fam-form');
+  await page.fill('#fam-code', '111111');
+  await page.fill('#fam-name', 'Ammi');
+  await page.click('#fam-link-btn');
+  await page.waitForFunction(() => /code is not right/.test(document.getElementById('auth-msg-box').innerText), null, { timeout: 5000 })
+    .catch(() => { throw new Error('a wrong code should say so'); });
+  await page.fill('#fam-code', '482 913');
+  assert(await page.inputValue('#fam-code') === '482913', 'the code box keeps digits only');
+  await page.click('#fam-link-btn');
+  await page.waitForSelector('.fam-sos', { timeout: 8000 }).catch(() => { throw new Error('a right code should open the SOS screen'); });
+  assert(/House 14, Block B · Ammi/.test(await page.$eval('.fam-sub', el => el.innerText)), 'linked to Ayesha\'s house with the typed name');
+  assert(await page.evaluate(() => window.__mockStore.family.get('u_famnew').residentUid === 'u_res1'), 'family link saved');
+  noErrors(page);
+  await page.context().close();
+});
+
+test('resident: Profile shows the family code, shares it on WhatsApp, renews it and removes a family phone', async page => {
+  await page.evaluate(() => selectTab('profile'));
+  await page.waitForFunction(() => /Imran \(husband\)/.test((document.getElementById('family-list') || {}).innerText || ''), null, { timeout: 5000 })
+    .catch(() => { throw new Error('linked family phones should be listed'); });
+  assert(/4 8 2 9 1 3/.test(await page.$eval('.fam-code', el => el.innerText)), 'the code is shown');
+  callLater(page, 'makeFamilyCode(true)');
+  await page.waitForSelector('#ui-sheet [data-ui="ok"]', { timeout: 5000 });
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForFunction(() => !/4 8 2 9 1 3/.test(document.querySelector('.fam-code').innerText), null, { timeout: 5000 })
+    .catch(() => { throw new Error('renew should show a new code'); });
+  callLater(page, "removeFamilyPhone('u_fam1')");
+  await page.waitForSelector('#ui-sheet [data-ui="ok"]', { timeout: 5000 });
+  await page.click('#ui-sheet [data-ui="ok"]');
+  await page.waitForFunction(() => !window.__mockStore.family.has('u_fam1'), null, { timeout: 5000 })
+    .catch(() => { throw new Error('remove should unlink the phone'); });
+  await page.waitForFunction(() => /No family phones yet/.test(document.getElementById('family-list').innerText), null, { timeout: 5000 })
+    .catch(() => { throw new Error('list should update after remove'); });
+  assert(await noSideScroll(page), 'no sideways scrolling');
+  noErrors(page);
+}, 'resident');
+
+test('family alarms ring for management and that house only, not for other residents', async page => {
+  const add = () => {
+    window.__mockStore.announcements.set('famA', { title: 'Medical at House 3, Block A', content: 'Please help.', emergency: true, emergencyType: 'medical',
+      createdBy: 'u_famx', createdByName: 'Ammi', createdByRole: 'family', createdByHouse: 'House 3, Block A', familyOf: 'u_r2', familyOfName: 'Muhammad Usman Khan', createdAt: new Date() });
+    startEmergencyWatch();
+  };
+  await page.evaluate(add);
+  await page.waitForTimeout(400);
+  assert(!(await page.locator('#emg-alarm.show').count()), "another house's family alarm must not ring for a resident");
+  await page.evaluate(() => selectTab('dashboard'));
+  await settle(page);
+  assert(!/Medical at House 3/.test(await page.evaluate(() => document.body.innerText)), 'nor be pinned or listed');
+  noErrors(page);
+  const admin = await open('admin');
+  await admin.evaluate(add);
+  await admin.waitForSelector('#emg-alarm.show', { timeout: 5000 }).catch(() => { throw new Error('management should get the full-screen alarm'); });
+  assert(/Raised by Ammi \(family of Muhammad Usman Khan, House 3, Block A\)/.test(await admin.$eval('#emg-alarm', el => el.innerText)), 'alarm names the family member and house');
+  noErrors(admin);
+  await admin.context().close();
+}, 'resident');
+
 // ---------- run ----------
 let passed = 0, failed = 0;
 for (const t of tests) {
   const role = t.role;
   let page;
   try {
-    page = await open(role);
+    if (role) page = await open(role);
     await t.fn(page);
     passed++; console.log(`ok    ${t.name}`);
   } catch (e) {

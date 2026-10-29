@@ -34,6 +34,16 @@ service cloud.firestore {
     function isMember() {
       return isStaff() || isApprovedResident();
     }
+    // Family Emergency Access: a family member's phone, signed in anonymously and
+    // linked to a resident's house by the linkFamilyPhone Cloud Function.
+    // It may only raise, see and cancel its own house's emergency alarms, and
+    // keeps working while the resident is suspended.
+    function isFamily() {
+      return signedIn() && exists(/databases/$(database)/documents/family/$(request.auth.uid));
+    }
+    function myFamily() {
+      return get(/databases/$(database)/documents/family/$(request.auth.uid)).data;
+    }
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
@@ -70,7 +80,7 @@ service cloud.firestore {
     // must never be able to write them on their own profile.
     function privilegedUserFields() {
       return ['role', 'approved', 'suspended', 'superAdmin', 'boardMember',
-              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason'];
+              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason', 'familyCode'];
     }
     match /users/{uid} {
       // Own profile, any staff member, or a board member (needed to broadcast notices)
@@ -82,7 +92,7 @@ service cloud.firestore {
         && request.resource.data.role == 'resident'
         && request.resource.data.approved == false
         && !request.resource.data.keys().hasAny(['suspended', 'superAdmin', 'boardMember',
-              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason']);
+              'billExempt', 'billExemptReason', 'membershipStatus', 'statusReason', 'familyCode']);
 
       // Self-update: cannot escalate role, make yourself super admin or board,
       // self-approve/unsuspend, or opt out of recurring bills.
@@ -104,19 +114,33 @@ service cloud.firestore {
 
     // ---------- announcements ----------
     match /announcements/{id} {
-      allow read: if isMember();
+      allow read: if isMember()
+        || (isFamily() && resource.data.get('familyOf', '') == myFamily().residentUid);
       // Notices: publishers only. Emergency alarms (emergency: true): any approved
       // member, in their own name. alertAll asks the emergencyAlert Cloud Function
       // to notify everyone (residents cannot read the member list themselves).
       allow create: if request.resource.data.get('createdBy', '') == request.auth.uid
         && (canPublish() || (isApprovedResident() && request.resource.data.get('emergency', false) == true))
         && (request.resource.data.get('alertAll', false) != true || request.resource.data.get('emergency', false) == true)
+        && request.resource.data.get('resolvedAt', null) == null
+        && request.resource.data.get('familyOf', null) == null
+        && request.resource.data.get('createdByRole', '') != 'family';
+      // A family phone raises an alarm for its own house only.
+      allow create: if isFamily()
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('emergency', false) == true
+        && request.resource.data.get('createdByRole', '') == 'family'
+        && request.resource.data.get('familyOf', '') == myFamily().residentUid
+        && request.resource.data.get('alertAll', false) != true
+        && request.resource.data.get('confirm', false) != true
         && request.resource.data.get('resolvedAt', null) == null;
-      // Whoever raised an alarm may cancel it (resolve), nothing else.
+      // Whoever raised an alarm may cancel it (resolve), nothing else. A resident
+      // may also cancel an alarm raised by their family.
       allow update: if isAdmin() || isSuperAdmin() || ownsPost()
-        || (isMember()
+        || ((isMember() || isFamily())
             && resource.data.get('emergency', false) == true
-            && resource.data.get('createdBy', '') == request.auth.uid
+            && (resource.data.get('createdBy', '') == request.auth.uid
+                || (isMember() && resource.data.get('familyOf', '') == request.auth.uid))
             && resource.data.get('resolvedAt', null) == null
             && onlyChanges(['resolvedAt', 'resolvedBy']));
       allow delete: if isAdmin() || isSuperAdmin() || ownsPost();
@@ -125,7 +149,7 @@ service cloud.firestore {
       // (emergencyAlarmRepeat function) for that member.
       match /acks/{ackUid} {
         allow read: if isStaff();
-        allow create, update: if isOwner(ackUid) && isMember();
+        allow create, update: if isOwner(ackUid) && (isMember() || isFamily());
         allow delete: if false;
       }
 
@@ -294,7 +318,7 @@ service cloud.firestore {
 
     // ---------- society settings (bank account etc.) ----------
     match /settings/{id} {
-      allow read: if isMember();
+      allow read: if isMember() || (isFamily() && id == 'emergencyContacts');
       allow write: if isAdmin();
     }
     // Bill totals for the resident dashboard, kept up to date by any staff member.
@@ -446,6 +470,24 @@ service cloud.firestore {
       allow read: if isStaff();
       allow create: if isMember() && request.resource.data.get('generatedByUid', '') == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    // ---------- family emergency access ----------
+    // Family phones: written only by the linkFamilyPhone Cloud Function. The
+    // resident sees and removes their own; admin / super admin may remove any.
+    match /family/{famUid} {
+      allow read: if isOwner(famUid) || isStaff() || isBoard()
+        || (signedIn() && resource.data.get('residentUid', '') == request.auth.uid);
+      allow delete: if isAdmin() || isSuperAdmin()
+        || (signedIn() && resource.data.get('residentUid', '') == request.auth.uid);
+      allow create, update: if false;
+    }
+    // Family codes and wrong-code counters: Cloud Functions only.
+    match /familyCodes/{code} {
+      allow read, write: if false;
+    }
+    match /familyLinkAttempts/{id} {
+      allow read, write: if false;
     }
 
     // ---------- FCM device tokens ----------
