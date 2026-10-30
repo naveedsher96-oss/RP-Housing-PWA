@@ -173,7 +173,8 @@
     push.savedFor = key;
     var now = fb.firestore.FieldValue.serverTimestamp();
     var tokens = {};
-    tokens[push.token] = { updatedAt: now, device: 'Android (app)', native: true };
+    // alarm: 1 tells the server this app version can show the siren alarm.
+    tokens[push.token] = { updatedAt: now, device: 'Android (app)', native: true, alarm: 1 };
     var ref = fb.firestore().collection('fcm_tokens').doc(user.uid);
     ref.set({ token: push.token, tokens: tokens, uid: user.uid, updatedAt: now }, { merge: true })
       .then(function () { return dropChromeTokens(fb, ref, push.token); })

@@ -845,18 +845,37 @@ exports.runMonthlySummaryOnRequest = onDocumentWritten(
   }
 );
 
-// One web push. Every push is sent with high urgency: at normal urgency Android
+// One push. Every push is sent with high urgency: at normal urgency Android
 // holds it back while the phone is idle (Doze), so alerts arrived late or only
 // when the app was opened. Emergency pushes also stay on screen until dismissed,
 // vibrate, and re-alert (sound again) when repeated with the same tag.
-function pushMessage(token, title, body, category) {
+// Emergency pushes to the RPHS Android app (alarmApp: its token was saved with
+// alarm >= 1) go as data-only messages, so the app itself handles them even when
+// closed: a siren (the alarm) shows full screen with the siren on the alarm
+// volume, and its "All clear" stops the siren. Other Android app tokens get the Emergency or Alerts
+// channel; browsers ignore the android block.
+function pushMessage(token, title, body, category, opts = {}) {
   const emergency = category === "emergency";
+  const ttlSeconds = emergency ? 600 : 3 * 86400;
+  if (emergency && opts.alarmApp) {
+    // siren: show the alarm; clear: the "All clear", which also stops the siren.
+    return {
+      token,
+      data: { category, [opts.siren ? "siren" : "clear"]: "1", title: String(title), body: String(body) },
+      android: { priority: "high", ttl: ttlSeconds * 1000 },
+    };
+  }
   return {
     token,
     notification: { title, body },
     data: { category },
+    android: {
+      priority: "high",
+      ttl: ttlSeconds * 1000,
+      notification: { channelId: opts.siren ? "rphs_emergency" : "rphs_alerts", ...(emergency ? { tag: "rphs-emergency" } : {}) },
+    },
     webpush: {
-      headers: { Urgency: "high", TTL: emergency ? "600" : String(3 * 86400) },
+      headers: { Urgency: "high", TTL: String(ttlSeconds) },
       notification: {
         icon: "https://naveedsher96-oss.github.io/RP-Housing-PWA/icon-192.png",
         ...(emergency ? { requireInteraction: true, vibrate: [700, 250, 700, 250, 700, 250, 700], tag: "rphs-emergency", renotify: true } : {}),
@@ -879,6 +898,11 @@ function deviceTokens(tokenDoc) {
   const list = Object.keys(map).sort((a, b) => at(map[b]) - at(map[a])).slice(0, MAX_DEVICES);
   if (d.token && !list.includes(d.token)) list.push(d.token);
   return list;
+}
+// Tokens of the RPHS Android app versions that can show the siren alarm.
+function alarmAppTokens(tokenDoc) {
+  const map = (tokenDoc && tokenDoc.exists && tokenDoc.data().tokens) || {};
+  return new Set(Object.keys(map).filter((t) => map[t] && Number(map[t].alarm) >= 1));
 }
 function isDeadToken(err) {
   const code = err && err.code;
@@ -909,11 +933,16 @@ exports.sendPushOnNotification = onDocumentCreated(
     const ref = admin.firestore().collection("fcm_tokens").doc(uid);
     if (data.testPush !== true && (await isPushMuted(uid, data))) return;
     if (data.testPush === true) await sleep(15000);
-    const tokens = deviceTokens(await ref.get());
+    const tokenDoc = await ref.get();
+    const tokens = deviceTokens(tokenDoc);
     if (!tokens.length) return;
 
     const category = notifCategory(data);
-    const res = await admin.messaging().sendEach(tokens.map((t) => pushMessage(t, data.title, data.body || data.text || "", category)));
+    // An emergency alarm rings the siren; its "All clear" (type notice) doesn't.
+    const siren = category === "emergency" && data.type !== "notice";
+    const alarmApp = alarmAppTokens(tokenDoc);
+    const res = await admin.messaging().sendEach(tokens.map((t) =>
+      pushMessage(t, data.title, data.body || data.text || "", category, { siren, alarmApp: alarmApp.has(t) })));
     const dead = [];
     res.responses.forEach((r, i) => {
       if (r.success) return;
@@ -1053,9 +1082,12 @@ exports.emergencyAlarmRepeat = onDocumentCreated(
       uids = members.docs.filter((d) => d.id !== n.createdBy && d.data().suspended !== true).map((d) => d.id);
     }
     const tokens = {}; // uid -> that member's device tokens
+    const alarmApp = new Set(); // tokens of app versions that show the siren alarm
     await Promise.all(uids.map(async (uid) => {
-      const list = deviceTokens(await db.collection("fcm_tokens").doc(uid).get());
+      const doc = await db.collection("fcm_tokens").doc(uid).get();
+      const list = deviceTokens(doc);
       if (list.length) tokens[uid] = list;
+      alarmAppTokens(doc).forEach((t) => alarmApp.add(t));
     }));
 
     for (let round = 1; round <= ALARM_REPEAT_ROUNDS; round++) {
@@ -1069,7 +1101,7 @@ exports.emergencyAlarmRepeat = onDocumentCreated(
       left.forEach((uid) => tokens[uid].forEach((t) => sends.push({ uid, t })));
       for (let i = 0; i < sends.length; i += 500) {
         const chunk = sends.slice(i, i + 500);
-        const res = await admin.messaging().sendEach(chunk.map((s) => pushMessage(s.t, title, body, "emergency")));
+        const res = await admin.messaging().sendEach(chunk.map((s) => pushMessage(s.t, title, body, "emergency", { siren: true, alarmApp: alarmApp.has(s.t) })));
         res.responses.forEach((r, j) => {
           if (!isDeadToken(r.error)) return;
           const s = chunk[j];

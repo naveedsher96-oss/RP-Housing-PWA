@@ -1,11 +1,8 @@
 package pk.rphs.society;
 
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
-import android.os.Build;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewCompat;
@@ -36,11 +33,9 @@ public class RphsBridgePlugin extends Plugin {
 
     static final String APP_ORIGIN = "https://naveedsher96-oss.github.io";
 
-    static final String ALERTS_CHANNEL = "rphs_alerts";
-
     @Override
     public void load() {
-        createAlertsChannel();
+        RphsChannels.ensure(getContext());
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             Logger.warn("RphsBridge", "WebView too old for the RPHS shim; sharing and downloads may not work");
             return;
@@ -56,18 +51,6 @@ public class RphsBridgePlugin extends Plugin {
         } catch (Exception e) {
             Logger.error("RphsBridge", "Could not inject the RPHS shim", e);
         }
-    }
-
-    /** Channel for every RPHS alert (bills, notices, complaints, emergencies), shown with sound and a banner. */
-    private void createAlertsChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-        NotificationManager manager = getContext().getSystemService(NotificationManager.class);
-        if (manager == null || manager.getNotificationChannel(ALERTS_CHANNEL) != null) return;
-        NotificationChannel channel = new NotificationChannel(ALERTS_CHANNEL, "Alerts", NotificationManager.IMPORTANCE_HIGH);
-        channel.setDescription("Bills, notices, complaints and emergency alarms from RPHS");
-        channel.enableVibration(true);
-        channel.setShowBadge(true);
-        manager.createNotificationChannel(channel);
     }
 
     /** Opens intent:// links (used for "WhatsApp" and "WhatsApp Business") the way Chrome does. */
