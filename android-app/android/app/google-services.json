@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "964175352040",
+    "project_id": "rp-housing-society",
+    "storage_bucket": "rp-housing-society.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:964175352040:android:8aa6652f5c8df443af395d",
+        "android_client_info": {
+          "package_name": "pk.rphs.society"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDPHdds4gXhdwk6CnAe2v9oNeM8Ejw8sXM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

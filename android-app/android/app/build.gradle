@@ -36,11 +36,6 @@ android {
         }
     }
     buildTypes {
-        debug {
-            // Installs next to the Play app for testing instead of replacing it.
-            applicationIdSuffix '.debug'
-            versionNameSuffix '-test'
-        }
         release {
             if (rphsKeystore) signingConfig signingConfigs.upload
             minifyEnabled false

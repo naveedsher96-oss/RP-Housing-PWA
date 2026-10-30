@@ -1,8 +1,12 @@
 package pk.rphs.society;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
@@ -24,15 +28,19 @@ import java.util.Collections;
  * The web app is written for Chrome. Inside the app's WebView a few Chrome
  * features are missing (the share sheet, file downloads, intent:// links), so
  * this plugin injects a small script (assets/rphs-shim.js) that fills those
- * gaps with native code. The web app itself is not changed.
+ * gaps with native code, and turns on native push alerts. The web app itself
+ * is not changed.
  */
 @CapacitorPlugin(name = "RphsBridge")
 public class RphsBridgePlugin extends Plugin {
 
     static final String APP_ORIGIN = "https://naveedsher96-oss.github.io";
 
+    static final String ALERTS_CHANNEL = "rphs_alerts";
+
     @Override
     public void load() {
+        createAlertsChannel();
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             Logger.warn("RphsBridge", "WebView too old for the RPHS shim; sharing and downloads may not work");
             return;
@@ -41,11 +49,25 @@ public class RphsBridgePlugin extends Plugin {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[8192];
             for (int n; (n = in.read(buf)) != -1; ) out.write(buf, 0, n);
-            String script = new String(out.toByteArray(), StandardCharsets.UTF_8);
+            // Lets the web app read Notification.permission straight away.
+            String permission = NotificationManagerCompat.from(getContext()).areNotificationsEnabled() ? "granted" : "default";
+            String script = new String(out.toByteArray(), StandardCharsets.UTF_8).replace("__RPHS_PUSH_PERMISSION__", permission);
             WebViewCompat.addDocumentStartJavaScript(getBridge().getWebView(), script, Collections.singleton(APP_ORIGIN));
         } catch (Exception e) {
             Logger.error("RphsBridge", "Could not inject the RPHS shim", e);
         }
+    }
+
+    /** Channel for every RPHS alert (bills, notices, complaints, emergencies), shown with sound and a banner. */
+    private void createAlertsChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager manager = getContext().getSystemService(NotificationManager.class);
+        if (manager == null || manager.getNotificationChannel(ALERTS_CHANNEL) != null) return;
+        NotificationChannel channel = new NotificationChannel(ALERTS_CHANNEL, "Alerts", NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription("Bills, notices, complaints and emergency alarms from RPHS");
+        channel.enableVibration(true);
+        channel.setShowBadge(true);
+        manager.createNotificationChannel(channel);
     }
 
     /** Opens intent:// links (used for "WhatsApp" and "WhatsApp Business") the way Chrome does. */

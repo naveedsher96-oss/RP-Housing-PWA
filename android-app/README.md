@@ -14,17 +14,21 @@ so it installs as a normal update.
 - `android/`: the Android project.
   - `app/src/main/assets/rphs-shim.js` is injected into the web app inside the
     Android app only. It fills gaps in Android's WebView: share sheet, file
-    downloads, opening PDFs, WhatsApp and other outside links.
+    downloads, opening PDFs, WhatsApp and other outside links, and push alerts.
+    For alerts it stands in for `Notification` and saves the phone's native FCM token
+    to `fcm_tokens/{uid}.tokens` like a browser token, so Cloud Functions need no change.
+  - `app/google-services.json` is the Firebase config for `pk.rphs.society`.
   - `app/src/main/java/pk/rphs/society/RphsBridgePlugin.java` is the native half of that.
 
 ## Building
 
 GitHub Actions builds it (`.github/workflows/android.yml`); nothing needs installing locally.
 
-- Every pull request that touches `android-app/` builds a test APK named "RPHS Test".
-  It installs next to the Play app, so it is safe to try on a phone.
+- Every pull request that touches `android-app/` checks that the app builds.
 - To make a Play release, go to Actions > Android app > Run workflow on `main`.
-  Download the `rphs-play-bundle-…` artifact and upload the `.aab` in Play Console.
+  Download the `rphs-play-bundle-…` artifact and upload the `.aab` in Play Console,
+  to Internal testing first. If Play says the version code is already used, run it
+  again with a higher "Version code".
 
 The release is signed with the Play upload key from these repository secrets
 (Settings > Secrets and variables > Actions):
