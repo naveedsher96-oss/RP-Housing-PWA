@@ -419,7 +419,7 @@ test('board: sees the emergency banner and can raise an alarm, but cannot resolv
   noErrors(page);
 }, 'board');
 
-test('admin: sends an emergency broadcast (two-step confirm), everyone is alerted, then resolves it', async page => {
+test('admin: sends an emergency broadcast in one tap (no confirm step), everyone is alerted, then resolves it', async page => {
   assert(await page.locator('.emg-btn').count() === 1, 'admin should see the Send Emergency Alert button');
   const before = await page.evaluate(() => window.__mockStore.announcements.size);
   await page.evaluate(() => openEmergencyModal());
@@ -428,9 +428,6 @@ test('admin: sends an emergency broadcast (two-step confirm), everyone is alerte
   await page.fill('#emg-title', 'Fire at the community hall');
   await page.fill('#emg-content', 'Keep away from the hall. Rescue 1122 is on the way.');
   await page.evaluate(() => { document.getElementById('emg-share-wa').checked = false; });
-  await page.click('#emg-send');
-  await page.waitForSelector('#emg-confirm:visible', { timeout: 3000 });
-  assert(await page.evaluate(n => window.__mockStore.announcements.size === n, before), 'first tap must only ask for confirmation');
   await page.click('#emg-send');
   await page.waitForFunction(n => window.__mockStore.announcements.size === n + 1, before, { timeout: 8000 })
     .catch(() => { throw new Error('emergency announcement was not created'); });
@@ -455,15 +452,26 @@ test('admin: sends an emergency broadcast (two-step confirm), everyone is alerte
   noErrors(page);
 }, 'admin');
 
+test('admin: can send an emergency alert with only a type picked (headline and message optional)', async page => {
+  const before = await page.evaluate(() => window.__mockStore.announcements.size);
+  await page.evaluate(() => openEmergencyModal());
+  await page.waitForSelector('#emg-form', { timeout: 5000 });
+  await page.click('#emg-types .chip[data-type="power"]');
+  await page.evaluate(() => { document.getElementById('emg-share-wa').checked = false; });
+  await page.click('#emg-send');
+  await page.waitForFunction(n => window.__mockStore.announcements.size === n + 1, before, { timeout: 8000 })
+    .catch(() => { throw new Error('alert with empty fields was not sent'); });
+  const a = await page.evaluate(() => [...window.__mockStore.announcements.values()].find(x => x.emergency && x.title === 'Electricity in RPHS'));
+  assert(a && a.emergencyType === 'power' && a.content.length > 0, `defaults wrong: ${JSON.stringify(a)}`);
+  noErrors(page);
+}, 'admin');
+
 test('resident: raises an emergency alarm with one tap of a type; everyone is alerted by the server; can cancel it', async page => {
   const before = await page.evaluate(() => window.__mockStore.announcements.size);
   await page.click('.emg-btn');
   await page.waitForSelector('#emg-form', { timeout: 5000 });
   await page.click('#emg-types .chip[data-type="security"]');
   await page.evaluate(() => { document.getElementById('emg-share-wa').checked = false; });
-  await page.click('#emg-send');
-  await page.waitForSelector('#emg-confirm:visible', { timeout: 3000 });
-  assert(await page.evaluate(n => window.__mockStore.announcements.size === n, before), 'first tap must only ask for confirmation');
   await page.click('#emg-send');
   await page.waitForFunction(n => window.__mockStore.announcements.size === n + 1, before, { timeout: 8000 })
     .catch(() => { throw new Error('alarm was not created'); });

@@ -3904,7 +3904,6 @@
     unlockAlarmAudio();
     const manager = canBroadcastEmergency();
     emergencyTypePick = 'security';
-    let armed = false;
     document.getElementById('modal-body').innerHTML = `
       <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px; color:var(--danger);">🚨 ${manager ? 'Emergency Broadcast' : 'Emergency Alarm'}</div>
       <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px; line-height:1.5;">Sounds an alarm on every member's phone immediately, including those who muted notifications, and stays pinned on every dashboard until it is resolved. ${manager ? '' : 'Your name and house are shown with the alarm. '}Use only for real emergencies.</div>
@@ -3913,15 +3912,14 @@
         <div class="chip-row" id="emg-types" style="margin:0 0 10px;">
           ${EMERGENCY_TYPES.map(t => `<button type="button" class="chip ${t[0] === emergencyTypePick ? 'active' : ''}" data-type="${t[0]}" onclick="pickEmergencyType('${t[0]}')">${t[2]} ${escapeHtml(t[1])}</button>`).join('')}
         </div>
-        <label>Where / headline${manager ? '' : ' (optional)'}</label>
-        <input type="text" id="emg-title" placeholder="${manager ? 'e.g. Gas leak near House 24, Block C' : escapeHtml('e.g. ' + (currentUserProfile.house || 'House 24, Block C'))}" ${manager ? 'required' : ''} maxlength="90" />
-        <label>Message${manager ? ' — what should residents do?' : ' (optional)'}</label>
-        <textarea id="emg-content" placeholder="${manager ? 'e.g. Avoid the area, keep windows open, do not light stoves. SNGPL team is on the way.' : 'e.g. Someone is trying to break in, please come quickly.'}" ${manager ? 'required' : ''}></textarea>
+        <label>Where / headline (optional)</label>
+        <input type="text" id="emg-title" placeholder="${manager ? 'e.g. Gas leak near House 24, Block C' : escapeHtml('e.g. ' + (currentUserProfile.house || 'House 24, Block C'))}" maxlength="90" />
+        <label>Message${manager ? ' — what should residents do?' : ''} (optional)</label>
+        <textarea id="emg-content" placeholder="${manager ? 'e.g. Avoid the area, keep windows open, do not light stoves. SNGPL team is on the way.' : 'e.g. Someone is trying to break in, please come quickly.'}"></textarea>
         <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
           <input type="checkbox" id="emg-share-wa" checked style="width:auto; margin:0;" />
           <span>Also share on WhatsApp after sending</span>
         </label>
-        <div id="emg-confirm" style="display:none; background:var(--danger-soft); border:1px solid rgba(229,97,90,0.45); border-radius:12px; padding:10px 12px; font-size:14px; font-weight:600; margin-top:14px; line-height:1.5;"></div>
         <button type="submit" id="emg-send" class="btn danger block" style="margin-top:14px;">Send alert to everyone</button>
       </form>
     `;
@@ -3929,23 +3927,18 @@
 
     document.getElementById('emg-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const typeLabel = emergencyTypeMeta(emergencyTypePick)[1];
-      const where = document.getElementById('emg-title').value.trim();
-      // A resident in a hurry may skip the details: the type and their house are enough.
-      const title = manager ? where : (where ? `${typeLabel}: ${where}` : `${typeLabel} at ${currentUserProfile.house || 'a house in RPHS'}`);
-      const content = document.getElementById('emg-content').value.trim() || (manager ? '' : 'Please help or call for help. Open the RPHS app for details.');
-      const shareWa = document.getElementById('emg-share-wa').checked;
-      if (!title || !content) return;
-      const fanOutHere = canNotifyEveryone();
       const btn = document.getElementById('emg-send');
-      if (!armed) {
-        armed = true;
-        const box = document.getElementById('emg-confirm');
-        box.textContent = `Sound the alarm for "${title}" on every member's phone now?`;
-        box.style.display = 'block';
-        btn.textContent = 'Yes, send now';
-        return;
-      }
+      if (btn.disabled) return;
+      const typeLabel = emergencyTypePick === 'other' ? 'Emergency' : emergencyTypeMeta(emergencyTypePick)[1];
+      const where = document.getElementById('emg-title').value.trim();
+      // In a hurry the details can be skipped: the type (and the resident's house) are enough.
+      const title = where
+        ? (manager ? where : `${typeLabel}: ${where}`)
+        : (manager ? `${typeLabel} in RPHS` : `${typeLabel} at ${currentUserProfile.house || 'a house in RPHS'}`);
+      const content = document.getElementById('emg-content').value.trim()
+        || (manager ? 'Please stay alert and follow instructions from RPHS management. Open the RPHS app for details.' : 'Please help or call for help. Open the RPHS app for details.');
+      const shareWa = document.getElementById('emg-share-wa').checked;
+      const fanOutHere = canNotifyEveryone();
       btn.disabled = true;
       btn.textContent = 'Sending…';
       try {
@@ -3968,7 +3961,7 @@
         if (shareWa) openWhatsAppShare(`🚨 *EMERGENCY – ${title}*\n\n${content}\n\n- ${manager ? 'RPHS Management' : (currentUserProfile.name || 'RPHS resident') + (currentUserProfile.house ? ', ' + currentUserProfile.house : '')}`);
       } catch (err) {
         btn.disabled = false;
-        btn.textContent = 'Yes, send now';
+        btn.textContent = 'Send alert to everyone';
         toast('Could not send the alert: ' + err.message, 'bad');
       }
     });
