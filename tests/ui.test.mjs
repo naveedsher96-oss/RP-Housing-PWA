@@ -230,7 +230,8 @@ test('admin: status update with a note appends to the timeline and notifies the 
   const summary = await page.evaluate(() => document.getElementById('ticket-filter-summary').innerText);
   assert(/Over 7 days: 2/.test(summary), `admin summary should flag complaints open over 7 days, got: ${summary}`);
   const list = await page.evaluate(() => document.getElementById('tickets-list').innerText);
-  assert(/⚠ Open 25 days/.test(list), 'card for the 25-day-old complaint should carry the SLA flag');
+  // Seeded at 9:15 am 25 days ago, so before 9:15 it is still 24 full days.
+  assert(/⚠ Open 2[45] days/.test(list), 'card for the 25-day-old complaint should carry the SLA flag');
   await page.evaluate(() => openTicketDetailModal('t1'));
   await page.waitForSelector('#admin-ticket-form', { timeout: 5000 });
   await page.waitForSelector('#ticket-photos .ticket-photo img', { timeout: 5000 }).catch(() => { throw new Error('detail should show the attached photo'); });
@@ -1048,6 +1049,8 @@ test('resident: home shows quick buttons, mosque times, This week with an import
 test('resident: Calendar tab shows the month with board meetings and repeats; residents cannot add', async page => {
   await page.evaluate(() => selectTab('calendar'));
   await page.waitForSelector('.cal-grid', { timeout: 8000 });
+  // The shutdown is seeded two days ahead; near the month's end that is next month.
+  await page.evaluate(() => { const n = new Date(), d = new Date(n.getTime() + 2 * 86400000); if (d.getMonth() !== n.getMonth()) calShift(1); });
   await page.waitForFunction(() => /LESCO shutdown/.test(document.getElementById('calendar-body').innerText), null, { timeout: 8000 });
   const body = await page.$eval('#calendar-body', el => el.innerText);
   assert(/Garbage pickup/.test(body) && /Every week/.test(body), `weekly garbage pickup should repeat: ${body}`);
