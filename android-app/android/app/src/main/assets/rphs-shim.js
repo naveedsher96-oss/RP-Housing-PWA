@@ -200,6 +200,11 @@
       push.token = (t && t.value) || '';
       saveToken();
     });
+    // A push while the app is open: Android shows the banner; the web app just
+    // refreshes its list (no title, so it doesn't show a second banner).
+    cap.addListener('PushNotifications', 'pushNotificationReceived', function (n) {
+      if (push.onMessage) push.onMessage({ data: (n && n.data) || {}, notification: {} });
+    });
     cap.addListener('PushNotifications', 'registrationError', function (e) {
       console.warn('RPHS push registration failed', e && e.error);
     });
@@ -208,6 +213,71 @@
       if (push.permission === 'granted') return native('PushNotifications', 'register');
     });
   }).catch(function (e) { console.warn('RPHS push setup failed', e); });
+
+  // The web app only offers web push (and the "Send a test alert" button) when
+  // firebase.messaging() is supported. In the app, firebase.messaging becomes a
+  // small stand-in backed by the native FCM token, so the web app's own token
+  // saving, test alert and in-app refresh on a new alert all work unchanged.
+  var nativeMessagingApi = {
+    getToken: function () { return nativeToken(); },
+    deleteToken: function () { return Promise.resolve(true); },
+    onMessage: function (cb) { push.onMessage = cb; return function () { push.onMessage = null; }; }
+  };
+  function nativeMessaging() { return nativeMessagingApi; }
+  nativeMessaging.isSupported = function () { return Promise.resolve(true); };
+
+  function nativeToken() {
+    if (push.token) return Promise.resolve(push.token);
+    if (push.permission !== 'granted') return Promise.resolve('');
+    return bridgeReady().then(function () {
+      native('PushNotifications', 'register').catch(function () {});
+      return waitFor(function () { return push.token; }, 200, 15000);
+    }).catch(function () { return ''; });
+  }
+
+  var realFirebase;
+  function installMessaging(fb) {
+    if (!fb || (typeof fb !== 'object' && typeof fb !== 'function')) return;
+    try {
+      Object.defineProperty(fb, 'messaging', {
+        configurable: true, enumerable: true,
+        get: function () { return nativeMessaging; },
+        set: function () {}
+      });
+    } catch (e) { console.warn('RPHS messaging stand-in failed', e); }
+  }
+  try {
+    Object.defineProperty(window, 'firebase', {
+      configurable: true, enumerable: true,
+      get: function () { return realFirebase; },
+      set: function (fb) { realFirebase = fb; installMessaging(fb); }
+    });
+  } catch (e) { console.warn('RPHS firebase hook failed', e); }
+
+  // The web app registers firebase-messaging-sw.js before asking for a token;
+  // the native token doesn't need it, so a failure there mustn't block alerts.
+  if (navigator.serviceWorker && navigator.serviceWorker.register) {
+    var registerSw = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    navigator.serviceWorker.register = function (url, opts) {
+      return registerSw(url, opts).catch(function (e) {
+        if (/firebase-messaging-sw/.test(String(url))) return {};
+        throw e;
+      });
+    };
+  }
+
+  // The app counts as installed ("Android (app)" in the device list).
+  var matchMedia = window.matchMedia;
+  if (matchMedia) {
+    window.matchMedia = function (q) {
+      if (/display-mode:\s*standalone/.test(String(q))) {
+        var m = matchMedia.call(window, q);
+        try { Object.defineProperty(m, 'matches', { value: true }); } catch (e) {}
+        return m;
+      }
+      return matchMedia.call(window, q);
+    };
+  }
 
   firebaseReady().then(function (fb) {
     var auth = fb.auth();
