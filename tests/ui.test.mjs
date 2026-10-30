@@ -1026,6 +1026,12 @@ test('resident: Urdu mode translates navigation, titles, badges, buttons and pla
 test('resident: home shows quick buttons, mosque times, This week with an important notice, and a folded money report', async page => {
   const text = await page.evaluate(() => document.getElementById('dashboard-body').innerText);
   assert(/Society Mosque/.test(text) && /5:15/.test(text) && /8:15/.test(text) && /Next:/.test(text), `mosque card should show the jamaat times: ${text.slice(0, 600)}`);
+  await page.click('#mosque-card .pray-row');
+  await page.waitForSelector('#modal-view.active .pray-list', { timeout: 5000 });
+  const sheet = await page.$eval('#modal-body', el => el.innerText);
+  assert(await page.locator('.pray-list > div').count() === 5 && /Fajr/.test(sheet) && /Isha/.test(sheet) && /8:15/.test(sheet) && /Next/.test(sheet), `tapping the mosque card should open the big times list: ${sheet}`);
+  assert(!/Edit jamaat times/.test(sheet), 'residents must not see the Edit button in the times popup');
+  await page.evaluate(() => closeModal());
   const week = await page.$eval('#week-card', el => el.innerText);
   assert(/LESCO shutdown/.test(week) && /Garbage pickup/.test(week) && /Water supply off Tuesday/.test(week), `This week should list the calendar and the important notice: ${week}`);
   assert(!/Old picnic/.test(week), 'removed calendar items must not show');

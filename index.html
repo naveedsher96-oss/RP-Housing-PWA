@@ -495,6 +495,15 @@
   .mc-lab span{ flex:1; text-align:center; font-size:11px; color:var(--text-faint); }
   .mc-foot{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:12.5px; color:var(--text-faint); margin:8px 0 10px; }
   #mosque-card .mc-foot{ margin-bottom:0; }
+  #mosque-card.tap{ cursor:pointer; }
+  #mosque-card.tap:active{ transform:scale(.99); }
+  .pray-list{ display:flex; flex-direction:column; gap:8px; }
+  .pray-list > div{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-radius:var(--radius-sm); background:var(--bg-elevated-2); }
+  .pray-list > div.now{ background:var(--accent); color:#2A1A00; }
+  .pray-list .pn{ font-size:18px; font-weight:700; }
+  .pray-list .pn small{ display:block; font-size:13px; font-weight:600; opacity:.75; }
+  .pray-list .pt{ font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .pray-list .pt small{ font-size:14px; font-weight:700; margin-left:3px; opacity:.8; }
   .pray-row{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:5px; text-align:center; }
   .pray-row div{ background:var(--bg-elevated-2); border-radius:10px; padding:7px 0; min-width:0; }
   .pray-row div.now{ background:var(--accent); color:#2A1A00; }
@@ -4435,7 +4444,7 @@
     const time = k => to12h(k === 'zuhr' && friday && d.jummah ? d.jummah : d[k]);
     const nextRow = PRAYERS.find(p => p[0] === nk);
     return `
-      <div class="card" style="cursor:default; margin-bottom:14px;" id="mosque-card">
+      <div class="card tap" style="margin-bottom:14px;" id="mosque-card" role="button" tabindex="0" aria-label="Show all jamaat times" onclick="openMosqueSheet()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMosqueSheet();}">
         <div class="mc-head">
           <div style="font-weight:700; font-size:14px;">🕌 Society Mosque · Jamaat</div>
           ${nextRow && time(nk) ? `<span class="badge pending">Next: ${escapeHtml(label(...nextRow))} ${escapeHtml(time(nk))}</span>` : ''}
@@ -4450,11 +4459,47 @@
           </div>` : ''}
         <div class="mc-foot">
           <span>${d.jummah ? `Jummah${d.jummahKhutbah ? ' khutbah ' + escapeHtml(to12h(d.jummahKhutbah)) + ' ·' : ''} jamaat ${escapeHtml(to12h(d.jummah))}` : ''}${d.updatedAt ? `${d.jummah ? ' · ' : ''}Updated ${escapeHtml(formatDate(d.updatedAt))}` : ''}</span>
-          ${canEditMosque() ? `<button class="btn sm secondary" onclick="openMosqueForm()">${icon('edit', 'ico-svg-sm')} Edit</button>` : ''}
+          ${canEditMosque() ? `<button class="btn sm secondary" onclick="event.stopPropagation(); openMosqueForm()">${icon('edit', 'ico-svg-sm')} Edit</button>` : ''}
         </div>
         ${d.note ? `<div style="font-size:13px; color:var(--text-muted); margin-top:6px;">${escapeHtml(d.note)}</div>` : ''}
       </div>`;
   }
+  // Bigger view of the jamaat times, opened by tapping the dashboard card.
+  window.openMosqueSheet = function() {
+    const d = mosqueData;
+    if (!d || !PRAYERS.some(([k]) => d[k])) return;
+    const now = new Date();
+    const friday = now.getDay() === 5;
+    const nk = nextPrayerKey(d, now);
+    const jummahZuhr = k => k === 'zuhr' && friday && d.jummah;
+    const ampm = (k, hm) => { const m = prayerMinutes(k, hm); return m == null ? '' : (m >= 720 ? 'pm' : 'am'); };
+    const row = ([k, en, urName]) => {
+      const hm = jummahZuhr(k) ? d.jummah : d[k];
+      const t = to12h(hm);
+      return `
+        <div class="${k === nk ? 'now' : ''}">
+          <div class="pn">${escapeHtml(jummahZuhr(k) ? 'Jummah' : en)} <small>${escapeHtml(jummahZuhr(k) ? 'جمعہ' : urName)}${k === nk ? ' · Next' : ''}</small></div>
+          <div class="pt">${t ? `${escapeHtml(t)}<small>${ampm(k, hm)}</small>` : '–'}</div>
+        </div>`;
+    };
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:4px;">🕌 Society Mosque</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Jamaat times${d.updatedAt ? ` · Updated ${escapeHtml(formatDate(d.updatedAt))}` : ''}</div>
+      <div class="pray-list">${PRAYERS.map(row).join('')}</div>
+      ${d.jummah ? `
+        <div class="ramadan-row" style="margin-top:12px;">
+          <div><span>Jummah khutbah</span><b>${d.jummahKhutbah ? escapeHtml(to12h(d.jummahKhutbah)) + ' pm' : '–'}</b></div>
+          <div style="text-align:right;"><span>Jummah jamaat</span><b>${escapeHtml(to12h(d.jummah))} pm</b></div>
+        </div>` : ''}
+      ${d.ramadan && (d.sehri || d.iftar) ? `
+        <div class="ramadan-row">
+          <div><span>Sehri ends</span><b>${escapeHtml(to12h(d.sehri) || '–')} am</b></div>
+          <div style="text-align:right;"><span>Iftar</span><b>${escapeHtml(to12h(d.iftar) || '–')} pm</b></div>
+        </div>` : ''}
+      ${d.note ? `<div style="font-size:14px; color:var(--text-muted); margin-top:12px; line-height:1.5;">${escapeHtml(d.note)}</div>` : ''}
+      ${canEditMosque() ? `<button class="btn secondary block" style="margin-top:14px;" onclick="openMosqueForm()">${icon('edit')} Edit jamaat times</button>` : ''}`;
+    openModal();
+  };
   window.openMosqueForm = function() {
     if (!canEditMosque()) return;
     const d = mosqueData || {};
