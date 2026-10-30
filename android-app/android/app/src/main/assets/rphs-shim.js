@@ -173,10 +173,30 @@
     push.savedFor = key;
     var now = fb.firestore.FieldValue.serverTimestamp();
     var tokens = {};
-    tokens[push.token] = { updatedAt: now, device: 'Android (app)' };
-    fb.firestore().collection('fcm_tokens').doc(user.uid)
-      .set({ token: push.token, tokens: tokens, uid: user.uid, updatedAt: now }, { merge: true })
+    tokens[push.token] = { updatedAt: now, device: 'Android (app)', native: true };
+    var ref = fb.firestore().collection('fcm_tokens').doc(user.uid);
+    ref.set({ token: push.token, tokens: tokens, uid: user.uid, updatedAt: now }, { merge: true })
+      .then(function () { return dropChromeTokens(fb, ref, push.token); })
       .catch(function (e) { push.savedFor = ''; console.warn('RPHS push token save failed', e); });
+  }
+
+  // Before this app, RPHS on Android ran inside Chrome, which registered its own
+  // web push token. Left in place, every alert would arrive twice (Chrome + app),
+  // so the member's other Android web tokens are dropped once the app has its own.
+  // Tokens the app saved itself (native: true), on any phone, are kept.
+  function dropChromeTokens(fb, ref, nativeToken) {
+    return ref.get().then(function (snap) {
+      var map = (snap.exists && snap.data().tokens) || {};
+      var fs = fb.firestore;
+      var args = [];
+      Object.keys(map).forEach(function (t) {
+        var e = map[t] || {};
+        if (t !== nativeToken && !e.native && /^Android/.test(e.device || '')) {
+          args.push(new fs.FieldPath('tokens', t), fs.FieldValue.delete());
+        }
+      });
+      if (args.length) return ref.update.apply(ref, args);
+    });
   }
 
   // Signing out stops this phone getting the previous member's alerts.
