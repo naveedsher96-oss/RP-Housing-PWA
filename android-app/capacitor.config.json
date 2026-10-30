@@ -1,0 +1,18 @@
+{
+  "appId": "pk.rphs.society",
+  "appName": "Roshan RPHS",
+  "webDir": "www",
+  "server": {
+    "url": "https://naveedsher96-oss.github.io/RP-Housing-PWA/",
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "backgroundColor": "#10142A"
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}
