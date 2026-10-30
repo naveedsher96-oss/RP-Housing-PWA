@@ -1,9 +1,9 @@
 name: Android app
 
 # Builds the Roshan RPHS Android app (android-app/).
-# - Pull requests: a test APK ("RPHS Test") that installs next to the Play app.
+# - Pull requests: checks that the app builds.
 # - Run manually (Actions > Android app > Run workflow) on main: the signed
-#   .aab to upload to Play Console, plus the test APK.
+#   .aab to upload to Play Console (Internal testing first).
 
 on:
   pull_request:
@@ -55,13 +55,10 @@ jobs:
       - name: Copy app settings into the Android project
         run: npx cap sync android
 
-      - name: Build test APK
+      - name: Check the app builds
+        if: github.event_name == 'pull_request'
         working-directory: android-app/android
-        run: ./gradlew --no-daemon assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rphs-test-apk-${{ env.RPHS_VERSION_CODE }}
-          path: android-app/android/app/build/outputs/apk/debug/*.apk
+        run: ./gradlew --no-daemon assembleRelease
 
       - name: Build signed Play bundle
         if: github.event_name == 'workflow_dispatch'
